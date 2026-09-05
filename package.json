@@ -12,6 +12,10 @@
     },
     "./package.json": "./package.json"
   },
+  "files": [
+    "dist",
+    "prisma/schema.prisma"
+  ],
   "scripts": {
     "build": "prisma generate && tsc -p tsconfig.build.json",
     "start": "node dist/server.js",

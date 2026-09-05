@@ -28,9 +28,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # helix-api and its examples/e2e depend on @helixid/sdk-js and
-      # @helixid/did-hedera as pnpm git+path dependencies pointing at the
-      # (currently private) helix-sdk-js repo, e.g.:
+      # @helixid/core depends on @helixid/sdk-js and @helixid/did-hedera as
+      # pnpm git+path dependencies pointing at the (currently private)
+      # helix-sdk-js repo, e.g.:
       #   "@helixid/sdk-js": "github:helixid/helix-sdk-js#path:helix-sdk-js"
       # A plain `git clone` of a private repo needs auth that the default
       # GITHUB_TOKEN does not grant across repos, so pnpm's install would
@@ -41,13 +41,6 @@ jobs:
       # stored as a repo or org secret. If helix-sdk-js is made public,
       # or once these packages are published to a registry, this step
       # (and the secret) can be removed.
-      # NOTE: url.<base>.insteadOf is a multi-valued git config key, so each
-      # rewrite MUST be added with `--add` — plain `git config <key> <val>`
-      # replaces the single existing value instead of appending, which
-      # silently dropped the first two rewrites here in an earlier version
-      # of this step (only the last insteadOf survived, so SSH-form
-      # dependency URLs still went out over real SSH and failed with
-      # "cannot run ssh: No such file or directory" in Install dependencies).
       - name: Configure git for private cross-repo dependency
         run: |
           git config --global --add url."https://${{ secrets.HELIXID_CROSS_REPO_TOKEN }}@github.com/".insteadOf "https://github.com/"
@@ -63,19 +56,8 @@ jobs:
           node-version: '24.15.0'
           cache: 'pnpm'
 
-      # examples/e2e-travel-concierge and examples/e2e-travel-concierge-hosted
-      # both depend on @helixid/sdk-js and @helixid/mcp via *local*
-      # file:../../../helix-sdk-js/... paths (a true sibling-repo checkout on
-      # a dev machine with all four split repos side by side) rather than
-      # the git+path specs the rest of the workspace uses -- this CI job
-      # only checks out helix-server, so that directory never exists here
-      # and a plain `pnpm install` fails with ENOENT trying to scandir it.
-      # Excluded from install entirely; neither has a build/test:non-live
-      # script, so nothing later in this workflow needs them installed.
-      # (See each one's own package.json/docker-compose.yml/README.md for
-      # the real, sibling-checkout- or vendoring-based install paths.)
       - name: Install dependencies
-        run: corepack enable && pnpm install --frozen-lockfile --filter '!@helixid/example-e2e-travel-concierge' --filter '!@helixid/example-e2e-travel-concierge-hosted'
+        run: corepack enable && pnpm install --frozen-lockfile
 
       - name: Build
         run: pnpm run workspace:build
@@ -87,16 +69,9 @@ jobs:
           NODE_ENV: test
 
       # Runs the real test suites but skips coverage-threshold enforcement,
-      # and skips tests/live/** (helix-api) — run separately below, against
-      # all three storage/DID configurations, since they spin up the real
-      # server themselves rather than sharing this step's fixtures.
-      #
-      # @helixid/example-e2e-consent-demo is excluded: its tests (and much
-      # of agent/ and sp-shared/) still import from @helixid/core, which
-      # was retired and folded into per-package copies in an earlier,
-      # unrelated refactor (07366cb in the original monorepo) that never
-      # updated this example. Pre-existing breakage, carried over from the
-      # monorepo split, tracked as a follow-up rather than papered over.
+      # and skips tests/live/** — run separately below, against all three
+      # storage/DID configurations, since they spin up the real server
+      # themselves rather than sharing this step's fixtures.
       - name: Test
         run: pnpm run workspace:test:non-live
         env:
@@ -113,9 +88,9 @@ jobs:
           VP_TTL_SECONDS: 300
           AUDIT_LOG_DESTINATION: stdout
 
-      # Live/e2e tests (helix-api/tests/live) spin up the real server and
-      # drive it over HTTP end to end. They mint agent/user DIDs as did:key
-      # or did:web (LIVE_DID_METHOD, default 'key') rather than did:hedera —
+      # Live/e2e tests (tests/live) spin up the real server and drive it
+      # over HTTP end to end. They mint agent/user DIDs as did:key or
+      # did:web (LIVE_DID_METHOD, default 'key') rather than did:hedera —
       # see DIDService.createDID — so unlike the step above, no Hedera
       # network access or secrets are needed at all.
       - name: Live tests (Postgres)
