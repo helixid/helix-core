@@ -17,6 +17,7 @@
     "prisma/schema.prisma"
   ],
   "scripts": {
+    "prepare": "pnpm run build",
     "build": "prisma generate && tsc -p tsconfig.build.json",
     "start": "node dist/server.js",
     "dev": "tsx watch src/server.ts",
