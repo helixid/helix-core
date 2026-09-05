@@ -8,3 +8,4 @@ data/
 *.sqlite-journal
 *.sqlite-wal
 *.sqlite-shm
+wallet.enc
