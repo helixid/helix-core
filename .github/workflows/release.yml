@@ -44,11 +44,14 @@ jobs:
           cache: 'pnpm'
           registry-url: 'https://registry.npmjs.org'
 
-      # OIDC trusted publishing needs npm >= 11.5.1; Node 24's bundled npm
-      # may be older than that.
-      - name: Update npm
-        run: npm install -g npm@latest
-
+      # Deliberately NOT upgrading npm here (previously `npm install -g
+      # npm@latest`, needed for OIDC's npm>=11.5.1 requirement — no longer
+      # relevant now that this workflow uses a classic NPM_TOKEN). Keep
+      # Node 24.15.0's bundled npm (11.12.1): a newer one broke `pnpm
+      # publish --no-git-checks`, which forwards that pnpm-only flag
+      # through to npm's own config parser on some npm versions, which
+      # then rejects it as an unknown flag (EUNKNOWNCONFIG). Confirmed
+      # locally with the bundled 11.12.1 — publish gets past that fine.
       - name: Install dependencies
         run: corepack enable && pnpm install --frozen-lockfile
 
