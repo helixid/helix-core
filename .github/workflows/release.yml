@@ -56,12 +56,19 @@ jobs:
         run: pnpm run build
 
       # TEMPORARY debug step — remove once the getUnpublishedPackages
-      # crash is understood. Reproduces exactly what changeset publish's
-      # pre-check runs, with the real NPM_TOKEN, to see the raw response.
+      # crash is understood. Reproduces EXACTLY what changeset publish's
+      # pre-check runs (no extra flags — @changesets/cli's info$1 calls
+      # `pnpm info <name> --json` with nothing else), with the real
+      # NPM_TOKEN, to see the raw response shape.
       - name: Debug pnpm info
         run: |
           echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > /tmp/debug.npmrc
-          NPM_CONFIG_USERCONFIG=/tmp/debug.npmrc pnpm info @helixid/core --json --loglevel debug
+          NPM_CONFIG_USERCONFIG=/tmp/debug.npmrc pnpm info @helixid/core --json > /tmp/info-out.json 2> /tmp/info-err.log
+          echo "=== exit code: $? ==="
+          echo "=== stdout (first char: $(head -c1 /tmp/info-out.json)) ==="
+          cat /tmp/info-out.json
+          echo "=== stderr ==="
+          cat /tmp/info-err.log
         env:
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
 
