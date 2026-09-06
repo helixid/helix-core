@@ -62,10 +62,20 @@ jobs:
       # main with no changesets left, which is what actually triggers the
       # publish step below.
       #
-      # Requires npm's Trusted Publisher configured for @helixid/core,
-      # pointing at this repo + this workflow file (npmjs.com package
-      # Settings > Trusted Publisher). No NPM_TOKEN secret needed — npm
-      # exchanges this job's OIDC token for a short-lived publish token.
+      # Uses a classic NPM_TOKEN rather than npm's OIDC Trusted Publisher:
+      # when no NPM_TOKEN is present, changesets/action does its own OIDC
+      # exchange and injects the resulting short-lived, publish-scoped
+      # token into every registry call `changeset publish` makes —
+      # including its own pre-check (`pnpm info <pkg> --json`, used to see
+      # what's already published). That token isn't valid for generic
+      # metadata reads, and the registry silently omits `versions` from
+      # the response for it, crashing @changesets/cli's
+      # getUnpublishedPackages (TypeError: Cannot read properties of
+      # undefined (reading 'includes')). See npm/cli#8976 and
+      # changesets/action#515 — both open as of this writing. NPM_TOKEN
+      # sidesteps the whole broken path; the Trusted Publisher config on
+      # npmjs.com can stay in place, it's just unused while this secret
+      # exists.
       - name: Create Release PR or publish
         uses: changesets/action@v1
         with:
@@ -73,3 +83,4 @@ jobs:
           publish: pnpm run release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
