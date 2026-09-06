@@ -55,6 +55,16 @@ jobs:
       - name: Build
         run: pnpm run build
 
+      # TEMPORARY debug step — remove once the getUnpublishedPackages
+      # crash is understood. Reproduces exactly what changeset publish's
+      # pre-check runs, with the real NPM_TOKEN, to see the raw response.
+      - name: Debug pnpm info
+        run: |
+          echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > /tmp/debug.npmrc
+          NPM_CONFIG_USERCONFIG=/tmp/debug.npmrc pnpm info @helixid/core --json --loglevel debug
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+
       # On every push to main: if there are pending .changeset/*.md files,
       # opens/updates a "Version Packages" PR that applies them (bumps
       # package.json, writes CHANGELOG.md, deletes the consumed changesets)
