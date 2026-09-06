@@ -91,6 +91,9 @@
       "fast-uri": "3.1.2",
       "protobufjs": "8.0.2",
       "@helixid/mcp-middleware>@helixid/sdk-js": "file:../helix-sdk-js/helix-sdk-js"
+    },
+    "patchedDependencies": {
+      "@changesets/cli@3.0.2": "patches/@changesets__cli@3.0.2.patch"
     }
   },
   "devDependencies": {

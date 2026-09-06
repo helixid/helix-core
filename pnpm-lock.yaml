@@ -9,6 +9,11 @@ overrides:
   protobufjs: 8.0.2
   '@helixid/mcp-middleware>@helixid/sdk-js': file:../helix-sdk-js/helix-sdk-js
 
+patchedDependencies:
+  '@changesets/cli@3.0.2':
+    hash: kmfxn7f2db3vqz3vlm53vpupkm
+    path: patches/@changesets__cli@3.0.2.patch
+
 importers:
 
   .:
@@ -64,7 +69,7 @@ importers:
     devDependencies:
       '@changesets/cli':
         specifier: ^3.0.2
-        version: 3.0.2
+        version: 3.0.2(patch_hash=kmfxn7f2db3vqz3vlm53vpupkm)
       '@helixid/did-hedera':
         specifier: ^0.1.2
         version: 0.1.2(bn.js@5.2.5)(react-native@0.87.1(@babel/core@7.29.7)(@types/react@19.2.18)(react@19.2.8))
@@ -3688,7 +3693,7 @@ snapshots:
     dependencies:
       '@changesets/types': 7.0.0
 
-  '@changesets/cli@3.0.2':
+  '@changesets/cli@3.0.2(patch_hash=kmfxn7f2db3vqz3vlm53vpupkm)':
     dependencies:
       '@changesets/apply-release-plan': 8.1.0
       '@changesets/assemble-release-plan': 7.0.0

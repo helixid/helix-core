@@ -55,23 +55,6 @@ jobs:
       - name: Build
         run: pnpm run build
 
-      # TEMPORARY debug step — remove once the getUnpublishedPackages
-      # crash is understood. Reproduces EXACTLY what changeset publish's
-      # pre-check runs (no extra flags — @changesets/cli's info$1 calls
-      # `pnpm info <name> --json` with nothing else), with the real
-      # NPM_TOKEN, to see the raw response shape.
-      - name: Debug pnpm info
-        run: |
-          echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > /tmp/debug.npmrc
-          NPM_CONFIG_USERCONFIG=/tmp/debug.npmrc pnpm info @helixid/core --json > /tmp/info-out.json 2> /tmp/info-err.log
-          echo "=== exit code: $? ==="
-          echo "=== stdout (first char: $(head -c1 /tmp/info-out.json)) ==="
-          cat /tmp/info-out.json
-          echo "=== stderr ==="
-          cat /tmp/info-err.log
-        env:
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-
       # On every push to main: if there are pending .changeset/*.md files,
       # opens/updates a "Version Packages" PR that applies them (bumps
       # package.json, writes CHANGELOG.md, deletes the consumed changesets)
@@ -79,20 +62,22 @@ jobs:
       # main with no changesets left, which is what actually triggers the
       # publish step below.
       #
-      # Uses a classic NPM_TOKEN rather than npm's OIDC Trusted Publisher:
-      # when no NPM_TOKEN is present, changesets/action does its own OIDC
-      # exchange and injects the resulting short-lived, publish-scoped
-      # token into every registry call `changeset publish` makes —
-      # including its own pre-check (`pnpm info <pkg> --json`, used to see
-      # what's already published). That token isn't valid for generic
-      # metadata reads, and the registry silently omits `versions` from
-      # the response for it, crashing @changesets/cli's
-      # getUnpublishedPackages (TypeError: Cannot read properties of
-      # undefined (reading 'includes')). See npm/cli#8976 and
-      # changesets/action#515 — both open as of this writing. NPM_TOKEN
-      # sidesteps the whole broken path; the Trusted Publisher config on
-      # npmjs.com can stay in place, it's just unused while this secret
-      # exists.
+      # Uses a classic NPM_TOKEN — kept even though npm's OIDC Trusted
+      # Publisher is configured for this package, since @changesets/cli's
+      # pnpm publish tool has a real bug independent of auth method: its
+      # `pnpm info <pkg> --json` pre-check (checking what's already
+      # published) assumes a plain object response, but pnpm sometimes
+      # returns it array-wrapped (confirmed via a debug run against this
+      # exact repo/token — reproducible in CI, not locally). The npm-tool
+      # equivalent in the same file already defensively unwraps that
+      # array; the pnpm one didn't, crashing getUnpublishedPackages
+      # (TypeError: Cannot read properties of undefined (reading
+      # 'includes')). Patched in patches/@changesets__cli@3.0.2.patch to
+      # add the same unwrapping. NPM_TOKEN itself is unrelated to that bug
+      # — it's here because changesets/action's own OIDC path is a
+      # separate, less-travelled code path (see open npm/cli#8976,
+      # changesets/action#515) not worth debugging on top of the pnpm
+      # bug; a classic token sidesteps it.
       - name: Create Release PR or publish
         uses: changesets/action@v1
         with:

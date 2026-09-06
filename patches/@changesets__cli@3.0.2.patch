@@ -1,0 +1,19 @@
+diff --git a/dist/getPublishPlan.mjs b/dist/getPublishPlan.mjs
+index a7a560d793840af0fb93a24ab053bca637f01208..cca8a20ae80b346ca5d28cd8cef9aa51b0cd3919 100644
+--- a/dist/getPublishPlan.mjs
++++ b/dist/getPublishPlan.mjs
+@@ -292,7 +292,13 @@ function getPnpmError(stderr, stdout) {
+ const name$1 = "pnpm";
+ function parseInfoResult({ exitCode, stdout, stderr }) {
+ 	if (exitCode !== 0) return { error: getPnpmError(stderr, stdout) };
+-	return stdout ? { info: JSON.parse(stdout) } : void 0;
++	if (!stdout) return void 0;
++	const parsed = JSON.parse(stdout);
++	if (Array.isArray(parsed)) {
++		assert(parsed.length === 1, "Unexpected array output from pnpm info --json");
++		return { info: parsed[0] };
++	}
++	return { info: parsed };
+ }
+ const info$1 = async ({ cwd, pkg }) => {
+ 	const { packageJson } = pkg;
