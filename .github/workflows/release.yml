@@ -1,0 +1,75 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+concurrency: ${{ github.workflow }}-${{ github.ref }}
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      id-token: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # See ci.yml for why this is needed: @helixid/sdk-js is a devDependency
+      # pinned via a git+path reference into the (currently private)
+      # helix-sdk-js repo, e.g.:
+      #   "@helixid/sdk-js": "github:helixid/helix-sdk-js#path:helix-sdk-js"
+      # HELIXID_CROSS_REPO_TOKEN must be a PAT (classic, `repo` scope, or
+      # fine-grained with contents:read) belonging to a user/machine account
+      # with read access to helixid/helix-sdk-js, stored as a repo or org
+      # secret. Remove this step once helix-sdk-js is public.
+      - name: Configure git for private cross-repo dependency
+        run: |
+          git config --global --add url."https://${{ secrets.HELIXID_CROSS_REPO_TOKEN }}@github.com/".insteadOf "https://github.com/"
+          git config --global --add url."https://${{ secrets.HELIXID_CROSS_REPO_TOKEN }}@github.com/".insteadOf "git@github.com:"
+          git config --global --add url."https://${{ secrets.HELIXID_CROSS_REPO_TOKEN }}@github.com/".insteadOf "ssh://git@github.com/"
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.2
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.15.0'
+          cache: 'pnpm'
+          registry-url: 'https://registry.npmjs.org'
+
+      # OIDC trusted publishing needs npm >= 11.5.1; Node 24's bundled npm
+      # may be older than that.
+      - name: Update npm
+        run: npm install -g npm@latest
+
+      - name: Install dependencies
+        run: corepack enable && pnpm install --frozen-lockfile
+
+      - name: Build
+        run: pnpm run build
+
+      # On every push to main: if there are pending .changeset/*.md files,
+      # opens/updates a "Version Packages" PR that applies them (bumps
+      # package.json, writes CHANGELOG.md, deletes the consumed changesets)
+      # — nothing is published yet. Merging that PR is itself a push to
+      # main with no changesets left, which is what actually triggers the
+      # publish step below.
+      #
+      # Requires npm's Trusted Publisher configured for @helixid/core,
+      # pointing at this repo + this workflow file (npmjs.com package
+      # Settings > Trusted Publisher). No NPM_TOKEN secret needed — npm
+      # exchanges this job's OIDC token for a short-lived publish token.
+      - name: Create Release PR or publish
+        uses: changesets/action@v1
+        with:
+          version: pnpm run version
+          publish: pnpm run release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

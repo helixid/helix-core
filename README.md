@@ -32,11 +32,20 @@ up first.
 pnpm install
 ```
 
-`helix-api` depends on `@helixid/did-hedera`, pulled as a git dependency
-from the (currently private) `helixid/helix-sdk-js` repo. If `pnpm
-install` fails trying to fetch it, you need read access to that repo —
-this isn't optional even in `did:key` mode, since it's an install-time
-dependency regardless of which DID method you run with.
+This repo's own `pnpm install` still needs read access to the (currently
+private) `helixid/helix-sdk-js` repo, via the `@helixid/sdk-js`
+devDependency used by dev/e2e tooling — unrelated to DID method choice,
+and not something a consumer installing `@helixid/core` from npm ever
+hits (devDependencies aren't installed transitively).
+
+`@helixid/did-hedera` is not a dependency of `@helixid/core` at all, not
+even an optional one — `did:key` and `did:web` never touch it, and
+`DID_METHOD=hedera` only works if you separately run
+`npm install @helixid/did-hedera` (published on npm; see "Using
+did:hedera" below). Leaving it out of the manifest keeps every other
+install method free of Hedera's SDK weight, and free of pulling the old,
+retired `@helixid/core` in transitively (`@helixid/did-hedera` itself
+still depends on that package at `^0.1.5`).
 
 ### 2. Configure
 
@@ -92,6 +101,36 @@ built against a different Node version than the one currently active
 under a different version than you're running now). Fix: `cd
 node_modules/.pnpm/better-sqlite3@*/node_modules/better-sqlite3 && npx
 node-gyp rebuild` from the repo root, then retry.
+
+## Using did:hedera
+
+`did:key` and `did:web` work out of the box. `DID_METHOD=hedera` anchors
+DIDs on the Hedera network instead, and needs one extra package plus a
+funded Hedera account:
+
+```bash
+npm install @helixid/did-hedera
+```
+
+Then set (validated at startup — missing any of these with
+`DID_METHOD=hedera` fails fast rather than failing later at request time):
+
+```bash
+DID_METHOD=hedera
+HEDERA_NETWORK=testnet
+HEDERA_OPERATOR_ID=0.0.xxxxx
+HEDERA_OPERATOR_KEY=<operator private key>
+HELIX_ISSUER_DID=did:hedera:testnet:<...>
+```
+
+`scripts/setup-hedera.ts --create-issuer-did` (in the consuming server
+repo) generates the signing key and derives a matching `HELIX_ISSUER_DID`
+for you, writing both into `.env`.
+
+If `@helixid/did-hedera` isn't installed, both DID creation
+(`createHederaClient`) and resolution of existing `did:hedera:...` DIDs
+(`did-resolver`'s `resolveDID`) fail with an explicit error naming the
+missing package, rather than an obscure module-not-found stack trace.
 
 ## Boundaries
 
