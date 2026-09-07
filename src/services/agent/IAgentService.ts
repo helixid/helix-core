@@ -1,3 +1,5 @@
+import type { SignedVC, SignedVP } from '../../core/index.js';
+
 export interface EnrollmentTokenResult {
   token: string;
   expiresAt: string;
@@ -17,10 +19,13 @@ export interface OnboardVerifyResult {
   vcId: string;
 }
 
-export interface EnrollResult {
+export interface OnboardWithCustodyResult {
   agentDid: string;
-  vc: Record<string, unknown>;
   vcId: string;
+}
+
+export interface SignVPResult {
+  signedVP: SignedVP;
 }
 
 export interface UserChallengeVerifyResult {
@@ -47,15 +52,14 @@ export interface IAgentService {
     input: { challengeId: string; signature: string; didCreateSignature?: string },
     requestId: string,
   ): Promise<OnboardVerifyResult>;
-  enroll(
-    input: {
-      bootstrapToken: string;
-      agentDid: string;
-      timestamp: number;
-      proofSignature: string;
-    },
+  onboardWithCustody(
+    input: { enrollmentToken: string; domains?: string[] },
     requestId: string,
-  ): Promise<EnrollResult>;
+  ): Promise<OnboardWithCustodyResult>;
+  signVP(
+    input: { did: string; targetService: string; userDid?: string; grantVC?: SignedVC; vcId?: string },
+    requestId: string,
+  ): Promise<SignVPResult>;
   issueUserChallenge(
     input: { did: string; purpose: 'user_verification' },
     requestId: string,

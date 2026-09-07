@@ -1,6 +1,8 @@
 import { createHash, randomBytes } from 'node:crypto';
 import {
   AgentAlreadyOnboardedError,
+  AgentActiveCredentialNotFoundError,
+  AgentKeyNotFoundError,
   AuditEvents,
   ChallengeAlreadyVerifiedError,
   ChallengeExpiredError,
@@ -11,19 +13,22 @@ import {
   EnrollmentTokenExpiredError,
   EnrollmentTokenNotFoundError,
   base58btcDecode,
-  resolveDID,
+  signBytes,
   verifySignature,
+  VPBuilder,
   type HelixError,
   type IAuditLogger,
   type SignedVC,
+  type SignedVP,
 } from '../../core/index.js';
 import type { AgentRepository } from '../../repositories/agent.repository.js';
+import type { AgentKeyRepository } from '../../repositories/agent-key.repository.js';
 import type { IDIDService } from '../did/IDIDService.js';
 import type { IVCService } from '../vc/IVCService.js';
+import type { IKeyCustody } from '../key-custody/key-custody.js';
 import type {
   IAgentService,
   ChallengeResult,
-  EnrollResult,
 } from './IAgentService.js';
 
 type DIDVerificationMethodLike = {
@@ -79,43 +84,14 @@ function extractPublicKeyHex(doc: Awaited<ReturnType<IDIDService['resolveDID']>>
   throw new ChallengeSignatureInvalidError();
 }
 
-function extractPublicKeyHexFromDidDocument(doc: DIDDocumentLike): string {
-  const method = doc.verificationMethod?.find(
-    (item) => typeof item.type === 'string' && item.type.includes('Ed25519'),
-  );
-  if (!method) {
-    throw new ChallengeSignatureInvalidError(
-      'Agent DID document has no Ed25519 verification method',
-    );
-  }
-  if (typeof method.publicKeyHex === 'string') {
-    return method.publicKeyHex;
-  }
-  if (typeof method.publicKeyMultibase === 'string' && method.publicKeyMultibase.startsWith('z')) {
-    const decoded = base58btcDecode(method.publicKeyMultibase.slice(1));
-    return Buffer.from(decoded.slice(2)).toString('hex');
-  }
-  throw new ChallengeSignatureInvalidError('Agent DID document has unsupported key encoding');
-}
-
-function bootstrapProofPayload(input: {
-  bootstrapToken: string;
-  agentDid: string;
-  timestamp: number;
-}): string {
-  return JSON.stringify({
-    bootstrapToken: input.bootstrapToken,
-    agentDid: input.agentDid,
-    timestamp: input.timestamp,
-  });
-}
-
 export class AgentService implements IAgentService {
   constructor(
     private readonly repository: AgentRepository,
     private readonly didService: IDIDService,
     private readonly vcService: IVCService,
     private readonly auditLogger: IAuditLogger,
+    private readonly agentKeyRepository: AgentKeyRepository,
+    private readonly keyCustody: IKeyCustody,
     private readonly enrollmentTokenTtlSeconds = 900,
     private readonly challengeTtlSeconds = 300,
   ) {}
@@ -150,99 +126,99 @@ export class AgentService implements IAgentService {
     return { token, expiresAt: expiresAt.toISOString() };
   }
 
-  async enroll(
-    input: {
-      bootstrapToken: string;
-      agentDid: string;
-      timestamp: number;
-      proofSignature: string;
-    },
+  /**
+   * Single-call, server-custody onboarding. Agent self-custody has been
+   * retired — the server generates the keypair itself (via `keyCustody`)
+   * and internally drives the same processOnboardStep1/processOnboardVerify
+   * pair a self-custody caller used to drive over two client round trips,
+   * self-signing both the challenge nonce and (for did:hedera) the DID
+   * creation payload. The resulting private key is stored encrypted in
+   * `agentKeyRepository`, never returned to the caller.
+   */
+  async onboardWithCustody(
+    input: { enrollmentToken: string; domains?: string[] },
     requestId: string,
-  ): Promise<EnrollResult> {
-    const ageMs = Math.abs(Date.now() - input.timestamp);
-    if (!Number.isFinite(input.timestamp) || ageMs > 10 * 60 * 1000) {
-      throw new ChallengeSignatureInvalidError('Bootstrap proof timestamp is invalid or too old');
-    }
-    if (!/^[0-9a-f]{128}$/i.test(input.proofSignature)) {
-      throw new ChallengeSignatureInvalidError('Bootstrap proof signature is invalid');
-    }
+  ): Promise<{ agentDid: string; vcId: string }> {
+    const { publicKey, encrypted } = this.keyCustody.generateAndEncrypt();
 
-    const didDocument = await resolveDID(input.agentDid);
-    const publicKeyHex = extractPublicKeyHexFromDidDocument(
-      didDocument as unknown as DIDDocumentLike,
-    );
-    const proofValid = await verifySignature(
-      Buffer.from(
-        bootstrapProofPayload({
-          bootstrapToken: input.bootstrapToken,
-          agentDid: input.agentDid,
-          timestamp: input.timestamp,
-        }),
-        'utf8',
-      ),
-      input.proofSignature,
-      publicKeyHex,
-    );
-    if (!proofValid) {
-      throw new ChallengeSignatureInvalidError('Bootstrap proof verification failed');
-    }
-
-    const tokenHash = hashToken(input.bootstrapToken);
-    const tokenRecord = await this.repository.findEnrollmentTokenByHash(tokenHash);
-    if (!tokenRecord) {
-      throw new EnrollmentTokenNotFoundError();
-    }
-    if (tokenRecord.usedAt) {
-      throw new EnrollmentTokenAlreadyUsedError();
-    }
-    if (tokenRecord.expiresAt.getTime() <= Date.now()) {
-      this.auditLogger.log(AuditEvents.ENROLLMENT_TOKEN_REJECTED, {
-        requestId,
-        tokenIdHash: tokenHash,
-        reason: 'expired',
-        timestamp: new Date().toISOString(),
-      });
-      throw new EnrollmentTokenExpiredError();
-    }
-
-    const burned = await this.repository.burnEnrollmentTokenAtomically(tokenHash);
-    if (!burned) {
-      throw new EnrollmentTokenAlreadyUsedError();
-    }
-
-    this.auditLogger.log(AuditEvents.ENROLLMENT_TOKEN_CONSUMED, {
-      requestId,
-      tokenIdHash: tokenHash,
-      agentDid: input.agentDid,
-      timestamp: new Date().toISOString(),
-    });
-
-    const scopes = JSON.parse(tokenRecord.requestedScopes) as string[];
-    const vc = await this.vcService.issueVC(
+    const challenge = await this.processOnboardStep1(
       {
-        subjectDid: input.agentDid,
-        subjectType: 'agent',
-        privilegeScopes: scopes,
-        agentName: tokenRecord.agentName,
-        delegationDepth: 0,
-        maxDelegationDepth: tokenRecord.maxDelegationDepth ?? 0,
-        expiresInSeconds: this.enrollmentTokenTtlSeconds * 100,
+        enrollmentToken: input.enrollmentToken,
+        publicKeyHex: publicKey,
+        ...(input.domains ? { domains: input.domains } : {}),
       },
       requestId,
     );
 
-    this.auditLogger.log(AuditEvents.AGENT_ONBOARDED, {
+    const signature = await this.keyCustody.signWith(encrypted, (privateKeyHex) =>
+      signBytes(Buffer.from(challenge.nonce, 'hex'), privateKeyHex),
+    );
+    const didCreateSignature = challenge.didCreateSigningPayloadHex
+      ? await this.keyCustody.signWith(encrypted, (privateKeyHex) =>
+          signBytes(Buffer.from(challenge.didCreateSigningPayloadHex!, 'hex'), privateKeyHex),
+        )
+      : undefined;
+
+    const result = await this.processOnboardVerify(
+      {
+        challengeId: challenge.challengeId,
+        signature,
+        ...(didCreateSignature ? { didCreateSignature } : {}),
+      },
       requestId,
-      agentDid: input.agentDid,
-      agentName: tokenRecord.agentName,
-      onboardingMode: 'bootstrap-proof-single-roundtrip',
+    );
+
+    await this.agentKeyRepository.create({ did: result.agentDid, ...encrypted });
+
+    return { agentDid: result.agentDid, vcId: result.vcId };
+  }
+
+  /**
+   * Signs a VP on behalf of a server-custody agent — the caller never has,
+   * and never can have, the private key, so "present a VP" is an API call
+   * instead of a local VPBuilder.sign(). By default looks up the agent's
+   * one active HelixAgentCredential itself; pass `vcId` to pin a specific
+   * credential instead (e.g. when more than one active VC exists for the
+   * DID, which findActiveBySubjectDid rejects as ambiguous). An optional
+   * `grantVC` (an SP-issued DelegationGrantCredential the caller already
+   * holds — not secret material, just data to include) is passed straight
+   * through to VPBuilder's second credential slot, for the consent-grant
+   * flow (spec §2a): the grant itself is never held or looked up
+   * server-side, only composed into the VP being signed.
+   */
+  async signVP(
+    input: { did: string; targetService: string; userDid?: string; grantVC?: SignedVC; vcId?: string },
+    requestId: string,
+  ): Promise<{ signedVP: SignedVP }> {
+    const keyRecord = await this.agentKeyRepository.findByDid(input.did);
+    if (!keyRecord) {
+      throw new AgentKeyNotFoundError(input.did);
+    }
+
+    const vcJson = input.vcId
+      ? await this.vcService.findActiveByVcIdForSubject(input.vcId, input.did, 'HelixAgentCredential')
+      : await this.vcService.findActiveBySubjectDid(input.did, 'HelixAgentCredential');
+    if (!vcJson) {
+      throw new AgentActiveCredentialNotFoundError(input.did);
+    }
+
+    const credentials = input.grantVC ? [vcJson as SignedVC, input.grantVC] : [vcJson as SignedVC];
+    const signedVP = await this.keyCustody.signWith(keyRecord, (privateKeyHex) =>
+      new VPBuilder({
+        credentials,
+        holderDid: input.did,
+        ...(input.userDid ? { userDid: input.userDid } : {}),
+        targetService: input.targetService,
+      }).sign(privateKeyHex, `${input.did}#key-1`),
+    );
+
+    this.auditLogger.log(AuditEvents.AGENT_VP_SIGNED, {
+      requestId,
+      agentDid: input.did,
+      targetService: input.targetService,
     });
 
-    return {
-      agentDid: input.agentDid,
-      vcId: vc.vcId,
-      vc: vc.vc as SignedVC as unknown as Record<string, unknown>,
-    };
+    return { signedVP };
   }
 
   async processOnboardStep1(

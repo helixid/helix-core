@@ -25,8 +25,10 @@ import { DidRepository } from './repositories/did.repository.js';
 import { VcRepository } from './repositories/vc.repository.js';
 import { AuditLogRepository } from './repositories/audit-log.repository.js';
 import { AgentRepository } from './repositories/agent.repository.js';
+import { AgentKeyRepository } from './repositories/agent-key.repository.js';
 import { ServiceRegistryRepository } from './repositories/service-registry.repository.js';
 import { PreparedPayloadRepository } from './repositories/prepared-payload.repository.js';
+import { AesGcmKeyCustody } from './services/key-custody/key-custody.js';
 import { createDidCache, createStatusListCache } from './cache/cacheFactory.js';
 import { extractEd25519PublicKeyHexFromDIDDocument } from './services/did/publicKey.js';
 import { DIDService } from './services/did/did.service.js';
@@ -85,6 +87,7 @@ const didRepository = new DidRepository(prisma, sqlite);
 const vcRepository = new VcRepository(prisma, sqlite);
 const auditLogRepository = new AuditLogRepository(prisma, sqlite);
 const agentRepository = new AgentRepository(prisma, sqlite);
+const agentKeyRepository = new AgentKeyRepository(prisma, sqlite);
 const serviceRegistry = new ServiceRegistryRepository(agentRepository);
 const preparedPayloadRepository = new PreparedPayloadRepository(prisma, sqlite);
 await serviceRegistry.seedBuiltIns();
@@ -121,7 +124,21 @@ const vpService = new VPService(vcService, auditLogger, config.API_BASE_URL, {
   issuerDid: config.HELIX_ISSUER_DID,
   ttlSeconds: config.JWT_SESSION_TTL_SECONDS,
 });
-const agentService = new AgentService(agentRepository, didService, vcService, auditLogger);
+// Agent self-custody has been retired — every agent's private key is now
+// generated and held here, encrypted with this one shared master key. Unset
+// in dev falls back to a random per-process key (fine for local dev; means
+// encrypted AgentKey rows don't survive a restart in that mode) — same
+// pattern as HOSTED_ACCESS_TOKEN_SECRET below it.
+const agentKeyEncryptionKey = config.HOSTED_KEY_ENCRYPTION_KEY ?? crypto.randomBytes(32).toString('hex');
+const keyCustody = new AesGcmKeyCustody(agentKeyEncryptionKey);
+const agentService = new AgentService(
+  agentRepository,
+  didService,
+  vcService,
+  auditLogger,
+  agentKeyRepository,
+  keyCustody,
+);
 const preparedPayloadService = new PreparedPayloadService(preparedPayloadRepository, didService);
 
 const app = Fastify({
@@ -236,6 +253,7 @@ await app.register(auditLogRoutes, {
 await app.register(agentRoutes, {
   prefix: '/v1',
   agentService,
+  adminApiKey: config.HELIX_ADMIN_API_KEY,
 });
 
 const shutdown = async (): Promise<void> => {

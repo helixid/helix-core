@@ -461,6 +461,18 @@ export class AgentAlreadyOnboardedError extends HelixError {
   }
 }
 
+export class AgentKeyNotFoundError extends HelixError {
+  constructor(did: string) {
+    super('AGENT_KEY_NOT_FOUND', `No server-held key for agent DID: ${did}`, 404);
+  }
+}
+
+export class AgentActiveCredentialNotFoundError extends HelixError {
+  constructor(did: string) {
+    super('AGENT_ACTIVE_CREDENTIAL_NOT_FOUND', `No active credential for agent DID: ${did}`, 404);
+  }
+}
+
 export class PreparedPayloadNotFoundError extends HelixError {
   constructor(message = 'Prepared payload was not found') {
     super('PREPARED_PAYLOAD_NOT_FOUND', message, 404);

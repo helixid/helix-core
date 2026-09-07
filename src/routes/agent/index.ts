@@ -5,14 +5,25 @@
 //    http://www.apache.org/licenses/LICENSE-2.0
 
 import type { FastifyPluginAsync } from 'fastify';
+import { AdminAuthRequiredError, type SignedVC } from '../../core/index.js';
 import type { IAgentService } from '../../services/agent/IAgentService.js';
 import { mapAgentError } from '../../services/agent/agent.service.js';
 
 interface AgentRouteOptions {
   agentService: IAgentService;
+  /** Required to call POST /agents/:did/vp — see that route's comment for why. */
+  adminApiKey?: string | undefined;
 }
 
 const agentRoutes: FastifyPluginAsync<AgentRouteOptions> = async (fastify, options) => {
+  function requireAdmin(request: { headers: Record<string, string | string[] | undefined> }): void {
+    const submitted = request.headers['x-admin-api-key'];
+    const submittedKey = Array.isArray(submitted) ? submitted[0] : submitted;
+    if (!options.adminApiKey || submittedKey !== options.adminApiKey) {
+      throw new AdminAuthRequiredError();
+    }
+  }
+
   fastify.post('/enrollment-tokens', async (request, reply) => {
     try {
       const body = request.body as {
@@ -31,48 +42,55 @@ const agentRoutes: FastifyPluginAsync<AgentRouteOptions> = async (fastify, optio
     }
   });
 
-  fastify.post('/enroll', async (request, reply) => {
+  // POST /onboard - single-call, server-custody onboarding. Agent
+  // self-custody has been retired: the agent no longer generates a keypair
+  // or submits a public key here — the server does, internally, and stores
+  // the resulting private key encrypted (see AgentService.onboardWithCustody).
+  // Only { agentDid, vcId } comes back; no key material ever does.
+  fastify.post('/onboard', async (request, reply) => {
     try {
-      const result = await options.agentService.enroll(
-        request.body as {
-          bootstrapToken: string;
-          agentDid: string;
-          timestamp: number;
-          proofSignature: string;
+      const result = await options.agentService.onboardWithCustody(
+        request.body as { enrollmentToken: string; domains?: string[] },
+        request.id,
+      );
+      return reply.code(201).send(result);
+    } catch (error) {
+      const mapped = mapAgentError(error);
+      return reply
+        .code(mapped.statusCode)
+        .send({ error: { code: mapped.code, message: mapped.message, requestId: request.id } });
+    }
+  });
+
+  // POST /agents/:did/vp - sign a VP on behalf of a server-custody agent.
+  // The caller never has the agent's private key, so this has to be an API
+  // call rather than local VPBuilder.sign(). Gated by the admin key: OSS has
+  // no per-tenant credential narrower than that (unlike the hosted/
+  // enterprise build's per-account bearer token), so this is deliberately
+  // the same all-or-nothing trust already placed in the admin key for VC
+  // issuance/revocation — a known scoping reduction versus self-custody,
+  // where only the agent's own key could ever sign for itself.
+  fastify.post('/agents/:did/vp', async (request, reply) => {
+    try {
+      requireAdmin(request);
+      const params = request.params as { did: string };
+      const body = request.body as {
+        targetService: string;
+        userDid?: string;
+        grantVC?: SignedVC;
+        vcId?: string;
+      };
+      const result = await options.agentService.signVP(
+        {
+          did: params.did,
+          targetService: body.targetService,
+          ...(body.userDid ? { userDid: body.userDid } : {}),
+          ...(body.grantVC ? { grantVC: body.grantVC } : {}),
+          ...(body.vcId ? { vcId: body.vcId } : {}),
         },
         request.id,
       );
-      return reply.code(201).send(result);
-    } catch (error) {
-      const mapped = mapAgentError(error);
-      return reply
-        .code(mapped.statusCode)
-        .send({ error: { code: mapped.code, message: mapped.message, requestId: request.id } });
-    }
-  });
-
-  fastify.post('/onboard', async (request, reply) => {
-    try {
-      const result = await options.agentService.processOnboardStep1(
-        request.body as { enrollmentToken: string; publicKeyHex: string; domains?: string[] },
-        request.id,
-      );
       return reply.code(200).send(result);
-    } catch (error) {
-      const mapped = mapAgentError(error);
-      return reply
-        .code(mapped.statusCode)
-        .send({ error: { code: mapped.code, message: mapped.message, requestId: request.id } });
-    }
-  });
-
-  fastify.post('/onboard/verify', async (request, reply) => {
-    try {
-      const result = await options.agentService.processOnboardVerify(
-        request.body as { challengeId: string; signature: string; didCreateSignature?: string },
-        request.id,
-      );
-      return reply.code(201).send(result);
     } catch (error) {
       const mapped = mapAgentError(error);
       return reply
