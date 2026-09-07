@@ -52,6 +52,11 @@ export type {
   ChallengeRecord,
   ServiceRegistryRecord,
 } from './repositories/agent.repository.js';
+export { AgentKeyRepository } from './repositories/agent-key.repository.js';
+export type {
+  AgentKeyRecord,
+  CreateAgentKeyRecordParams,
+} from './repositories/agent-key.repository.js';
 export { ServiceRegistryRepository } from './repositories/service-registry.repository.js';
 export { PreparedPayloadRepository } from './repositories/prepared-payload.repository.js';
 
@@ -76,9 +81,12 @@ export type {
   EnrollmentTokenResult,
   ChallengeResult,
   OnboardVerifyResult,
-  EnrollResult,
+  OnboardWithCustodyResult,
+  SignVPResult,
   UserChallengeVerifyResult,
 } from './services/agent/IAgentService.js';
+export { AesGcmKeyCustody } from './services/key-custody/key-custody.js';
+export type { IKeyCustody, EncryptedKeyMaterial } from './services/key-custody/key-custody.js';
 export { PreparedPayloadService } from './services/prepared-payload/index.js';
 export type { IPreparedPayloadService } from './services/prepared-payload/IPreparedPayloadService.js';
 

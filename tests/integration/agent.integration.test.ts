@@ -1,15 +1,15 @@
 import Fastify from 'fastify';
 import { describe, expect, it } from 'vitest';
-import { signBytes } from '../../src/core/index.js';
 import agentRoutes from '../../src/routes/agent/index.js';
 import { AgentRepository } from '../../src/repositories/agent.repository.js';
+import { AgentKeyRepository } from '../../src/repositories/agent-key.repository.js';
 import { AgentService } from '../../src/services/agent/agent.service.js';
+import { AesGcmKeyCustody } from '../../src/services/key-custody/key-custody.js';
 import { MockDIDService } from '../mocks/MockDIDService.js';
 import { MockVCService } from '../mocks/MockVCService.js';
 import { TestAuditLogger } from '../utils/TestAuditLogger.js';
 
-const TEST_PRIVATE_KEY_HEX = '00'.repeat(32);
-const TEST_PUBLIC_KEY_HEX = '3b6a27bcceb6a42d62a3a8d02a6f0d73653215771de243a63ac048a18b59da29';
+const TEST_ADMIN_KEY = 'test-admin-key';
 
 function makeApp() {
   const app = Fastify();
@@ -26,14 +26,16 @@ function makeApp() {
       ]
     }),
     new MockVCService(),
-    new TestAuditLogger()
+    new TestAuditLogger(),
+    new AgentKeyRepository(),
+    new AesGcmKeyCustody('11'.repeat(32)),
   );
-  app.register(agentRoutes, { prefix: '/v1', agentService: service });
+  app.register(agentRoutes, { prefix: '/v1', agentService: service, adminApiKey: TEST_ADMIN_KEY });
   return app;
 }
 
 describe('agent integration', () => {
-  it('completes onboarding flow', async () => {
+  it('completes onboarding in one call, with no key material returned', async () => {
     const app = makeApp();
     const tokenRes = await app.inject({
       method: 'POST',
@@ -47,30 +49,20 @@ describe('agent integration', () => {
     expect(tokenRes.statusCode).toBe(201);
     const tokenBody = tokenRes.json();
 
-    const step1 = await app.inject({
+    const onboard = await app.inject({
       method: 'POST',
       url: '/v1/onboard',
       payload: {
         enrollmentToken: tokenBody.token,
-        publicKeyHex: TEST_PUBLIC_KEY_HEX,
         domains: ['https://myagent.example.com']
       }
     });
-    expect(step1.statusCode).toBe(200);
-    const step1Body = step1.json();
-    const signature = await signBytes(Buffer.from(step1Body.nonce, 'hex'), TEST_PRIVATE_KEY_HEX);
-    const didCreateSignature = await signBytes(
-      Buffer.from(step1Body.didCreateSigningPayloadHex, 'hex'),
-      TEST_PRIVATE_KEY_HEX
-    );
-
-    const step2 = await app.inject({
-      method: 'POST',
-      url: '/v1/onboard/verify',
-      payload: { challengeId: step1Body.challengeId, signature, didCreateSignature }
-    });
-    expect(step2.statusCode).toBe(201);
-    expect(step2.json().agentDid).toContain('did:hedera:testnet:');
+    expect(onboard.statusCode).toBe(201);
+    const onboardBody = onboard.json();
+    expect(onboardBody.agentDid).toContain('did:hedera:testnet:');
+    expect(onboardBody.vcId).toBeTruthy();
+    // No key material — not a publicKeyHex/privateKeyHex, wallet path, or anything else.
+    expect(Object.keys(onboardBody).sort()).toEqual(['agentDid', 'vcId']);
   });
 
   it('returns used-token error on second onboard call', async () => {
@@ -84,15 +76,51 @@ describe('agent integration', () => {
     await app.inject({
       method: 'POST',
       url: '/v1/onboard',
-      payload: { enrollmentToken: token, publicKeyHex: 'd'.repeat(64), domains: [] }
+      payload: { enrollmentToken: token, domains: [] }
     });
     const second = await app.inject({
       method: 'POST',
       url: '/v1/onboard',
-      payload: { enrollmentToken: token, publicKeyHex: 'd'.repeat(64), domains: [] }
+      payload: { enrollmentToken: token, domains: [] }
     });
     expect(second.statusCode).toBe(409);
     expect(second.json().error.code).toBe('ENROLLMENT_TOKEN_ALREADY_USED');
+  });
+
+  it('signs a VP for an onboarded agent when authenticated with the admin key', async () => {
+    const app = makeApp();
+    const tokenRes = await app.inject({
+      method: 'POST',
+      url: '/v1/enrollment-tokens',
+      payload: { agentName: 'My Agent', requestedScopes: ['read:orders'] }
+    });
+    const token = tokenRes.json().token as string;
+    const onboard = await app.inject({
+      method: 'POST',
+      url: '/v1/onboard',
+      payload: { enrollmentToken: token, domains: [] }
+    });
+    const { agentDid } = onboard.json();
+
+    const vp = await app.inject({
+      method: 'POST',
+      url: `/v1/agents/${encodeURIComponent(agentDid)}/vp`,
+      headers: { 'x-admin-api-key': TEST_ADMIN_KEY },
+      payload: { targetService: 'https://service.example.com' }
+    });
+    expect(vp.statusCode).toBe(200);
+    expect(vp.json().signedVP.holder).toBe(agentDid);
+    expect(vp.json().signedVP.proof).toBeTruthy();
+  });
+
+  it('rejects signing a VP without the admin key', async () => {
+    const app = makeApp();
+    const vp = await app.inject({
+      method: 'POST',
+      url: '/v1/agents/did:hedera:testnet:testid/vp',
+      payload: { targetService: 'https://service.example.com' }
+    });
+    expect(vp.statusCode).toBe(403);
   });
 
 });

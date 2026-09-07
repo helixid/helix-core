@@ -90,6 +90,18 @@ model VpId {
   @@map("vp_ids")
 }
 
+model AgentKey {
+  id                  String   @id @default(cuid())
+  did                 String   @unique
+  encryptedPrivateKey String
+  iv                  String
+  authTag             String
+  algorithm           String
+  createdAt           DateTime @default(now())
+
+  @@map("agent_keys")
+}
+
 model EnrollmentToken {
   id               String      @id @default(cuid())
   tokenHash        String      @unique

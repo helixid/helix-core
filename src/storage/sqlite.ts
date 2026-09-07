@@ -100,6 +100,17 @@ CREATE TABLE IF NOT EXISTS vp_ids (
   consumed_at TEXT
 );
 
+CREATE TABLE IF NOT EXISTS agent_keys (
+  id TEXT PRIMARY KEY,
+  did TEXT NOT NULL,
+  encrypted_private_key TEXT NOT NULL,
+  iv TEXT NOT NULL,
+  auth_tag TEXT NOT NULL,
+  algorithm TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_agent_keys_did ON agent_keys(did);
+
 CREATE TABLE IF NOT EXISTS enrollment_tokens (
   id TEXT PRIMARY KEY,
   token_hash TEXT NOT NULL UNIQUE,

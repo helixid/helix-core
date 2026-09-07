@@ -29,6 +29,8 @@ describe('AgentService Branch Coverage', () => {
   let didService: any;
   let vcService: any;
   let auditLogger: any;
+  let agentKeyRepository: any;
+  let keyCustody: any;
   let service: AgentService;
 
   beforeEach(() => {
@@ -52,7 +54,20 @@ describe('AgentService Branch Coverage', () => {
     };
     vcService = { findActiveBySubjectDid: vi.fn(), issueVC: vi.fn() };
     auditLogger = { log: vi.fn() };
-    service = new AgentService(repository, didService, vcService, auditLogger);
+    agentKeyRepository = { create: vi.fn(), findByDid: vi.fn() };
+    keyCustody = {
+      generateAndEncrypt: vi.fn(),
+      sign: vi.fn(),
+      signWith: vi.fn((_encrypted: unknown, use: (key: string) => unknown) => use('mock-private-key')),
+    };
+    service = new AgentService(
+      repository,
+      didService,
+      vcService,
+      auditLogger,
+      agentKeyRepository,
+      keyCustody,
+    );
     vi.mocked(verifySignature).mockReset();
   });
 

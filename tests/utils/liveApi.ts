@@ -6,7 +6,6 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createServer } from 'node:net';
 import { expect } from 'vitest';
-import { AgentWallet, HelixClient, VPBuilder } from '@helixid/sdk-js';
 import type { SignedVC, SignedVP } from '@helixid/sdk-js';
 import { createTestPrisma } from './prisma.js';
 
@@ -38,9 +37,6 @@ export interface LiveApi {
 export interface LiveAgent {
   did: string;
   vcId: string;
-  privateKeyHex: string;
-  walletPath: string;
-  cleanup(): Promise<void>;
 }
 
 /**
@@ -69,6 +65,7 @@ export async function resetLiveTestDatabase(): Promise<void> {
   await prisma.serviceRegistry.deleteMany();
   await prisma.didUpdate.deleteMany();
   await prisma.did.deleteMany();
+  await prisma.agentKey.deleteMany();
   await prisma.$disconnect();
 }
 
@@ -183,20 +180,22 @@ export async function startLiveApi(): Promise<LiveApi> {
   };
 }
 
+/**
+ * Onboards an agent through the real single-call, server-custody flow —
+ * agent self-custody (client-generated keypair, wallet file, passphrase)
+ * has been retired. The server generates and holds the private key; the
+ * only handle a caller gets back is the DID, used afterward to request a
+ * signed VP via signLiveVP() below.
+ */
 export async function onboardLiveAgent(
   api: LiveApi,
-  client: HelixClient,
   options: {
     agentName: string;
     requestedScopes: string[];
     requestedDomains: string[];
-    passphrase: string;
     maxDelegationDepth?: number;
   },
 ): Promise<LiveAgent> {
-  const dir = await mkdtemp(join(tmpdir(), 'helix-live-agent-'));
-  const walletPath = join(dir, 'agent-wallet.json');
-
   const tokenRes = await fetch(`${api.baseUrl}/v1/enrollment-tokens`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
@@ -210,43 +209,41 @@ export async function onboardLiveAgent(
   expect(tokenRes.status).toBe(201);
   const { token } = (await tokenRes.json()) as { token: string };
 
-  const challenge = await client.requestOnboardingChallenge(token, options.requestedDomains);
-  const onboarding = await client.completeOnboarding(
-    challenge.challengeId,
-    challenge.nonce,
-    options.passphrase,
-    walletPath,
-  );
-  const wallet = await new AgentWallet().load(options.passphrase, walletPath);
+  const onboardRes = await fetch(`${api.baseUrl}/v1/onboard`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ enrollmentToken: token, domains: options.requestedDomains }),
+  });
+  expect(onboardRes.status).toBe(201);
+  const onboarding = (await onboardRes.json()) as { agentDid: string; vcId: string };
 
-  return {
-    did: onboarding.agentDid,
-    vcId: onboarding.vcId,
-    privateKeyHex: wallet.privateKeyHex,
-    walletPath,
-    cleanup: () => rm(dir, { recursive: true, force: true }),
-  };
+  return { did: onboarding.agentDid, vcId: onboarding.vcId };
 }
 
 /**
- * Builds and signs a VP locally with the SDK's VPBuilder, the way a real
- * caller does post-SDK-API-only-migration — there is no server endpoint that
- * hands back an unsigned VP to sign anymore (`/v1/vp/template` was removed).
- * `credentials` is 1 or 2 held VCs: the agent-authority VC, optionally
- * followed by a consent grant VC.
+ * Signs a VP server-side for an agent onboarded via onboardLiveAgent() —
+ * there is no local private key to build one with anymore, so this is an
+ * API call (POST /v1/agents/:did/vp) rather than local VPBuilder use.
+ * Gated by the admin key, same as every other privileged live-test call.
  */
-export async function buildAndSignVP(
-  credentials: SignedVC[],
+export async function signLiveVP(
+  api: LiveApi,
   holderDid: string,
-  privateKeyHex: string,
-  options: { targetService: string; userDid?: string },
+  options: { targetService: string; userDid?: string; grantVC?: SignedVC; vcId?: string },
 ): Promise<SignedVP> {
-  return new VPBuilder({
-    credentials,
-    holderDid,
-    targetService: options.targetService,
-    ...(options.userDid !== undefined ? { userDid: options.userDid } : {}),
-  }).sign(privateKeyHex, `${holderDid}#key-1`);
+  const res = await fetch(`${api.baseUrl}/v1/agents/${encodeURIComponent(holderDid)}/vp`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'x-admin-api-key': api.adminApiKey },
+    body: JSON.stringify({
+      targetService: options.targetService,
+      ...(options.userDid !== undefined ? { userDid: options.userDid } : {}),
+      ...(options.grantVC !== undefined ? { grantVC: options.grantVC } : {}),
+      ...(options.vcId !== undefined ? { vcId: options.vcId } : {}),
+    }),
+  });
+  expect(res.status).toBe(200);
+  const { signedVP } = (await res.json()) as { signedVP: SignedVP };
+  return signedVP;
 }
 
 async function getAvailablePort(): Promise<number> {
