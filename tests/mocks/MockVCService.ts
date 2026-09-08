@@ -142,4 +142,15 @@ export class MockVCService implements IVCService {
       expiresAt: vc.validUntil,
     };
   }
+
+  registeredExternalVCs: SignedVC[] = [];
+
+  async registerExternalVC(
+    vc: SignedVC,
+    _requestId: string,
+  ): Promise<{ vcId: string; alreadyRegistered: boolean }> {
+    const alreadyRegistered = this.registeredExternalVCs.some((seen) => seen.id === vc.id);
+    if (!alreadyRegistered) this.registeredExternalVCs.push(vc);
+    return { vcId: vc.id, alreadyRegistered };
+  }
 }

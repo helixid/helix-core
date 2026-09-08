@@ -234,6 +234,7 @@ await app.register(vcRoutes, {
 await app.register(preparedPayloadRoutes, {
   prefix: '/v1/vcs',
   preparedPayloadService,
+  vcService,
 });
 await app.register(statusListRoutes, {
   prefix: '/v1/status-list',

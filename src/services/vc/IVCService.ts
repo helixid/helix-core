@@ -78,4 +78,25 @@ export interface IVCService {
    * logs VC_DELEGATED for this VC.
    */
   registerSignedVC(vc: SignedVC): Promise<void>;
+
+  /**
+   * Persists a VC that was signed outside this platform entirely — a Service
+   * Provider's own DelegationGrantCredential, signed with the SP's key
+   * through its own consent flow, so that the platform holds the credential
+   * rather than the agent carrying it.
+   *
+   * The difference from registerSignedVC() is trust, not storage:
+   * registerSignedVC()'s caller is this server, which just produced the
+   * signature itself and so has nothing to check. This one arrives over the
+   * wire, so the proof is verified against the issuer's resolved DID
+   * document, the validity window is checked, and the subject DID is
+   * registered if this server has not seen it, before anything is stored.
+   *
+   * Idempotent by vcId: re-registering the same grant (a retried consent
+   * callback, a re-run seed) reports alreadyRegistered rather than failing.
+   */
+  registerExternalVC(
+    vc: SignedVC,
+    requestId: string,
+  ): Promise<{ vcId: string; alreadyRegistered: boolean }>;
 }

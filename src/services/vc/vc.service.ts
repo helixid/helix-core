@@ -22,6 +22,7 @@ import {
   hashCanonicalPayload,
   resolveDID as resolveDIDCore,
   signBytes,
+  verifyEd25519Proof,
   type HelixVC,
   type SignedVC,
   VPMultipleActiveVCError,
@@ -147,6 +148,12 @@ export interface IVCService {
     length?: number;
   }): Promise<ReturnType<typeof buildStatusListCredential>>;
   registerSignedVC(vc: SignedVC): Promise<void>;
+
+  /** See IVCService.registerExternalVC() in ./IVCService.ts. */
+  registerExternalVC(
+    vc: SignedVC,
+    requestId: string,
+  ): Promise<{ vcId: string; alreadyRegistered: boolean }>;
 }
 
 /**
@@ -247,6 +254,118 @@ export class VCService implements IVCService {
       maxDelegationDepth: subject.maxDelegationDepth,
       parentVcId: subject.parentVcId,
     });
+  }
+
+  /**
+   * Registers a VC signed outside this platform — see
+   * IVCService.registerExternalVC(). Nothing here trusts the submitted
+   * credential: the proof is checked against the issuer's own DID document,
+   * so a forged or tampered grant is rejected before it reaches storage.
+   */
+  async registerExternalVC(
+    vc: SignedVC,
+    requestId: string,
+  ): Promise<{ vcId: string; alreadyRegistered: boolean }> {
+    // Idempotent by vcId: a retried consent callback or a re-run seed must
+    // not duplicate the row, and must not look like a failure to the caller.
+    const existing = await this.vcRepo.findByVcId(vc.id);
+    if (existing) {
+      return { vcId: vc.id, alreadyRegistered: true };
+    }
+
+    const { proof, ...unsigned } = vc as SignedVC & { proof?: { proofValue: string } };
+    if (!proof?.proofValue) {
+      throw new HelixError(ErrorCode.VALIDATION_ERROR, 'VC carries no proof to verify', 400);
+    }
+
+    let issuerDoc;
+    try {
+      issuerDoc = await resolveDIDCore(vc.issuer);
+    } catch {
+      throw new HelixError(
+        ErrorCode.VC_ISSUER_NOT_FOUND,
+        `Issuer DID ${vc.issuer} could not be resolved`,
+        400,
+      );
+    }
+
+    const signatureValid = await verifyEd25519Proof(
+      unsigned as Record<string, unknown>,
+      proof,
+      issuerDoc,
+    );
+    if (!signatureValid) {
+      throw new HelixError(
+        ErrorCode.VC_SIGNATURE_INVALID,
+        'VC proof does not verify against its issuer DID',
+        400,
+      );
+    }
+
+    const expiresAt = new Date((vc as unknown as { validUntil: string }).validUntil);
+    if (Number.isNaN(expiresAt.getTime())) {
+      throw new HelixError(ErrorCode.VALIDATION_ERROR, 'VC has no usable validUntil', 400);
+    }
+    if (expiresAt.getTime() <= Date.now()) {
+      throw new HelixError(ErrorCode.VC_EXPIRED, 'Cannot register an already-expired VC', 400);
+    }
+
+    const subject = vc.credentialSubject as unknown as {
+      id: string;
+      scopes?: string[];
+      privilegeScopes?: string[];
+    };
+
+    // vcs.subjectDid is a FK onto dids. An onboarded agent is already
+    // registered; this covers a grant naming a DID this server has only ever
+    // seen inside a VP, and mirrors issueVC()'s own fallback.
+    try {
+      await this.didService.resolveDID(subject.id, requestId);
+    } catch (err: unknown) {
+      if (err instanceof HelixError && err.code === ErrorCode.DID_NOT_FOUND) {
+        let resolved: Awaited<ReturnType<typeof resolveDIDCore>>;
+        try {
+          resolved = await resolveDIDCore(subject.id);
+        } catch {
+          throw new HelixError(ErrorCode.VC_SUBJECT_DID_NOT_FOUND, 'Subject DID not found', 404);
+        }
+        await this.didService.registerResolvedDID(subject.id, resolved, 'agent', requestId);
+      } else {
+        throw err;
+      }
+    }
+
+    // A DelegationGrant names its scopes `scopes`; agent credentials use
+    // `privilegeScopes`. Store whichever this credential carries, so the row
+    // stays queryable by scope either way.
+    const privilegeScopes = subject.privilegeScopes ?? subject.scopes;
+
+    await this.vcRepo.createVc({
+      vcId: vc.id,
+      subjectDid: subject.id,
+      subjectType: 'agent',
+      vcJson: vc,
+      privilegeScopes,
+      // Placeholder index, as in registerSignedVC(): an SP-issued grant
+      // carries its own credentialStatus pointing at the SP's status list,
+      // so revocation is checked there rather than against an index this
+      // platform claimed.
+      statusListIndex: 0,
+      expiresAt,
+    });
+
+    await this.audit.log({
+      event: 'CONSENT_GRANTED',
+      timestamp: new Date().toISOString(),
+      requestId,
+      vcId: vc.id,
+      subjectDid: subject.id,
+      subjectType: 'agent',
+      privilegeScopes,
+      expiresAt: expiresAt.toISOString(),
+    });
+
+    return { vcId: vc.id, alreadyRegistered: false };
   }
 
   async issueVC(params: IssueVCParams, requestId: string): Promise<IssueVCResult> {
