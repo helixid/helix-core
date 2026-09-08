@@ -51,6 +51,62 @@ describe('VC route surface', () => {
     await app.close();
   });
 
+  it('requires admin auth to register an externally-signed VC', async () => {
+    const app = await makeApp();
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/v1/vcs/register',
+      payload: { vc: { id: 'vc:grant:1' } },
+    });
+
+    expect(response.statusCode).toBe(403);
+    expect(JSON.parse(response.body).error.code).toBe(ErrorCode.ADMIN_AUTH_REQUIRED);
+    await app.close();
+  });
+
+  it('rejects a register call with no vc in the body', async () => {
+    const app = await makeApp();
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/v1/vcs/register',
+      headers: { 'x-admin-api-key': 'test-admin-key-0001' },
+      payload: {},
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(JSON.parse(response.body).error.code).toBe(ErrorCode.VALIDATION_ERROR);
+    await app.close();
+  });
+
+  it('registers an externally-signed VC, and is idempotent on the same vcId', async () => {
+    const app = await makeApp();
+    const vc = { id: 'vc:grant:1', issuer: 'did:web:airline.example.com' };
+
+    const first = await app.inject({
+      method: 'POST',
+      url: '/v1/vcs/register',
+      headers: { 'x-admin-api-key': 'test-admin-key-0001' },
+      payload: { vc },
+    });
+
+    expect(first.statusCode).toBe(201);
+    expect(JSON.parse(first.body)).toEqual({ vcId: 'vc:grant:1', alreadyRegistered: false });
+
+    // A retried consent callback must not fail or duplicate the grant.
+    const second = await app.inject({
+      method: 'POST',
+      url: '/v1/vcs/register',
+      headers: { 'x-admin-api-key': 'test-admin-key-0001' },
+      payload: { vc },
+    });
+
+    expect(second.statusCode).toBe(200);
+    expect(JSON.parse(second.body)).toEqual({ vcId: 'vc:grant:1', alreadyRegistered: true });
+    await app.close();
+  });
+
   it('does not expose API-side delegation', async () => {
     const app = await makeApp();
 

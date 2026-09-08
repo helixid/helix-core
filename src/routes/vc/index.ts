@@ -12,6 +12,7 @@
 
 import { FastifyPluginAsync } from 'fastify';
 import { AdminAuthRequiredError, ErrorCode, HelixError } from '../../core/index.js';
+import type { SignedVC } from '../../core/index.js';
 import type { IVCService, IssueVCParams, RenewVCOptions } from '../../services/vc/vc.service.js';
 
 const VC_STATUSES = ['active', 'revoked', 'expired'] as const;
@@ -76,6 +77,27 @@ const vcRoutes: FastifyPluginAsync<VcRouteOptions> = async (fastify, options) =>
     const params = request.body as IssueVCParams;
     const result = await vcService.issueVC(params, request.id);
     return reply.status(201).send(result);
+  });
+
+  // POST /v1/vcs/register - Register a VC signed outside this platform, so
+  // the platform holds it rather than the agent carrying it. The consent
+  // path: a Service Provider issues a DelegationGrantCredential with its own
+  // key, then registers it here. Distinct from POST /v1/vcs, which *issues* a
+  // VC signed by the platform issuer -- the wrong signature for a grant,
+  // whose whole point is that the SP attested to it.
+  //
+  // Admin-gated like every other write here. OSS has no per-tenant credential
+  // narrower than the admin key, so an SP registering a grant presents the
+  // same key an agent presents to sign a VP. The submitted proof is verified
+  // regardless, so the key gates who may write, not what may be claimed.
+  fastify.post('/register', async (request, reply) => {
+    requireAdmin(request);
+    const body = request.body as { vc?: SignedVC } | undefined;
+    if (!body?.vc) {
+      throw new HelixError(ErrorCode.VALIDATION_ERROR, 'Body must include a `vc`', 400);
+    }
+    const result = await vcService.registerExternalVC(body.vc, request.id);
+    return reply.status(result.alreadyRegistered ? 200 : 201).send(result);
   });
 
   // GET /v1/vcs/:vcId - Get VC details

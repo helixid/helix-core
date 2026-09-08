@@ -19,9 +19,11 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { HelixError, ErrorCode } from '../../core/index.js';
 import type { IPreparedPayloadService } from '../../services/prepared-payload/IPreparedPayloadService.js';
+import type { IVCService } from '../../services/vc/IVCService.js';
 
 export interface PreparedPayloadRouteOptions {
   preparedPayloadService: IPreparedPayloadService;
+  vcService: IVCService;
 }
 
 interface DelegationPrepareBody {
@@ -71,7 +73,7 @@ function requireFields(body: Record<string, unknown>, fields: string[]): void {
 
 const preparedPayloadRoutes: FastifyPluginAsync<PreparedPayloadRouteOptions> = async (
   fastify,
-  { preparedPayloadService },
+  { preparedPayloadService, vcService },
 ) => {
   // POST /v1/vcs/delegation/prepare
   fastify.post('/delegation/prepare', async (request, reply) => {
@@ -130,6 +132,21 @@ const preparedPayloadRoutes: FastifyPluginAsync<PreparedPayloadRouteOptions> = a
       'signatureHex',
     ]);
     const result = await preparedPayloadService.finalizeGrant(body);
+
+    // The platform holds the consent credential. finalize() only verifies the
+    // SP's signature and marks the token consumed -- it persists nothing --
+    // so without this the grant would exist only in whatever the SP and the
+    // agent happened to keep. That was survivable while agents had wallets;
+    // with self-custody retired there is no agent-side store left to hold it.
+    // Mirrors delegateAuthority()'s registerSignedVC() call for delegation VCs.
+    //
+    // Deliberately not best-effort: if this throws, the caller gets an error
+    // rather than a grant the platform silently failed to hold. The finalize
+    // token is already consumed at this point, so a retry has to start from a
+    // fresh prepare -- registerExternalVC() is idempotent by vcId, so
+    // re-registering the same grant is safe if the SP still has it.
+    await vcService.registerExternalVC(result, request.id);
+
     return reply.status(200).send(result);
   });
 
