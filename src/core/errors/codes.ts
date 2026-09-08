@@ -1,7 +1,16 @@
 export const ErrorCodes = {
   VALIDATION_ERROR: 'VALIDATION_ERROR',
   INTERNAL_ERROR: 'INTERNAL_ERROR',
+  // Self-hosted/OSS only (an actual admin key is configured and missing/wrong).
   ADMIN_AUTH_REQUIRED: 'ADMIN_AUTH_REQUIRED',
+  // Hosted/enterprise's equivalent -- no admin key exists there, so
+  // ADMIN_AUTH_REQUIRED would be a lie. Same shape (no valid credential
+  // presented), different code/message: see helix-server-enterprise's
+  // account-or-admin-guard.ts.
+  ACCOUNT_AUTH_REQUIRED: 'ACCOUNT_AUTH_REQUIRED',
+  // Authenticated, but not as the account that owns the resource in
+  // question (e.g. presenting a VP for an agent DID another account owns).
+  ACCOUNT_FORBIDDEN: 'ACCOUNT_FORBIDDEN',
 
   // B1 — DID & Hedera
   INVALID_PUBLIC_KEY: 'INVALID_PUBLIC_KEY',
