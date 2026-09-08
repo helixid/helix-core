@@ -99,6 +99,40 @@ const agentRoutes: FastifyPluginAsync<AgentRouteOptions> = async (fastify, optio
     }
   });
 
+  // POST /agents/:did/delegate - delegate a slice of a server-custody
+  // agent's authority to another DID. Same trust boundary and gating as
+  // POST /agents/:did/vp above: the delegator's private key is what
+  // authorizes this, and OSS has no per-tenant credential narrower than the
+  // admin key.
+  fastify.post('/agents/:did/delegate', async (request, reply) => {
+    try {
+      requireAdmin(request);
+      const params = request.params as { did: string };
+      const body = request.body as {
+        to: string;
+        scopes: string[];
+        expiresIn: number;
+        vcId?: string;
+      };
+      const result = await options.agentService.delegateAuthority(
+        {
+          did: params.did,
+          to: body.to,
+          scopes: body.scopes,
+          expiresIn: body.expiresIn,
+          ...(body.vcId ? { vcId: body.vcId } : {}),
+        },
+        request.id,
+      );
+      return reply.code(200).send(result);
+    } catch (error) {
+      const mapped = mapAgentError(error);
+      return reply
+        .code(mapped.statusCode)
+        .send({ error: { code: mapped.code, message: mapped.message, requestId: request.id } });
+    }
+  });
+
   fastify.post('/challenges', async (request, reply) => {
     try {
       const result = await options.agentService.issueUserChallenge(

@@ -33,6 +33,7 @@ import {
   PreparedPayloadAlreadyConsumedError,
   PreparedPayloadPurposeMismatchError,
   PreparedPayloadSignatureInvalidError,
+  SelfDelegationNotAllowedError,
   type SignedVC,
 } from '../../../src/core/index.js';
 import { PreparedPayloadService } from '../../../src/services/prepared-payload/prepared-payload.service.js';
@@ -176,6 +177,22 @@ describe('PreparedPayloadService — delegation', () => {
         expiresIn: 3600,
       }),
     ).rejects.toBeInstanceOf(ScopeEscalationDeniedError);
+  });
+
+  it('rejects delegating to the delegator\'s own DID', async () => {
+    const service = makeService();
+    const delegator = makeActor();
+    const fromVC = makeAgentVC(delegator.did);
+
+    await expect(
+      service.prepareDelegation({
+        delegatorDid: delegator.did,
+        fromVC,
+        to: delegator.did,
+        scopes: ['read:calendar'],
+        expiresIn: 3600,
+      }),
+    ).rejects.toBeInstanceOf(SelfDelegationNotAllowedError);
   });
 
   it('rejects delegation beyond maxDelegationDepth', async () => {

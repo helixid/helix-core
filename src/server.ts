@@ -131,6 +131,7 @@ const vpService = new VPService(vcService, auditLogger, config.API_BASE_URL, {
 // pattern as HOSTED_ACCESS_TOKEN_SECRET below it.
 const agentKeyEncryptionKey = config.HOSTED_KEY_ENCRYPTION_KEY ?? crypto.randomBytes(32).toString('hex');
 const keyCustody = new AesGcmKeyCustody(agentKeyEncryptionKey);
+const preparedPayloadService = new PreparedPayloadService(preparedPayloadRepository, didService);
 const agentService = new AgentService(
   agentRepository,
   didService,
@@ -138,8 +139,8 @@ const agentService = new AgentService(
   auditLogger,
   agentKeyRepository,
   keyCustody,
+  preparedPayloadService,
 );
-const preparedPayloadService = new PreparedPayloadService(preparedPayloadRepository, didService);
 
 const app = Fastify({
   logger: {

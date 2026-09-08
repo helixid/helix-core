@@ -1,3 +1,5 @@
+import type { SignedVC } from '../../core/index.js';
+
 export type VCStatus = 'active' | 'revoked' | 'expired';
 
 export interface IssueVCInput {
@@ -25,6 +27,16 @@ export interface IVCService {
     subjectDid: string,
     vcType?: string,
   ): Promise<Record<string, unknown> | null>;
+  /**
+   * Like findActiveBySubjectDid(), but returns every active credential
+   * instead of throwing when there's more than one -- for callers (see
+   * AgentService.delegateAuthority()) that can disambiguate themselves
+   * rather than needing "there's exactly one" as a precondition.
+   */
+  listActiveBySubjectDid(
+    subjectDid: string,
+    vcType?: string,
+  ): Promise<Array<Record<string, unknown>>>;
   findActiveByVcIdForSubject(
     vcId: string,
     subjectDid: string,
@@ -54,4 +66,16 @@ export interface IVCService {
     };
   }>;
   issueVC(input: IssueVCInput, requestId: string): Promise<IssueVCResult>;
+  /**
+   * Persists an already-signed VC produced outside issueVC()'s own
+   * issuer-signed path — specifically, a delegation VC signed by the
+   * delegator agent's own custodial key (see AgentService.delegateAuthority()
+   * and PreparedPayloadService.finalizeDelegation()), not this service's
+   * platform issuer key. Skips issueVC()'s signing and status-list-index
+   * claiming entirely; this only makes the VC findable again via
+   * findActiveBySubjectDid()/findActiveByVcIdForSubject() for a later hop of
+   * delegation. No audit event here — the caller (delegateAuthority) already
+   * logs VC_DELEGATED for this VC.
+   */
+  registerSignedVC(vc: SignedVC): Promise<void>;
 }

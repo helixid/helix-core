@@ -16,6 +16,7 @@ import {
   signBytes,
   verifySignature,
   VPBuilder,
+  VPMultipleActiveVCError,
   type HelixError,
   type IAuditLogger,
   type SignedVC,
@@ -26,9 +27,11 @@ import type { AgentKeyRepository } from '../../repositories/agent-key.repository
 import type { IDIDService } from '../did/IDIDService.js';
 import type { IVCService } from '../vc/IVCService.js';
 import type { IKeyCustody } from '../key-custody/key-custody.js';
+import type { IPreparedPayloadService } from '../prepared-payload/IPreparedPayloadService.js';
 import type {
   IAgentService,
   ChallengeResult,
+  DelegateAuthorityResult,
 } from './IAgentService.js';
 
 type DIDVerificationMethodLike = {
@@ -92,6 +95,13 @@ export class AgentService implements IAgentService {
     private readonly auditLogger: IAuditLogger,
     private readonly agentKeyRepository: AgentKeyRepository,
     private readonly keyCustody: IKeyCustody,
+    /**
+     * Only required for delegateAuthority() — every other method above works
+     * without it. Optional (rather than folded into a larger constructor
+     * everywhere) so the many existing callers that never delegate don't all
+     * need updating just to keep compiling.
+     */
+    private readonly preparedPayloadService?: IPreparedPayloadService,
     private readonly enrollmentTokenTtlSeconds = 900,
     private readonly challengeTtlSeconds = 300,
   ) {}
@@ -219,6 +229,122 @@ export class AgentService implements IAgentService {
     });
 
     return { signedVP };
+  }
+
+  /**
+   * Delegates a slice of a server-custody agent's authority to another DID —
+   * the custodial counterpart to the SDK's local delegate(), which needs a
+   * wallet's own private key and so has had nothing legitimate to call since
+   * agent self-custody was retired (see helix-sdk-js's delegation.ts and
+   * helix-sdk-py's agent_delegation_demo.py for the prior state of that gap).
+   *
+   * Mirrors signVP() exactly: same key lookup, same "which active credential"
+   * resolution (default to the one active HelixAgentCredential, or pin one
+   * via vcId when more than one exists — e.g. this agent already holds a
+   * VC delegated to it, alongside its own onboarding VC). The only new step
+   * is calling prepare/finalizeDelegation() instead of building the VP
+   * locally: payload construction (scope-subset and max-depth checks
+   * included) already lives there, so this just signs whatever hash it
+   * returns with the key custody already holds for VP signing.
+   */
+  async delegateAuthority(
+    input: { did: string; to: string; scopes: string[]; expiresIn: number; vcId?: string },
+    requestId: string,
+  ): Promise<DelegateAuthorityResult> {
+    if (!this.preparedPayloadService) {
+      throw Object.assign(new Error('Delegation is not configured'), {
+        code: 'INTERNAL_ERROR',
+        httpStatus: 500,
+      });
+    }
+
+    const keyRecord = await this.agentKeyRepository.findByDid(input.did);
+    if (!keyRecord) {
+      throw new AgentKeyNotFoundError(input.did);
+    }
+
+    const fromVC = input.vcId
+      ? await this.vcService.findActiveByVcIdForSubject(input.vcId, input.did, 'HelixAgentCredential')
+      : await this.resolveDelegationSourceVC(input.did, input.scopes);
+    if (!fromVC) {
+      throw new AgentActiveCredentialNotFoundError(input.did);
+    }
+
+    const prepared = await this.preparedPayloadService.prepareDelegation({
+      delegatorDid: input.did,
+      fromVC: fromVC as SignedVC,
+      to: input.to,
+      scopes: input.scopes,
+      expiresIn: input.expiresIn,
+    });
+
+    const signatureHex = await this.keyCustody.signWith(keyRecord, (privateKeyHex) =>
+      signBytes(Buffer.from(prepared.canonicalHash, 'hex'), privateKeyHex),
+    );
+
+    const delegatedVC = await this.preparedPayloadService.finalizeDelegation({
+      token: prepared.token,
+      verificationMethod: `${input.did}#key-1`,
+      signatureHex,
+    });
+
+    // Without this, the delegate DID could never be looked up again by
+    // vcId/subjectDid -- finalizeDelegation() only marks the prepare/
+    // finalize token consumed, it doesn't persist the VC itself. That made
+    // a second hop of delegation (the delegate delegating further) always
+    // fail with AgentActiveCredentialNotFoundError, regardless of
+    // maxDelegationDepth, since there was never anything for that lookup to
+    // find beyond the delegate's own (typically zero-authority) onboarding
+    // VC. registerSignedVC() stores it as-is, already correctly signed by
+    // this delegator's own key -- no re-signing, no platform-issuer
+    // involvement.
+    await this.vcService.registerSignedVC(delegatedVC);
+
+    this.auditLogger.log(AuditEvents.VC_DELEGATED, {
+      requestId,
+      delegatorDid: input.did,
+      delegateDid: input.to,
+      scopes: input.scopes,
+      delegatedVcId: delegatedVC.id,
+    });
+
+    return { delegatedVC };
+  }
+
+  /**
+   * Picks which of `did`'s active HelixAgentCredentials to delegate from
+   * when the caller didn't pin one via vcId — needed once an agent can hold
+   * more than one (its own onboarding VC, plus whatever it's been delegated)
+   * for delegateAuthority()'s default, no-vcId path to still work past the
+   * first hop. Eligible means: covers every scope being delegated, and has
+   * remaining delegation budget (delegationDepth + 1 <= maxDelegationDepth).
+   * Exactly one eligible candidate is the expected, common case; zero means
+   * "no active credential lets you do this" (same AgentActiveCredentialNotFoundError
+   * the caller would see for a nonexistent VC); more than one is genuine
+   * ambiguity this can't resolve on the caller's behalf (e.g. two separately
+   * delegated grants both cover the requested scopes) -- vcId is how the
+   * caller breaks that tie explicitly.
+   */
+  private async resolveDelegationSourceVC(
+    did: string,
+    requestedScopes: string[],
+  ): Promise<Record<string, unknown> | null> {
+    const candidates = await this.vcService.listActiveBySubjectDid(did, 'HelixAgentCredential');
+    const eligible = candidates.filter((vc) => {
+      const subject = (vc as { credentialSubject?: Record<string, unknown> }).credentialSubject ?? {};
+      const scopes = Array.isArray(subject['privilegeScopes']) ? (subject['privilegeScopes'] as string[]) : [];
+      const hasAllScopes = requestedScopes.every((scope) => scopes.includes(scope));
+      const depth = typeof subject['delegationDepth'] === 'number' ? (subject['delegationDepth'] as number) : 0;
+      const maxDepth =
+        typeof subject['maxDelegationDepth'] === 'number' ? (subject['maxDelegationDepth'] as number) : 0;
+      return hasAllScopes && depth + 1 <= maxDepth;
+    });
+
+    if (eligible.length === 0) return null;
+    if (eligible.length === 1) return eligible[0]!;
+    throw new VPMultipleActiveVCError(
+      `Multiple eligible credentials found for ${did} to delegate ${requestedScopes.join(', ')} from -- pass vcId to pick one explicitly`,
+    );
   }
 
   async processOnboardStep1(

@@ -233,6 +233,13 @@ export class MaxDelegationDepthExceededError extends HelixError {
   }
 }
 
+/** An agent cannot delegate authority to its own DID -- no legitimate use case, and it's not a privilege gain (scopes can only narrow, depth is still capped), just a nonsensical self-referential credential. */
+export class SelfDelegationNotAllowedError extends HelixError {
+  constructor(did: string) {
+    super('SELF_DELEGATION_NOT_ALLOWED', `Cannot delegate authority to the same DID: ${did}`, 400);
+  }
+}
+
 export class VCRevokedError extends HelixError {
   constructor(message = 'The Verifiable Credential has been revoked') {
     super('VC_REVOKED', message, 400);

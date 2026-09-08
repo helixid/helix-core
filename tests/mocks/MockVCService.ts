@@ -1,4 +1,5 @@
 import { buildStatusListCredential, createStatusList, setBit } from '../../src/core/index.js';
+import type { SignedVC } from '../../src/core/index.js';
 import type {
   IVCService,
   IssueVCInput,
@@ -50,6 +51,22 @@ export class MockVCService implements IVCService {
       if (!types.includes(vcType)) return null;
     }
     return this.activeVC;
+  }
+
+  async registerSignedVC(vc: SignedVC): Promise<void> {
+    this.activeVC = vc as unknown as Record<string, unknown>;
+  }
+
+  async listActiveBySubjectDid(
+    _subjectDid: string,
+    vcType?: string,
+  ): Promise<Array<Record<string, unknown>>> {
+    if (!this.activeVC) return [];
+    if (vcType) {
+      const types = (this.activeVC['type'] as string[]) || [];
+      if (!types.includes(vcType)) return [];
+    }
+    return [this.activeVC];
   }
 
   async getVCStatus(): Promise<VCStatus> {

@@ -37,6 +37,7 @@ import { extractEd25519PublicKeyHexFromDIDDocument } from '../did/publicKey.js';
 type CredentialSubject = {
   agentName?: string;
   userId?: string;
+  delegatedFrom?: string;
   delegationDepth?: number;
   maxDelegationDepth?: number;
   parentVcId?: string;
@@ -118,6 +119,10 @@ export interface IVCService {
     subjectDid: string,
     vcType?: string,
   ): Promise<Record<string, unknown> | null>;
+  listActiveBySubjectDid(
+    subjectDid: string,
+    vcType?: string,
+  ): Promise<Array<Record<string, unknown>>>;
   issueVC(params: IssueVCParams, requestId: string): Promise<IssueVCResult>;
   listVCs(filters?: ListVCFilters): Promise<VCSummary[]>;
   getVC(vcId: string, requestId: string): Promise<VCDetails>;
@@ -141,6 +146,7 @@ export interface IVCService {
     listId?: string;
     length?: number;
   }): Promise<ReturnType<typeof buildStatusListCredential>>;
+  registerSignedVC(vc: SignedVC): Promise<void>;
 }
 
 /**
@@ -175,6 +181,20 @@ export class VCService implements IVCService {
     ) as Record<string, unknown>;
   }
 
+  async listActiveBySubjectDid(
+    subjectDid: string,
+    vcType?: string,
+  ): Promise<Array<Record<string, unknown>>> {
+    const records = await this.vcRepo.findActiveBySubjectDid(subjectDid, vcType);
+    return records.map(
+      (record) =>
+        (typeof record.vcJson === 'string' ? JSON.parse(record.vcJson) : record.vcJson) as Record<
+          string,
+          unknown
+        >,
+    );
+  }
+
   async findActiveByVcIdForSubject(
     vcId: string,
     subjectDid: string,
@@ -197,6 +217,36 @@ export class VCService implements IVCService {
       if (!types.includes(vcType)) return null;
     }
     return vc;
+  }
+
+  /**
+   * Persists an already-signed VC without issuing or re-signing it — see
+   * IVCService.registerSignedVC()'s doc comment. Assigns statusListIndex: 0
+   * as a placeholder rather than claiming a real one: this VC's own JSON
+   * carries no credentialStatus entry (delegation VCs aren't individually
+   * revocable via status list yet — a separate gap from this one), so there
+   * is no real index for a claimed one to correspond to. 0 is never
+   * interpreted as "revoked" by anything here; revocation for this record
+   * is tracked the same way as everywhere else in this repository, via the
+   * row's own revokedAt column.
+   */
+  async registerSignedVC(vc: SignedVC): Promise<void> {
+    const subject = (vc as unknown as { credentialSubject: CredentialSubject & { id: string; privilegeScopes?: string[] } })
+      .credentialSubject;
+    const validUntil = (vc as unknown as { validUntil: string }).validUntil;
+    await this.vcRepo.createVc({
+      vcId: vc.id,
+      subjectDid: subject.id,
+      subjectType: 'agent',
+      vcJson: vc,
+      privilegeScopes: subject.privilegeScopes,
+      statusListIndex: 0,
+      expiresAt: new Date(validUntil),
+      delegatedFrom: subject.delegatedFrom,
+      delegationDepth: subject.delegationDepth,
+      maxDelegationDepth: subject.maxDelegationDepth,
+      parentVcId: subject.parentVcId,
+    });
   }
 
   async issueVC(params: IssueVCParams, requestId: string): Promise<IssueVCResult> {

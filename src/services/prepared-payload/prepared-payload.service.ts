@@ -36,6 +36,7 @@ import {
   PreparedPayloadSignatureInvalidError,
   RenewalWindowExpiredError,
   RenewalWindowNotOpenError,
+  SelfDelegationNotAllowedError,
   VCMissingCredentialStatusError,
   VCRevokedError,
   VC_CONTEXTS,
@@ -86,6 +87,10 @@ export class PreparedPayloadService implements IPreparedPayloadService {
   // -- delegation ------------------------------------------------------
 
   async prepareDelegation(input: PrepareDelegationInput): Promise<PrepareResult> {
+    if (input.to === input.delegatorDid) {
+      throw new SelfDelegationNotAllowedError(input.delegatorDid);
+    }
+
     const parentSubject = input.fromVC.credentialSubject as {
       privilegeScopes?: unknown;
       delegationDepth?: number;

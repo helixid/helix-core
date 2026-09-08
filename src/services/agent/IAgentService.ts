@@ -28,6 +28,10 @@ export interface SignVPResult {
   signedVP: SignedVP;
 }
 
+export interface DelegateAuthorityResult {
+  delegatedVC: SignedVC;
+}
+
 export interface UserChallengeVerifyResult {
   did: string;
   verified: true;
@@ -60,6 +64,10 @@ export interface IAgentService {
     input: { did: string; targetService: string; userDid?: string; grantVC?: SignedVC; vcId?: string },
     requestId: string,
   ): Promise<SignVPResult>;
+  delegateAuthority(
+    input: { did: string; to: string; scopes: string[]; expiresIn: number; vcId?: string },
+    requestId: string,
+  ): Promise<DelegateAuthorityResult>;
   issueUserChallenge(
     input: { did: string; purpose: 'user_verification' },
     requestId: string,
