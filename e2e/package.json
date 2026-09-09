@@ -10,7 +10,7 @@
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
-    "@helixid/sdk-js": "github:helixid/helix-sdk-js#path:helix-sdk-js",
+    "@helixid/sdk-js": "^0.2.0",
     "@types/node": "^20.0.0",
     "typescript": "^5.4.0",
     "vitest": "^4.1.8"

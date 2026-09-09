@@ -7,7 +7,6 @@ settings:
 overrides:
   fast-uri: 3.1.2
   protobufjs: 8.0.2
-  '@helixid/mcp-middleware>@helixid/sdk-js': file:../helix-sdk-js/helix-sdk-js
 
 patchedDependencies:
   '@changesets/cli@3.0.2':
@@ -74,8 +73,8 @@ importers:
         specifier: ^0.1.2
         version: 0.1.2(bn.js@5.2.5)(react-native@0.87.1(@babel/core@7.29.7)(@types/react@19.2.18)(react@19.2.8))
       '@helixid/sdk-js':
-        specifier: github:helixid/helix-sdk-js#path:helix-sdk-js
-        version: https://codeload.github.com/helixid/helix-sdk-js/tar.gz/d91e2370f6dafcf5306886c2c20b20828acb5d06#path:helix-sdk-js
+        specifier: ^0.2.0
+        version: 0.2.0
       '@types/better-sqlite3':
         specifier: ^7.6.13
         version: 7.6.13
@@ -125,8 +124,8 @@ importers:
   e2e:
     devDependencies:
       '@helixid/sdk-js':
-        specifier: github:helixid/helix-sdk-js#path:helix-sdk-js
-        version: https://codeload.github.com/helixid/helix-sdk-js/tar.gz/d91e2370f6dafcf5306886c2c20b20828acb5d06#path:helix-sdk-js
+        specifier: ^0.2.0
+        version: 0.2.0
       '@types/node':
         specifier: ^20.0.0
         version: 20.19.43
@@ -631,9 +630,8 @@ packages:
   '@helixid/did-hedera@0.1.2':
     resolution: {integrity: sha512-byKtjIW60qQ5ZzoIELydknuD3qW8yUriyYVTFVbEbwuHbY4h4ntwtV5hfHokMTwhNmYFvYcqUUVgWl0Q7PKwIA==}
 
-  '@helixid/sdk-js@https://codeload.github.com/helixid/helix-sdk-js/tar.gz/d91e2370f6dafcf5306886c2c20b20828acb5d06#path:helix-sdk-js':
-    resolution: {path: helix-sdk-js, tarball: https://codeload.github.com/helixid/helix-sdk-js/tar.gz/d91e2370f6dafcf5306886c2c20b20828acb5d06}
-    version: 0.1.7
+  '@helixid/sdk-js@0.2.0':
+    resolution: {integrity: sha512-vrcx/6rjOqDhuQsLp/LGXaxEHffKevDZJiRmOSLoUwDcPH4RwgSDKQeTNJoZ+Nhkcjbc4ZlAz7Kxh5vky+OJmw==}
 
   '@hiero-did-sdk/cache@0.1.8':
     resolution: {integrity: sha512-HGC4ckyzK6ollXzwliEcyy9398srz2eSmBbYBFQawc/D3wCqK1Dd2jHhhQoutsUp8s/7+EhpB4urZ3CSOHFjBA==}
@@ -4181,7 +4179,7 @@ snapshots:
       - react-native
       - supports-color
 
-  '@helixid/sdk-js@https://codeload.github.com/helixid/helix-sdk-js/tar.gz/d91e2370f6dafcf5306886c2c20b20828acb5d06#path:helix-sdk-js':
+  '@helixid/sdk-js@0.2.0':
     dependencies:
       '@noble/ed25519': 2.3.0
       '@noble/hashes': 1.8.0
