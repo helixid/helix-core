@@ -1,5 +1,11 @@
 # @helixid/core
 
+## 2.0.1
+
+### Patch Changes
+
+- 2c98211: Bump dependencies to latest in-range (semver-compatible) versions.
+
 ## 2.0.0
 
 ### Major Changes
