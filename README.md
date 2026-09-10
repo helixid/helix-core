@@ -1,22 +1,5 @@
 # @helixid/core
 
-> **Not the same `@helixid/core` as before.** This codebase previously
-> published a package under this name, then retired it (see
-> `docs/proposal-retire-core-package.md`) when its only real second
-> consumer — `helix-sdk-js` — stopped needing it locally after
-> `proposal-sdk-api-only.md` moved verification/delegation-building behind
-> API calls instead. That left one consumer, and a separately-versioned
-> package for one consumer wasn't worth it.
->
-> This is a fresh package under the same name, for a different reason: two
-> full server products — the closed-source enterprise server and the
-> self-hosted OSS server (`github.com/helixid/helixid`) — share the entire
-> DID/VC/VP/agent business-logic layer (repositories, services, routes),
-> and need that layer to be one real dependency, not two independently
-> drifting copies. That's a materially different situation from the one
-> that got retired; don't read this package's existence as a reversal of
-> that earlier decision.
-
 Fastify HTTP API primitives for Helix ID — self-hostable, stateful operations across four boundaries. Consumed by both `helix-server-enterprise` and `github.com/helixid/helixid` (the OSS self-hosted server) as a real dependency, not copied into either.
 
 ## Documentation
