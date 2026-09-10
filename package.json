@@ -1,9 +1,9 @@
 {
   "name": "@helixid/core",
-  "version": "2.0.1",
+  "version": "2.1.0",
   "description": "Fastify HTTP API primitives for Helix ID — self-hostable DID/VC/VP/agent business-logic layer, consumed by helix-server-enterprise and the OSS self-hosted server.",
   "license": "Apache-2.0",
-  "homepage": "https://www.dgverse.in/products/helix-id",
+  "homepage": "https://helixid.dev/",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/helixid/helix-core.git"
