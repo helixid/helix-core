@@ -13,21 +13,14 @@
 import { describe, it, expect } from 'vitest';
 import {
   DIDNotFoundError,
-  buildDIDDocument,
   generateKeyPair,
   hashCanonicalPayload,
   publicKeyToMultibase,
   signData,
   createStatusList,
-  setBit,
   buildStatusListCredential,
   MaxDelegationDepthExceededError,
-  MaxRenewalCountExceededError,
-  RenewalWindowNotOpenError,
-  RenewalWindowExpiredError,
   ScopeEscalationDeniedError,
-  VCRevokedError,
-  VCMissingCredentialStatusError,
   PreparedPayloadNotFoundError,
   PreparedPayloadExpiredError,
   PreparedPayloadAlreadyConsumedError,
@@ -89,53 +82,6 @@ function makeAgentVC(subjectDid: string, delegatedFrom?: string): SignedVC {
       type: 'Ed25519Signature2020',
       created: '2026-01-01T00:00:00.000Z',
       verificationMethod: 'did:key:z6MkIssuerExample#key-1',
-      proofPurpose: 'assertionMethod',
-      proofValue: 'zPlaceholder',
-    },
-  } as unknown as SignedVC;
-}
-
-/** A self-issued-style agent VC with a credentialStatus entry, at a given
- * point in its own validity lifecycle (fraction 0 = just issued, 1 = right
- * at expiry) — used to exercise the renewal-window check deterministically. */
-function makeRenewableAgentVC(opts: {
-  ownerDid: string;
-  statusListIndex: number;
-  elapsedFraction: number;
-  validityMs?: number;
-  renewalCount?: number;
-}): SignedVC {
-  const validityMs = opts.validityMs ?? 24 * 60 * 60 * 1000; // 24h, like selfIssueVC's default
-  const validFrom = new Date(Date.now() - opts.elapsedFraction * validityMs);
-  const validUntil = new Date(validFrom.getTime() + validityMs);
-  return {
-    '@context': ['https://www.w3.org/ns/credentials/v2', 'https://helixid.io/contexts/v1'],
-    id: 'vc:helix:self:test-renewable',
-    type: ['VerifiableCredential', 'HelixAgentCredential'],
-    issuer: opts.ownerDid,
-    validFrom: validFrom.toISOString(),
-    validUntil: validUntil.toISOString(),
-    credentialStatus: {
-      id: `https://sp.example/status/1#${opts.statusListIndex}`,
-      type: 'BitstringStatusListEntry',
-      statusPurpose: 'revocation',
-      statusListIndex: opts.statusListIndex.toString(),
-      statusListCredential: 'https://sp.example/status/1',
-    },
-    credentialSubject: {
-      id: opts.ownerDid,
-      type: 'HelixAgent',
-      privilegeScopes: ['read:calendar', 'read:email'],
-      agentName: opts.ownerDid,
-      delegationDepth: 0,
-      maxDelegationDepth: 0,
-      renewalCount: opts.renewalCount ?? 0,
-    },
-    evidence: [{ type: 'SelfSignedDevCredential', warning: 'Not for production use' }],
-    proof: {
-      type: 'Ed25519Signature2020',
-      created: validFrom.toISOString(),
-      verificationMethod: `${opts.ownerDid}#key-1`,
       proofPurpose: 'assertionMethod',
       proofValue: 'zPlaceholder',
     },
@@ -426,200 +372,5 @@ describe('PreparedPayloadService — grant', () => {
     expect(grantVC.issuer).toBe(issuer.did);
     expect((grantVC as unknown as { type: string[] }).type).toContain('DelegationGrantCredential');
     expect(grantVC.proof.verificationMethod).toBe(`${issuer.did}#key-1`);
-  });
-});
-
-describe('PreparedPayloadService — agent-renewal', () => {
-  function statusListWith(index: number, revoked: boolean) {
-    let encodedList = createStatusList();
-    if (revoked) encodedList = setBit(encodedList, index, 1);
-    return buildStatusListCredential('sp-status-list-1', encodedList, 'did:key:z6MkIssuerExample', 'https://sp.example');
-  }
-
-  it('rejects renewal when currentVC has no credentialStatus', async () => {
-    const service = makeService();
-    const owner = makeActor();
-    const currentVC = makeAgentVC(owner.did); // no credentialStatus field
-    const statusList = statusListWith(0, false);
-
-    await expect(
-      service.prepareAgentRenewal({
-        currentVC,
-        statusList,
-        statusListCredentialUrl: 'https://sp.example/status/1',
-        expiresIn: 3600,
-      }),
-    ).rejects.toBeInstanceOf(VCMissingCredentialStatusError);
-  });
-
-  it('rejects renewal of a revoked VC', async () => {
-    const service = makeService();
-    const owner = makeActor();
-    const currentVC = makeRenewableAgentVC({ ownerDid: owner.did, statusListIndex: 5, elapsedFraction: 0.9 });
-    const statusList = statusListWith(5, true); // revoked
-
-    await expect(
-      service.prepareAgentRenewal({
-        currentVC,
-        statusList,
-        statusListCredentialUrl: 'https://sp.example/status/1',
-        expiresIn: 3600,
-      }),
-    ).rejects.toBeInstanceOf(VCRevokedError);
-  });
-
-  it('rejects renewal requested too early (window not open)', async () => {
-    const service = makeService();
-    const owner = makeActor();
-    // Only 10% elapsed; window opens at 80%.
-    const currentVC = makeRenewableAgentVC({ ownerDid: owner.did, statusListIndex: 1, elapsedFraction: 0.1 });
-    const statusList = statusListWith(1, false);
-
-    await expect(
-      service.prepareAgentRenewal({
-        currentVC,
-        statusList,
-        statusListCredentialUrl: 'https://sp.example/status/1',
-        expiresIn: 3600,
-      }),
-    ).rejects.toBeInstanceOf(RenewalWindowNotOpenError);
-  });
-
-  it('rejects renewal requested long after expiry (grace period passed)', async () => {
-    const service = makeService();
-    const owner = makeActor();
-    // elapsedFraction > 1 puts validUntil in the past beyond the 24h grace window.
-    const currentVC = makeRenewableAgentVC({
-      ownerDid: owner.did,
-      statusListIndex: 2,
-      elapsedFraction: 3, // validFrom = now - 3*24h, validUntil = now - 2*24h
-    });
-    const statusList = statusListWith(2, false);
-
-    await expect(
-      service.prepareAgentRenewal({
-        currentVC,
-        statusList,
-        statusListCredentialUrl: 'https://sp.example/status/1',
-        expiresIn: 3600,
-      }),
-    ).rejects.toBeInstanceOf(RenewalWindowExpiredError);
-  });
-
-  it('rejects renewal requesting scopes beyond the current VC', async () => {
-    const service = makeService();
-    const owner = makeActor();
-    const currentVC = makeRenewableAgentVC({ ownerDid: owner.did, statusListIndex: 3, elapsedFraction: 0.9 });
-    const statusList = statusListWith(3, false);
-
-    await expect(
-      service.prepareAgentRenewal({
-        currentVC,
-        statusList,
-        statusListCredentialUrl: 'https://sp.example/status/1',
-        expiresIn: 3600,
-        scopes: ['admin:everything'],
-      }),
-    ).rejects.toBeInstanceOf(ScopeEscalationDeniedError);
-  });
-
-  it('rejects renewal once the renewal count cap is reached', async () => {
-    const service = makeService();
-    const owner = makeActor();
-    const currentVC = makeRenewableAgentVC({
-      ownerDid: owner.did,
-      statusListIndex: 4,
-      elapsedFraction: 0.9,
-      renewalCount: 5, // at MAX_RENEWAL_COUNT
-    });
-    const statusList = statusListWith(4, false);
-
-    await expect(
-      service.prepareAgentRenewal({
-        currentVC,
-        statusList,
-        statusListCredentialUrl: 'https://sp.example/status/1',
-        expiresIn: 3600,
-      }),
-    ).rejects.toBeInstanceOf(MaxRenewalCountExceededError);
-  });
-
-  it('completes the full prepare -> sign -> finalize round trip and increments renewalCount', async () => {
-    const service = makeService();
-    const owner = makeActor();
-    const currentVC = makeRenewableAgentVC({
-      ownerDid: owner.did,
-      statusListIndex: 6,
-      elapsedFraction: 0.9,
-      renewalCount: 2,
-    });
-    const statusList = statusListWith(6, false);
-
-    const prepared = await service.prepareAgentRenewal({
-      currentVC,
-      statusList,
-      statusListCredentialUrl: 'https://sp.example/status/1',
-      expiresIn: 3600,
-    });
-
-    expect(prepared.unsignedPayload.issuer).toBe(owner.did);
-    expect(
-      (prepared.unsignedPayload.credentialSubject as { renewalCount: number }).renewalCount,
-    ).toBe(3);
-    expect(
-      (prepared.unsignedPayload.credentialSubject as { renewedFrom: string }).renewedFrom,
-    ).toBe(currentVC.id);
-
-    const signatureHex = await signPrepareResult(owner.privateKeyHex, prepared.canonicalHash);
-    const renewedVC = await service.finalizeAgentRenewal({
-      token: prepared.token,
-      verificationMethod: `${owner.did}#key-1`,
-      signatureHex,
-    });
-
-    expect(renewedVC.issuer).toBe(owner.did);
-    expect(renewedVC.proof.verificationMethod).toBe(`${owner.did}#key-1`);
-  });
-
-  it('allows narrowing scopes on renewal', async () => {
-    const service = makeService();
-    const owner = makeActor();
-    const currentVC = makeRenewableAgentVC({ ownerDid: owner.did, statusListIndex: 7, elapsedFraction: 0.9 });
-    const statusList = statusListWith(7, false);
-
-    const prepared = await service.prepareAgentRenewal({
-      currentVC,
-      statusList,
-      statusListCredentialUrl: 'https://sp.example/status/1',
-      expiresIn: 3600,
-      scopes: ['read:calendar'],
-    });
-
-    expect(
-      (prepared.unsignedPayload.credentialSubject as { privilegeScopes: string[] }).privilegeScopes,
-    ).toEqual(['read:calendar']);
-  });
-
-  it('rejects finalizing an agent-renewal token against the delegation endpoint', async () => {
-    const service = makeService();
-    const owner = makeActor();
-    const currentVC = makeRenewableAgentVC({ ownerDid: owner.did, statusListIndex: 8, elapsedFraction: 0.9 });
-    const statusList = statusListWith(8, false);
-
-    const prepared = await service.prepareAgentRenewal({
-      currentVC,
-      statusList,
-      statusListCredentialUrl: 'https://sp.example/status/1',
-      expiresIn: 3600,
-    });
-    const signatureHex = await signPrepareResult(owner.privateKeyHex, prepared.canonicalHash);
-
-    await expect(
-      service.finalizeDelegation({
-        token: prepared.token,
-        verificationMethod: `${owner.did}#key-1`,
-        signatureHex,
-      }),
-    ).rejects.toBeInstanceOf(PreparedPayloadPurposeMismatchError);
   });
 });

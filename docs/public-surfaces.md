@@ -25,9 +25,9 @@ Base paths are mounted from `helix-api/src/server.ts`.
 | `POST` | `/v1/vp/verify` | Verify signed VP and optionally issue session token. | `signedVP`, optional `session: true`. | Verification result, optionally session data. |
 | `GET` | `/v1/sessions/public-key` | Return API session JWT verification public key. | None. | Ed25519 public key metadata. Cacheable for 1 hour. |
 | `POST` | `/v1/enrollment-tokens` | Create enrollment token for an agent. | `agentName`, `requestedScopes`, optional `requestedDomains`, `maxDelegationDepth`. | Enrollment token/challenge metadata. |
-| `POST` | `/v1/enroll` | Legacy/direct enrollment proof flow. | `bootstrapToken`, `agentDid`, `timestamp`, `proofSignature`. | Issued VC for agent. |
-| `POST` | `/v1/onboard` | Onboarding step 1: create challenge for generated key. | `enrollmentToken`, `publicKeyHex`, optional `domains`. | `challengeId`, nonce, expiry, optional DID-create signing payload. |
-| `POST` | `/v1/onboard/verify` | Onboarding step 2: verify challenge and issue VC. | `challengeId`, `signature`, optional `didCreateSignature`. | `agentDid`, `vc`, `vcId`. |
+| `POST` | `/v1/onboard` | Onboard an agent (server-custody): redeem an enrollment token in a single call. | `enrollmentToken`, optional `domains`. | `{ agentDid, vcId }`. Server generates and holds the agent's key; no separate challenge/verify step (agent self-custody is retired). |
+| `POST` | `/v1/agents/:did/vp` | Sign a Verifiable Presentation on behalf of a server-custody agent. | DID path param, VP options. | Signed VP. Requires `x-admin-api-key`. |
+| `POST` | `/v1/agents/:did/delegate` | Delegate a slice of a server-custody agent's authority to another DID. | DID path param, `to`, `scopes`, `expiresIn`, optional `vcId`. | Delegated VC. Requires `x-admin-api-key`. |
 | `POST` | `/v1/challenges` | Issue user verification challenge. | `did`, `purpose: "user_verification"`. | Challenge id, nonce, expiry. |
 | `POST` | `/v1/challenges/:challengeId/verify` | Verify user challenge signature. | Challenge id, `signature`. | Verified DID and optional VC. |
 | `GET` | `/v1/audit-log` | List audit events. | Optional `eventType`, `since`, `limit`. | Newest-first audit summaries, including derived `delegatedFrom`, `delegatedTo`, `parentVcId`, and `delegationDepth` for VP verification events when delegation context is available; `attemptedVcId`, `attemptedParentVcId`, `attemptedDelegatedFrom` for rejections; `issuer`, `userDid`, `scopes`, `durability` for consent events. Requires `x-admin-api-key`. |
@@ -62,9 +62,9 @@ API-backed client. Construct with no args for SDK-only mode, or with API base UR
 | `checkVCStatus(vc)` | Return `active`, `revoked`, or `expired`. |
 | `fetchSessionPublicKey()` | Fetch public key for API-issued session JWTs. |
 | `verifySessionToken(token, publicKeyHex)` | Verify API session token locally. |
-| `enroll(bootstrapToken, wallet)` | Direct enrollment using wallet DID/signature; stores returned VC. |
-| `requestOnboardingChallenge(token, domains?)` | Start two-step onboarding and hold pending keypair. |
-| `completeOnboarding(challengeId, nonce, passphrase, path)` | Sign challenge, verify onboarding, save wallet. |
+| `onboardAgent(enrollmentToken, domains?)` | Redeem an enrollment token; server generates and holds the agent's key (agent self-custody is retired). |
+| `signVP(did, options)` | Sign a VP on behalf of a server-custody agent (server- or enterprise-side, depending on `apiKey`). |
+| `delegateAuthority(did, to, scopes, expiresIn, options?)` | Delegate a slice of a server-custody agent's authority to another DID. |
 | `requestUserChallenge(userDid)` | Request user verification challenge. |
 | `verifyUserChallenge(challengeId, signature)` | Verify user challenge signature. |
 
@@ -104,7 +104,6 @@ Local encrypted wallet and credential store.
 | --- | --- |
 | `new VPBuilder({ credentials, holderDid, targetService, userDid? }).sign(privateKeyHex, verificationMethodId)` | Build and sign a short-lived VP for a target service. `credentials` carries 1–2 entries: exactly one agent-authority VC, plus at most one consent grant VC. `userDid` is optional; when omitted, `delegatedBy` is absent from the payload. |
 | `verifyVP(vp, options?)` | Verify VP signature, VC signature, expiry, revocation, target service, and delegation chain. |
-| `delegate(options, wallet)` | Create delegated VC from wallet credential with scoped-down privileges. |
 | `checkScope(result, requiredScope)` | Boolean scope check on `VerifyVPResult`. |
 | `requireScope(result, requiredScope)` | Throw if required scope is missing. |
 | `new SessionManager({ secret, ttl }).issue(input)` | Issue HMAC session JWT from verified agent/scopes. |

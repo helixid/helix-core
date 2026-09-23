@@ -15,7 +15,7 @@ lose the reasoning.
   any sample app.
 - It's a UI layer over SDK methods and API endpoints already catalogued in
   `public-surfaces.md`:
-  - Enroll agents (`/v1/enrollment-tokens`, `/v1/onboard`, `/v1/onboard/verify`)
+  - Enroll agents (`/v1/enrollment-tokens`, `/v1/onboard`)
   - Browse DIDs (`/v1/dids`, `/v1/dids/:did`)
   - View issued VCs (`/v1/vcs`, `/v1/vcs/:vcId`)
   - Inspect VPs as they're presented / verified

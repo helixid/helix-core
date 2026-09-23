@@ -142,6 +142,9 @@ model PreparedPayload {
   // 'delegation' | 'grant' — see docs/proposal-sdk-api-only.md. One purpose
   // per row; the finalize endpoint for a given purpose rejects tokens
   // prepared for a different one (PreparedPayloadPurposeMismatchError).
+  // ('agent-renewal' was removed with agent self-custody. 'delegation' is
+  // no longer reachable over HTTP -- see routes/prepared-payload/index.ts --
+  // but is still used internally by AgentService.delegateAuthority().)
   purpose           String
   // Canonical JSON of the unsigned VC skeleton (no `proof` field). This is
   // exactly what hashCanonicalPayload() was run over to produce canonicalHash.

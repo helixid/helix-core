@@ -7,7 +7,7 @@ This document maps major Helix ID flows to the public surfaces in [public-surfac
 Brief flow:
 
 1. Operator creates enrollment token.
-2. Agent completes onboarding and stores wallet + VC.
+2. Agent redeems it; the server generates and holds the agent's key, creates its DID, and issues its VC (agent self-custody is retired — there is no wallet file).
 3. Agent signs a VP for a target service.
 4. Verifier checks VP, VC, scopes, delegation chain, and revocation status.
 
@@ -16,9 +16,8 @@ Surfaces used:
 | Step | Surfaces |
 | --- | --- |
 | Create enrollment token | `POST /v1/enrollment-tokens`, or operator-side setup with `helix vc issue` in CLI flows. |
-| Onboard agent | `HelixClient.requestOnboardingChallenge()`, `HelixClient.completeOnboarding()`, `POST /v1/onboard`, `POST /v1/onboard/verify`, `AgentWallet.save()`. |
-| Store/read credential | `AgentWallet.addCredential()`, `AgentWallet.credentials`, `AgentWallet.load()`. |
-| Issue VP | `VPBuilder.sign()`, `HelixIDMiddleware()`, `HelixIDToolWrapper()`, or `attachHelixVP()`. |
+| Onboard agent | `HelixClient.onboardAgent()`, `POST /v1/onboard`. |
+| Issue VP | `HelixClient.signVP()`, `POST /v1/agents/:did/vp`, or (for local signing by other actors, e.g. issuers/SPs) `VPBuilder.sign()`, `HelixIDMiddleware()`, `HelixIDToolWrapper()`, `attachHelixVP()`. |
 | Verify VP | `POST /v1/vp/verify`, `verifyVP()`, `helixidMCPMiddleware()`. |
 | Enforce scope | `requireScope()`, `checkScope()`, `filterToolsByScope()`, MCP `requiredScopes`. |
 | Optional session | `POST /v1/vp/verify` with `session: true`, `GET /v1/sessions/public-key`, `HelixClient.fetchSessionPublicKey()`, `HelixClient.verifySessionToken()`. |
@@ -27,7 +26,7 @@ Surfaces used:
 
 Brief flow:
 
-1. Existing credential holder delegates a reduced set of scopes to another DID.
+1. A server-custody agent delegates a reduced set of scopes to another DID; the server signs the delegated VC on the delegator's behalf (agent self-custody is retired, so the delegator never holds or uses its own key directly).
 2. Delegate uses the delegated VC to create a VP.
 3. Verifier validates the full delegation chain.
 
@@ -35,10 +34,8 @@ Surfaces used:
 
 | Step | Surfaces |
 | --- | --- |
-| Load parent credential | `AgentWallet.load()`, `AgentWallet.credentials`. |
-| Create delegated VC | `delegate(options, wallet)`. |
-| Store delegated VC | `AgentWallet.addCredential()`, `AgentWallet.updateCredential()`. |
-| Issue VP from delegated VC | `VPBuilder.sign()`, LangChain `HelixIDMiddleware()`, MCP `attachHelixVP()`. |
+| Create delegated VC | `HelixClient.delegateAuthority()`, `POST /v1/agents/:did/delegate`. |
+| Issue VP from delegated VC | `HelixClient.signVP()`, `POST /v1/agents/:did/vp`, or (for local signing by other actors) `VPBuilder.sign()`, LangChain `HelixIDMiddleware()`, MCP `attachHelixVP()`. |
 | Verify delegation chain | `verifyVP()`, `POST /v1/vp/verify`, `helixidMCPMiddleware()`. |
 | Enforce delegated scopes | `requireScope()`, `checkScope()`, `filterToolsByScope()`, MCP `requiredScopes`. |
 
@@ -54,7 +51,7 @@ Surfaces used:
 
 | Step | Surfaces |
 | --- | --- |
-| Enroll and issue VC | `POST /v1/enrollment-tokens`, `POST /v1/onboard`, `POST /v1/onboard/verify`, `HelixClient.requestOnboardingChallenge()`, `HelixClient.completeOnboarding()`. |
+| Enroll and issue VC | `POST /v1/enrollment-tokens`, `POST /v1/onboard`, `HelixClient.onboardAgent()`. |
 | Direct issue alternative | `POST /v1/vcs`, `HelixClient.issueVC()`, or `helix vc issue`. |
 | Publish/read status list | `GET /v1/status-list/:listId`, `POST /v1/status-list`, `HelixClient.getStatusList()`, `HelixClient.createStatusList()`, `helix status-list create`. |
 | Revoke VC | `POST /v1/vcs/:vcId/revoke`, `HelixClient.revokeVC()`, or `helix revoke`. |
