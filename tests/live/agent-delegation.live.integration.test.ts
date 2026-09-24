@@ -1,25 +1,22 @@
-import { afterAll, beforeAll, describe, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import supertest from 'supertest';
+import type { SignedVC } from '../../src/core/schemas/vc.js';
 import {
+  LIVE_HEDERA_TIMEOUT_MS,
+  onboardLiveAgent,
   resetLiveTestDatabase,
+  signLiveVP,
   startLiveApi,
+  type LiveAgent,
   type LiveApi,
 } from '../utils/liveApi.js';
 
 // Agent-to-agent delegation (a "sub-agent") — distinct from the consent-grant
 // flow: here the delegator is itself an onboarded agent, delegating a subset
-// of its own privilege scopes to another agent it controls.
-//
-// SKIPPED — known gap from the server-custody migration, not yet a design
-// decision: the SDK's delegate() needs the delegator's real private key to
-// sign the sub-agent's VC (previously: AgentWallet.load(walletPath, ...)),
-// and under server custody there is no wallet file and no local key to load.
-// Unlike VP-signing (AgentService.signVP, an agent presenting something),
-// this is an agent *issuing* a credential to another agent — a materially
-// different, new capability (something like AgentService.signDelegationVC(),
-// a KeyCustody-backed VC-issuance path) that hasn't been designed or built.
-// Re-enable once that capability exists and this test is rewritten against
-// it — the two `it.todo`s below are placeholders, not real coverage.
-describe.skip('Agent Delegation Live Integration', () => {
+// of its own privilege scopes to another agent. Both are server-custody
+// agents, so the delegated VC is signed with the delegator's custodial key
+// via POST /v1/agents/:did/delegate (AgentService.delegateAuthority()).
+describe('Agent Delegation Live Integration', () => {
   let api: LiveApi;
 
   beforeAll(async () => {
@@ -31,7 +28,102 @@ describe.skip('Agent Delegation Live Integration', () => {
     await api?.stop();
   });
 
-  it.todo('lets a delegated sub-agent present a VP whose delegationChain shows the parent');
+  async function delegate(
+    from: LiveAgent,
+    body: { to: string; scopes: string[]; expiresIn: number; vcId?: string },
+  ): Promise<supertest.Response> {
+    return supertest(api.baseUrl)
+      .post(`/v1/agents/${encodeURIComponent(from.did)}/delegate`)
+      .set('x-admin-api-key', api.adminApiKey)
+      .send(body);
+  }
 
-  it.todo("rejects delegation past the parent VC's maxDelegationDepth");
+  it('lets a delegated sub-agent present a VP whose delegationChain shows the parent', async () => {
+    const parent = await onboardLiveAgent(api, {
+      agentName: 'Live Delegation Parent',
+      requestedScopes: ['read:orders', 'write:orders'],
+      requestedDomains: ['https://live-delegation-parent.agent.example.com'],
+      maxDelegationDepth: 1,
+    });
+    const child = await onboardLiveAgent(api, {
+      agentName: 'Live Delegation Child',
+      requestedScopes: ['read:profile'],
+      requestedDomains: ['https://live-delegation-child.agent.example.com'],
+    });
+
+    const delegateRes = await delegate(parent, { to: child.did, scopes: ['read:orders'], expiresIn: 3600 });
+    expect(delegateRes.statusCode).toBe(200);
+    const delegatedVC = delegateRes.body.delegatedVC as SignedVC;
+    expect(delegatedVC.credentialSubject).toMatchObject({
+      id: child.did,
+      privilegeScopes: ['read:orders'],
+      delegationDepth: 1,
+    });
+
+    // The child now holds two active credentials (its own onboarding VC and
+    // the delegated one), so it pins the delegated one explicitly.
+    const signedVP = await signLiveVP(api, child.did, { targetService: 'amazon', vcId: delegatedVC.id });
+    const verifyRes = await supertest(api.baseUrl).post('/v1/vp/verify').send({ signedVP });
+    expect(verifyRes.statusCode).toBe(200);
+    expect(verifyRes.body).toMatchObject({ valid: true, agentDid: child.did, privilegeScopes: ['read:orders'] });
+    expect(verifyRes.body.delegationChain.map((link: { subject: string }) => link.subject)).toEqual([
+      parent.did,
+      child.did,
+    ]);
+  }, LIVE_HEDERA_TIMEOUT_MS);
+
+  it("rejects delegation past the parent VC's maxDelegationDepth", async () => {
+    const parent = await onboardLiveAgent(api, {
+      agentName: 'Live Depth Parent',
+      requestedScopes: ['read:orders'],
+      requestedDomains: ['https://live-depth-parent.agent.example.com'],
+      maxDelegationDepth: 1,
+    });
+    const child = await onboardLiveAgent(api, {
+      agentName: 'Live Depth Child',
+      requestedScopes: ['read:profile'],
+      requestedDomains: ['https://live-depth-child.agent.example.com'],
+    });
+    const grandchild = await onboardLiveAgent(api, {
+      agentName: 'Live Depth Grandchild',
+      requestedScopes: ['read:profile'],
+      requestedDomains: ['https://live-depth-grandchild.agent.example.com'],
+    });
+
+    const firstHop = await delegate(parent, { to: child.did, scopes: ['read:orders'], expiresIn: 3600 });
+    expect(firstHop.statusCode).toBe(200);
+
+    // The delegated VC sits at depth 1 of a max of 1 — no budget left.
+    const secondHop = await delegate(child, {
+      to: grandchild.did,
+      scopes: ['read:orders'],
+      expiresIn: 3600,
+      vcId: firstHop.body.delegatedVC.id,
+    });
+    expect(secondHop.statusCode).toBe(400);
+    expect(secondHop.body.error.code).toBe('MAX_DELEGATION_DEPTH_EXCEEDED');
+  }, LIVE_HEDERA_TIMEOUT_MS);
+
+  it('rejects delegating a scope the parent does not hold', async () => {
+    const parent = await onboardLiveAgent(api, {
+      agentName: 'Live Escalation Parent',
+      requestedScopes: ['read:orders'],
+      requestedDomains: ['https://live-escalation-parent.agent.example.com'],
+      maxDelegationDepth: 1,
+    });
+    const child = await onboardLiveAgent(api, {
+      agentName: 'Live Escalation Child',
+      requestedScopes: ['read:profile'],
+      requestedDomains: ['https://live-escalation-child.agent.example.com'],
+    });
+
+    const res = await delegate(parent, {
+      to: child.did,
+      scopes: ['write:orders'],
+      expiresIn: 3600,
+      vcId: parent.vcId,
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.body.error.code).toBe('SCOPE_ESCALATION_DENIED');
+  }, LIVE_HEDERA_TIMEOUT_MS);
 });

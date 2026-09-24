@@ -103,7 +103,7 @@ Local encrypted wallet and credential store.
 | Export | Purpose |
 | --- | --- |
 | `new VPBuilder({ credentials, holderDid, targetService, userDid? }).sign(privateKeyHex, verificationMethodId)` | Build and sign a short-lived VP for a target service. `credentials` carries 1–2 entries: exactly one agent-authority VC, plus at most one consent grant VC. `userDid` is optional; when omitted, `delegatedBy` is absent from the payload. |
-| `verifyVP(vp, options?)` | Verify VP signature, VC signature, expiry, revocation, target service, and delegation chain. |
+| `verifyVP(vp, client, options?)` | Verify VP signature, VC signature, expiry, revocation, target service, and delegation chain via `POST /v1/vp/verify` (no local fallback). |
 | `checkScope(result, requiredScope)` | Boolean scope check on `VerifyVPResult`. |
 | `requireScope(result, requiredScope)` | Throw if required scope is missing. |
 | `new SessionManager({ secret, ttl }).issue(input)` | Issue HMAC session JWT from verified agent/scopes. |
@@ -119,12 +119,10 @@ Package: `@helixid/langchain`.
 | --- | --- |
 | `HelixIDMiddleware(options)` | Returns LangChain callback config that injects `_helixVP` into object tool input before tool start. |
 | `HelixIDToolWrapper(tool, options)` | Wraps a structured tool and injects `_helixVP` before calling the original `_call`. |
-| `filterToolsByScope(tools, walletFilePath, walletPassphrase)` | Filters tools by `tool.metadata.requiredScope` or tool name against wallet VC scopes. |
+| `filterToolsByScope(tools, client, agentDid)` | Filters tools by `tool.metadata.requiredScope` or tool name against the scopes of the agent's active VC (`client.listVCs()`). |
 | `encodeBase64UrlJson(value)` | Encodes VP/object as base64url JSON. |
-| `selectVC(wallet, targetService)` | Picks matching credential for target service, falling back to first VC. |
-| `ensureObjectInput(input)` | Validates tool input is an object. |
 
-Options: `walletPassphrase`, `walletFilePath`, `targetService`, optional `userDid`.
+Options: `client` (`HelixClient`), `agentDid`, `targetService`, optional `userDid`. VPs are signed server-side via `client.signVP()`.
 
 ## MCP Adapter
 
@@ -132,13 +130,13 @@ Package: `@helixid/mcp`.
 
 | Export | Purpose |
 | --- | --- |
-| `attachHelixVP(toolCall, options)` | Client-side helper that loads wallet, signs VP, and attaches `_helixVP` to MCP tool input. |
+| `attachHelixVP(toolCall, options)` | Client-side helper that requests a server-signed VP (`client.signVP()`) and attaches `_helixVP` to MCP tool input. |
 | `helixidMCPMiddleware(options)` | Server-side middleware that requires `_helixVP`, verifies it, and enforces optional scopes. |
 
 Options:
 
-- `AttachHelixVPOptions`: `walletPassphrase`, `walletFilePath`, `targetService`, optional `userDid`.
-- `MCPMiddlewareOptions`: optional `requiredScopes`, optional `allowSelfSigned`.
+- `AttachHelixVPOptions`: `client`, `agentDid`, `targetService`, optional `userDid`.
+- `MCPMiddlewareOptions`: `client`, optional `requiredScopes`, optional `allowSelfSigned`.
 
 ## Consent Widget
 
@@ -169,7 +167,7 @@ Binary: `helix`.
 
 | Command | Purpose | Required options | Optional options |
 | --- | --- | --- | --- |
-| `helix did create` | Create DID and encrypted wallet. For `--method web`, also creates the SP's initial status list by default. | `--method <web|hedera|key>`, `--wallet <path>` | `--domain <domain>`, `--network <testnet|previewnet|mainnet>`, `--no-status-list`, `--status-list-length <bits>`, `--status-list-output <path>`, `--status-list-base-url <url>` |
+| `helix did create` | Create DID and encrypted wallet. For `--method web`, also creates the SP's initial status list by default. | `--method <web|hedera>`, `--wallet <path>` | `--domain <domain>`, `--network <testnet|previewnet|mainnet>`, `--no-status-list`, `--status-list-length <bits>`, `--status-list-output <path>`, `--status-list-base-url <url>` |
 | `helix issuer init` | Validate issuer wallet readiness. | `--wallet <path>` | None. |
 | `helix status-list create` | Create signed BitstringStatusList credential file. | `--length <bits>`, `--output <path>`, `--base-url <url>`, `--wallet <path>` | None. |
 | `helix vc issue` | Issue `HelixAgentCredential` to agent DID. | `--agent-did <did>`, `--scopes <csv>`, `--expires <duration>`, `--status-list <path>`, `--base-url <url>`, `--wallet <path>` | `--output <path>`, `--max-delegation-depth <depth>` |

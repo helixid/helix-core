@@ -82,7 +82,7 @@ Surfaces used:
 Brief flow:
 
 1. Issuer renews an existing VC.
-2. Agent stores the renewed VC.
+2. The renewed VC is stored server-side alongside the agent's custodial key; `signVP()` picks the active one (or pin it with `vcId`).
 3. Verifiers use the latest VC and status list as usual.
 
 Surfaces used:
@@ -90,8 +90,8 @@ Surfaces used:
 | Step | Surfaces |
 | --- | --- |
 | Renew VC | `POST /v1/vcs/:vcId/renew`, `HelixClient.renewVC()`. |
-| Store renewed VC | `AgentWallet.addCredential()`, `AgentWallet.updateCredential()`. |
-| Read latest VC | `AgentWallet.getLatestCredential()`, `AgentWallet.getCredential()`. |
+| Find active VC | `GET /v1/vcs?subjectDid=...&status=active`, `HelixClient.listVCs()`. |
+| Present renewed VC | `POST /v1/agents/:did/vp`, `HelixClient.signVP()` (optional `vcId`). |
 
 ## 6. User DID Challenge Verification
 
@@ -124,30 +124,7 @@ Surfaces used:
 | Fetch session key | `GET /v1/sessions/public-key`, `HelixClient.fetchSessionPublicKey()`. |
 | Verify session token | `HelixClient.verifySessionToken()`. |
 
-## 8. Local Dev Credential Flow
-
-**Retired** by the agent self-custody retirement (CHANGELOG `0.2.0`) — step 2 below
-(`selfIssueVC`) no longer exists in the SDK or CLI, and `verifyVP` no longer has a local
-verification path (step 4), so this flow can no longer run with no server involved. Kept here
-for historical reference only.
-
-Brief flow (as it worked pre-retirement):
-
-1. Create or load a local wallet.
-2. Self-issue a dev VC.
-3. Build a VP from that wallet.
-4. Verify with self-signed support only in non-production paths.
-
-Surfaces used (pre-retirement):
-
-| Step | Surfaces |
-| --- | --- |
-| Create/load wallet | `AgentWallet.create()`, `AgentWallet.load()`. |
-| Self-issue VC | ~~`selfIssueVC()`, `helix vc self-issue`~~ — removed. |
-| Build VP | `VPBuilder.sign()`, `HelixIDMiddleware()`, `HelixIDToolWrapper()`, `attachHelixVP()`. |
-| Verify self-signed VC | `verifyVP(vp, client, { allowSelfSigned: true })` — now requires a `HelixClient`; no local fallback. |
-
-## 9. Wallet Management
+## 8. Wallet Management
 
 Brief flow:
 
