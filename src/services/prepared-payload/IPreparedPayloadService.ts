@@ -42,28 +42,6 @@ export interface PrepareGrantInput {
   statusListCredentialUrl: string;
 }
 
-export interface PrepareAgentRenewalInput {
-  /**
-   * The agent's current (soon-to-expire or already-expired-within-grace) VC.
-   * Must carry a `credentialStatus` entry — renewal can't check revocation
-   * without one. Renewal is signed by whoever signed this VC (`issuer`).
-   */
-  currentVC: SignedVC;
-  /**
-   * Status list the currentVC's credentialStatus entry lives on, unmodified.
-   * Caller owns storage, same as PrepareGrantInput.statusList.
-   */
-  statusList: { credentialSubject: { encodedList: string } };
-  statusListCredentialUrl: string;
-  expiresIn: number;
-  /**
-   * Optional narrower scope set for the renewed VC. Must be a subset of
-   * currentVC's scopes — renewal can only narrow, never widen. Omit to keep
-   * the same scopes.
-   */
-  scopes?: string[];
-}
-
 export interface FinalizeInput {
   token: string;
   verificationMethod: string;
@@ -74,10 +52,15 @@ export interface FinalizeInput {
 }
 
 export interface IPreparedPayloadService {
+  /**
+   * Called internally by the server-custody AgentService.delegateAuthority()
+   * (prepare, sign with the custody-held key, finalize) — not exposed over
+   * HTTP; the old external `/v1/vcs/delegation/*` route was removed with
+   * agent self-custody, since it existed only for the SDK's wallet-based
+   * delegate(), which needed the delegator's own key.
+   */
   prepareDelegation(input: PrepareDelegationInput): Promise<PrepareResult>;
-  prepareGrant(input: PrepareGrantInput): Promise<PrepareResult>;
-  prepareAgentRenewal(input: PrepareAgentRenewalInput): Promise<PrepareResult>;
   finalizeDelegation(input: FinalizeInput): Promise<SignedVC>;
+  prepareGrant(input: PrepareGrantInput): Promise<PrepareResult>;
   finalizeGrant(input: FinalizeInput): Promise<SignedVC>;
-  finalizeAgentRenewal(input: FinalizeInput): Promise<SignedVC>;
 }

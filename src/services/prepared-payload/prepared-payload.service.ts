@@ -18,30 +18,32 @@
 //
 // prepareDelegation()/finalizeDelegation() port helix-core's
 // buildDelegationVC() payload construction (delegation.ts) minus the signing
-// step. prepareGrant()/finalizeGrant() do the same for issueGrant()
-// (grant.ts). Both are mechanical, faithful ports — the JSON shape here must
-// match helix-core's exactly, since that's what the client's local
-// hashCanonicalPayload()/signData() will be hashing and signing against.
+// step. Not exposed over HTTP any more (the old `/v1/vcs/delegation/*` route
+// existed only for the SDK's wallet-based delegate(), removed with agent
+// self-custody) — called internally by AgentService.delegateAuthority(),
+// which signs with the custody-held key in between prepare and finalize.
+//
+// prepareGrant()/finalizeGrant() do the same for issueGrant() (grant.ts),
+// and remain a public HTTP route: the SP holds its own key and signs
+// locally, so prepare/finalize really does cross the wire to it.
+//
+// This used to also serve agent-renewal (wallet-based, agent-self-custody);
+// removed when agent self-custody was retired — see prepareAgentRenewal()
+// in git history if resurrecting it.
 
 import { randomUUID } from 'node:crypto';
 import {
   ErrorCode,
   HelixError,
   MaxDelegationDepthExceededError,
-  MaxRenewalCountExceededError,
   PreparedPayloadAlreadyConsumedError,
   PreparedPayloadExpiredError,
   PreparedPayloadNotFoundError,
   PreparedPayloadPurposeMismatchError,
   PreparedPayloadSignatureInvalidError,
-  RenewalWindowExpiredError,
-  RenewalWindowNotOpenError,
   SelfDelegationNotAllowedError,
-  VCMissingCredentialStatusError,
-  VCRevokedError,
   VC_CONTEXTS,
   base58btcEncode,
-  getBit,
   getStatusListLength,
   hashCanonicalPayload,
   resolveDID as resolveDIDCore,
@@ -52,7 +54,6 @@ import {
 import type {
   FinalizeInput,
   IPreparedPayloadService,
-  PrepareAgentRenewalInput,
   PrepareDelegationInput,
   PrepareGrantInput,
   PrepareResult,
@@ -65,14 +66,6 @@ import type { IDIDService } from '../did/did.service.js';
 import { extractEd25519PublicKeyHexFromDIDDocument } from '../did/publicKey.js';
 
 const PREPARE_TTL_SECONDS = 5 * 60;
-
-// Renewal policy (see docs/proposal-sdk-api-only.md's "renewal" scope and the
-// design discussion it links to). Configurable knobs, not hardcoded forever —
-// revisit alongside Item #1 (hosted instance) if enterprise tenants need
-// different values per plan/tier.
-const RENEWAL_WINDOW_FRACTION = 0.8; // window opens at 80% of validity elapsed
-const RENEWAL_GRACE_PERIOD_MS = 24 * 60 * 60 * 1000; // 24h after validUntil
-const MAX_RENEWAL_COUNT = 5; // beyond this, require fresh issuance
 
 function toHex(bytes: Uint8Array): string {
   return Buffer.from(bytes).toString('hex');
@@ -189,120 +182,10 @@ export class PreparedPayloadService implements IPreparedPayloadService {
     return this.finalize('grant', input);
   }
 
-  // -- agent-renewal -------------------------------------------------------
-  //
-  // Renewal is issuance-repeated-on-a-timer: same signer (issuer) as the VC
-  // being renewed, same subject, optionally-narrower scopes, fresh validity
-  // window. Standard credential-renewal hygiene, checks 1-3 below (4 is the
-  // finalize signature check itself; 5 is the existing audit logger, wired
-  // at the route/server level like every other mutating endpoint):
-  //   1. currentVC must not be revoked
-  //   2. renewed scopes must be a subset of currentVC's scopes (no widening)
-  //   3. renewal must fall inside the renewal window: opens once
-  //      RENEWAL_WINDOW_FRACTION of currentVC's validity has elapsed, closes
-  //      RENEWAL_GRACE_PERIOD_MS after currentVC.validUntil. Outside that
-  //      window (too early, or too long expired) a fresh issuance is
-  //      required instead — renewal isn't a way to indefinitely extend trust
-  //      without ever re-touching the original issuance path.
-  //   Also caps total renewals per lineage (MAX_RENEWAL_COUNT) for the same
-  //   reason: an indefinitely-renewable credential drifts further from its
-  //   original (self-signed, not CA-verified) issuance over time.
-
-  async prepareAgentRenewal(input: PrepareAgentRenewalInput): Promise<PrepareResult> {
-    const subject = input.currentVC.credentialSubject as {
-      privilegeScopes?: unknown;
-      renewalCount?: number;
-    };
-    if (!Array.isArray(subject.privilegeScopes)) {
-      throw new HelixError(ErrorCode.VALIDATION_ERROR, 'currentVC has no privilege scopes', 400);
-    }
-
-    const credentialStatus = (
-      input.currentVC as unknown as {
-        credentialStatus?: { statusListIndex: string };
-      }
-    ).credentialStatus;
-    if (!credentialStatus) {
-      throw new VCMissingCredentialStatusError();
-    }
-
-    // 1. not revoked
-    const currentIndex = Number(credentialStatus.statusListIndex);
-    const bit = getBit(input.statusList.credentialSubject.encodedList, currentIndex);
-    if (bit === 1) {
-      throw new VCRevokedError();
-    }
-
-    // 2. scope ceiling — renewal may narrow, never widen
-    const requestedScopes = input.scopes ?? (subject.privilegeScopes as string[]);
-    validateScopeSubset(subject.privilegeScopes as string[], requestedScopes);
-
-    // 3. renewal window
-    const validFrom = new Date(
-      (input.currentVC as unknown as { validFrom: string }).validFrom,
-    ).getTime();
-    const validUntil = new Date(
-      (input.currentVC as unknown as { validUntil: string }).validUntil,
-    ).getTime();
-    const now = Date.now();
-    const totalValidityMs = validUntil - validFrom;
-    const windowOpensAt = validFrom + RENEWAL_WINDOW_FRACTION * totalValidityMs;
-    const windowClosesAt = validUntil + RENEWAL_GRACE_PERIOD_MS;
-    if (now < windowOpensAt) {
-      throw new RenewalWindowNotOpenError(
-        `Renewal window opens at ${new Date(windowOpensAt).toISOString()}`,
-      );
-    }
-    if (now > windowClosesAt) {
-      throw new RenewalWindowExpiredError();
-    }
-
-    // renewal count cap
-    const renewalCount = subject.renewalCount ?? 0;
-    if (renewalCount >= MAX_RENEWAL_COUNT) {
-      throw new MaxRenewalCountExceededError();
-    }
-
-    const listLength = getStatusListLength(input.statusList.credentialSubject.encodedList);
-    const newIndex = Math.floor(Math.random() * listLength);
-    const newValidFrom = new Date();
-    const newValidUntil = new Date(newValidFrom.getTime() + input.expiresIn * 1000);
-
-    // Mirrors helix-core/src/self-signed.ts selfIssueVC() payload shape,
-    // minus the `proof`, plus renewal bookkeeping.
-    const payload = {
-      '@context': ['https://www.w3.org/ns/credentials/v2', 'https://helixid.io/contexts/v1'],
-      id: `vc:helix:self:${randomUUID()}`,
-      type: ['VerifiableCredential', 'HelixAgentCredential'],
-      issuer: input.currentVC.issuer,
-      validFrom: newValidFrom.toISOString(),
-      validUntil: newValidUntil.toISOString(),
-      credentialStatus: {
-        id: `${input.statusListCredentialUrl}#${newIndex}`,
-        type: 'BitstringStatusListEntry' as const,
-        statusPurpose: 'revocation' as const,
-        statusListIndex: newIndex.toString(),
-        statusListCredential: input.statusListCredentialUrl,
-      },
-      credentialSubject: {
-        ...(input.currentVC.credentialSubject as Record<string, unknown>),
-        privilegeScopes: requestedScopes,
-        renewalCount: renewalCount + 1,
-        renewedFrom: input.currentVC.id,
-      },
-    };
-
-    return this.store('agent-renewal', payload, input.currentVC.issuer as string);
-  }
-
-  async finalizeAgentRenewal(input: FinalizeInput): Promise<SignedVC> {
-    return this.finalize('agent-renewal', input);
-  }
-
   // -- shared prepare/finalize plumbing -----------------------------------
 
   private async store(
-    purpose: 'delegation' | 'grant' | 'agent-renewal',
+    purpose: 'delegation' | 'grant',
     payload: Record<string, unknown>,
     expectedSignerDid: string,
   ): Promise<PrepareResult> {
@@ -325,10 +208,7 @@ export class PreparedPayloadService implements IPreparedPayloadService {
     };
   }
 
-  private async finalize(
-    purpose: 'delegation' | 'grant' | 'agent-renewal',
-    input: FinalizeInput,
-  ): Promise<SignedVC> {
+  private async finalize(purpose: 'delegation' | 'grant', input: FinalizeInput): Promise<SignedVC> {
     const record = await this.repository.findByToken(input.token);
     this.assertUsable(record, purpose);
 
@@ -369,7 +249,7 @@ export class PreparedPayloadService implements IPreparedPayloadService {
 
   private assertUsable(
     record: PreparedPayloadRecord | null,
-    purpose: 'delegation' | 'grant' | 'agent-renewal',
+    purpose: 'delegation' | 'grant',
   ): asserts record is PreparedPayloadRecord {
     if (!record) {
       throw new PreparedPayloadNotFoundError();

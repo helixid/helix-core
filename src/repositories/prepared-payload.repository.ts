@@ -17,7 +17,13 @@ import {
   type PreparedPayloadStorageDriver,
 } from './drivers/prepared-payload.drivers.js';
 
-export type PreparedPayloadPurpose = 'delegation' | 'grant' | 'agent-renewal';
+// 'agent-renewal' was removed with agent self-custody; existing DB rows
+// with that purpose (if any) just become permanently unfinalizable, which
+// is fine since their tokens were single-use and short-lived
+// (PREPARE_TTL_SECONDS) already. 'delegation' stays: prepare/finalize here
+// are still called internally by AgentService.delegateAuthority(), just
+// not reachable over HTTP any more.
+export type PreparedPayloadPurpose = 'delegation' | 'grant';
 
 export interface PreparedPayloadRecord {
   id: string;
