@@ -34,6 +34,8 @@ interface AttemptedVPContext {
   attemptedVcId?: string;
   attemptedParentVcId?: string;
   attemptedDelegatedFrom?: string;
+  attemptedHolderDid?: string;
+  attemptedTargetService?: string;
 }
 
 /**
@@ -55,6 +57,12 @@ function readAttemptedVPContext(signedVP: SignedVP): AttemptedVPContext {
     if (typeof parentVcId === 'string') context.attemptedParentVcId = parentVcId;
     const delegatedFrom = subject?.['delegatedFrom'];
     if (typeof delegatedFrom === 'string') context.attemptedDelegatedFrom = delegatedFrom;
+    // Who the VP says is presenting, and to whom. A rejection names no agent
+    // otherwise, so without these it cannot be tied to one at all.
+    const holder = (signedVP as unknown as Record<string, unknown>)?.['holder'];
+    if (typeof holder === 'string') context.attemptedHolderDid = holder;
+    const targetService = (signedVP as unknown as Record<string, unknown>)?.['targetService'];
+    if (typeof targetService === 'string') context.attemptedTargetService = targetService;
   } catch {
     // Correlation fields are optional by design; a garbage VP just yields none.
   }
@@ -122,6 +130,7 @@ export class VPService implements IVPService {
         requestId,
         vpId,
         agentDid: result.agentDid,
+        targetService: parsed.data.targetService,
         result: 'success',
         verifiedAt,
         delegatedFrom: chainParent?.subject,
