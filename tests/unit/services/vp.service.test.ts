@@ -56,6 +56,9 @@ describe('VPService (thin wrapper)', () => {
     });
     const eventTypes = auditLogger.events.map((entry) => entry.event.event);
     expect(eventTypes.filter((type) => type === AuditEvents.VP_VERIFIED)).toHaveLength(1);
+    // The event names the service the VP was presented to, not just the agent.
+    const verified = auditLogger.events.find((entry) => entry.event.event === AuditEvents.VP_VERIFIED);
+    expect(verified?.event).toMatchObject({ agentDid: holder.did, targetService: 'orders' });
     expect(eventTypes).not.toContain(AuditEvents.CHAIN_VERIFIED);
     expect(eventTypes).not.toContain(AuditEvents.CHAIN_REJECTED);
     expect(eventTypes).not.toContain(AuditEvents.VP_REJECTED);
@@ -212,6 +215,10 @@ describe('VPService (thin wrapper)', () => {
     expect(rejected?.event['attemptedVcId']).toBe(vc.id);
     expect(rejected?.event['attemptedParentVcId']).toBe('vc:helix:parent-1');
     expect(rejected?.event['attemptedDelegatedFrom']).toBe('did:key:zParent');
+    // A rejection has no verified agent, so the claimed holder and service
+    // are what tie it to one.
+    expect(rejected?.event['attemptedHolderDid']).toBe(holder.did);
+    expect(rejected?.event['attemptedTargetService']).toBe('orders');
   });
 
   it('still logs VP_REJECTED when the VP is too malformed to read context from', async () => {
@@ -228,6 +235,7 @@ describe('VPService (thin wrapper)', () => {
     );
     expect(rejected).toBeDefined();
     expect(rejected?.event['attemptedVcId']).toBeUndefined();
+    expect(rejected?.event['attemptedHolderDid']).toBeUndefined();
   });
 
   it('throws when a session is requested but JWT options are not configured', async () => {

@@ -374,6 +374,8 @@ const auditLogRoutes: FastifyPluginAsync<AuditLogRouteOptions> = async (fastify,
         attemptedVcId: asString(record.payload.attemptedVcId),
         attemptedParentVcId: asString(record.payload.attemptedParentVcId),
         attemptedDelegatedFrom: asString(record.payload.attemptedDelegatedFrom),
+        attemptedHolderDid: asString(record.payload.attemptedHolderDid),
+        attemptedTargetService: asString(record.payload.attemptedTargetService),
         // Consent-grant fields (CONSENT_GRANTED).
         issuer: asString(record.payload.issuer),
         userDid: asString(record.payload.userDid),
