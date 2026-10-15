@@ -241,7 +241,7 @@ type SqliteEnrollmentTokenRow = {
   requested_scopes: string;
   requested_domains: string;
   max_delegation_depth: number;
-  expires_at: string;
+  expires_at: string | undefined;
   used_at: string | null;
   created_at: string;
 };
@@ -286,7 +286,7 @@ function fromEnrollmentTokenRow(
     requestedScopes: row.requested_scopes,
     requestedDomains: row.requested_domains,
     maxDelegationDepth: row.max_delegation_depth,
-    expiresAt: new Date(row.expires_at),
+    expiresAt: row.expires_at ? new Date(row.expires_at) : null,
     usedAt: row.used_at ? new Date(row.used_at) : null,
     createdAt: new Date(row.created_at),
   };

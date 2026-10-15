@@ -2,7 +2,8 @@ import type { SignedVC, SignedVP } from '../../core/index.js';
 
 export interface EnrollmentTokenResult {
   token: string;
-  expiresAt: string;
+  /** Absent when the token has no expiry. */
+  expiresAt?: string;
 }
 
 export interface ChallengeResult {
@@ -45,6 +46,7 @@ export interface IAgentService {
       requestedScopes: string[];
       requestedDomains?: string[];
       maxDelegationDepth?: number;
+      expiry?: number | null;
     },
     requestId: string,
   ): Promise<EnrollmentTokenResult>;
@@ -57,7 +59,7 @@ export interface IAgentService {
     requestId: string,
   ): Promise<OnboardVerifyResult>;
   onboardWithCustody(
-    input: { enrollmentToken: string; domains?: string[] },
+    input: { enrollmentToken: string; domains?: string[]; expiry?: number },
     requestId: string,
   ): Promise<OnboardWithCustodyResult>;
   signVP(

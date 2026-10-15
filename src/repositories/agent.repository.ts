@@ -10,7 +10,7 @@ export interface EnrollmentTokenRecord {
   requestedScopes: string;
   requestedDomains: string;
   maxDelegationDepth?: number;
-  expiresAt: Date;
+  expiresAt: Date | null;
   usedAt: Date | null;
   createdAt: Date;
 }

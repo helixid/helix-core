@@ -60,11 +60,20 @@ export function hashToken(token: string): string {
   return createHash('sha256').update(token, 'utf8').digest('hex');
 }
 
-function ensureHttps(url: string): boolean {
+/**
+ * Accepts `http(s)://host[...]` or a bare host like `example.com` (assumed
+ * https). Returns the normalized URL, or null if it isn't a usable web URL.
+ */
+function normalizeDomain(domain: string): string | null {
+  const trimmed = domain.trim();
+  if (!trimmed) return null;
+  const candidate = /^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
   try {
-    return new URL(url).protocol === 'https:';
+    const url = new URL(candidate);
+    if (url.protocol !== 'https:' && url.protocol !== 'http:') return null;
+    return url.hostname ? candidate : null;
   } catch {
-    return false;
+    return null;
   }
 }
 
@@ -112,28 +121,46 @@ export class AgentService implements IAgentService {
       requestedScopes: string[];
       requestedDomains?: string[];
       maxDelegationDepth?: number;
+      /**
+       * Whole days until the token expires, at the same time of day as now.
+       * null, undefined or '' means the token has no expiry.
+       */
+      expiry?: number | null;
     },
     requestId: string,
-  ): Promise<{ token: string; expiresAt: string }> {
+  ): Promise<{ token: string; expiresAt?: string }> {
+    // '' can still arrive at runtime from a JSON body even though the type says number.
+    const expiry = input.expiry === null || (input.expiry as unknown) === '' ? undefined : input.expiry;
+    if (expiry !== undefined && !(Number.isInteger(expiry) && expiry > 0)) {
+      throw Object.assign(new Error('expiry must be a positive whole number of days'), {
+        code: 'INVALID_EXPIRY',
+        httpStatus: 400,
+      });
+    }
     const token = `enroll:${randomBytes(12).toString('hex')}`;
     const tokenHash = hashToken(token);
-    const expiresAt = new Date(Date.now() + this.enrollmentTokenTtlSeconds * 1000);
+    let expiresAt: Date | undefined;
+    if (expiry !== undefined) {
+      expiresAt = new Date();
+      // Calendar-day arithmetic keeps the wall-clock time (4 PM + 1 day -> 4 PM tomorrow) across DST changes.
+      expiresAt.setDate(expiresAt.getDate() + expiry);
+    }
     await this.repository.createEnrollmentToken({
       tokenHash,
       agentName: input.agentName,
       requestedScopes: JSON.stringify(input.requestedScopes),
       requestedDomains: JSON.stringify(input.requestedDomains ?? []),
       maxDelegationDepth: input.maxDelegationDepth ?? 0,
-      expiresAt,
+      expiresAt: expiresAt ?? null,
     });
-    this.auditLogger.log(AuditEvents.ENROLLMENT_TOKEN_GENERATED, {
-      requestId,
-      tokenIdHash: tokenHash,
-      agentName: input.agentName,
-      requestedScopes: input.requestedScopes,
-      expiresAt: expiresAt.toISOString(),
-    });
-    return { token, expiresAt: expiresAt.toISOString() };
+    // this.auditLogger.log(AuditEvents.ENROLLMENT_TOKEN_GENERATED, {
+    //   requestId,
+    //   tokenIdHash: tokenHash,
+    //   agentName: input.agentName,
+    //   requestedScopes: input.requestedScopes,
+    //   expiresAt: expiresAt.toISOString(),
+    // });
+    return { token, ...(expiresAt ? { expiresAt: expiresAt.toISOString() } : {}) };
   }
 
   /**
@@ -357,13 +384,16 @@ export class AgentService implements IAgentService {
         httpStatus: 400,
       });
     }
+    const domains: string[] = [];
     for (const domain of input.domains ?? []) {
-      if (!ensureHttps(domain)) {
+      const normalized = normalizeDomain(domain);
+      if (!normalized) {
         throw Object.assign(new Error('Invalid domain URL'), {
           code: 'INVALID_SERVICE_ENDPOINT_URL',
           httpStatus: 400,
         });
       }
+      domains.push(normalized);
     }
 
     const tokenHash = hashToken(input.enrollmentToken);
@@ -374,7 +404,7 @@ export class AgentService implements IAgentService {
     if (tokenRecord.usedAt) {
       throw new EnrollmentTokenAlreadyUsedError();
     }
-    if (tokenRecord.expiresAt.getTime() <= Date.now()) {
+    if (tokenRecord.expiresAt && tokenRecord.expiresAt.getTime() <= Date.now()) {
       this.auditLogger.log(AuditEvents.ENROLLMENT_TOKEN_REJECTED, {
         requestId,
         tokenIdHash: tokenHash,
@@ -411,7 +441,7 @@ export class AgentService implements IAgentService {
       did: '',
       purpose: 'agent_onboarding',
       pendingPublicKeyHex: input.publicKeyHex,
-      pendingDomains: JSON.stringify(input.domains ?? []),
+      pendingDomains: JSON.stringify(domains),
       pendingDidCreateStateJson: didCreateRequest.stateJson,
       pendingDidCreatePayloadHex: didCreateRequest.signingPayloadHex,
       expiresAt,

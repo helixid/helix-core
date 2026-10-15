@@ -109,7 +109,7 @@ model EnrollmentToken {
   requestedScopes  String
   requestedDomains String
   maxDelegationDepth Int         @default(0)
-  expiresAt        DateTime
+  expiresAt        DateTime?
   usedAt           DateTime?
   createdAt        DateTime    @default(now())
   challenges       Challenge[]

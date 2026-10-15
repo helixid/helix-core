@@ -1,5 +1,5 @@
 // Copyright 2026 DgVerse LLP
-import { describe, expect, it, vi, beforeEach } from 'vitest';
+import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import { AgentService } from '../../../src/services/agent/agent.service.js';
 import {
   AgentKeyNotFoundError,
@@ -82,6 +82,42 @@ describe('AgentService Unit Tests', () => {
       expect(result.token).toBeDefined();
       expect(repository.createEnrollmentToken).toHaveBeenCalled();
     });
+
+    describe('expiry', () => {
+      afterEach(() => {
+        vi.useRealTimers();
+      });
+
+      it('expires at the same time of day, `expiry` days later', async () => {
+        vi.useFakeTimers();
+        const now = new Date(2026, 9, 15, 16, 0, 0);
+        vi.setSystemTime(now);
+        const result = await agentService.generateEnrollmentToken(
+          { agentName: 'test', requestedScopes: ['read'], expiry: 1 },
+          'req-1',
+        );
+        expect(new Date(result.expiresAt!)).toEqual(new Date(2026, 9, 16, 16, 0, 0));
+        expect(repository.createEnrollmentToken).toHaveBeenCalledWith(
+          expect.objectContaining({ expiresAt: new Date(2026, 9, 16, 16, 0, 0) }),
+        );
+      });
+
+      it.each([undefined, null, ''])('stores no expiry when expiry=%j', async (expiry) => {
+        const result = await agentService.generateEnrollmentToken(
+          { agentName: 'test', requestedScopes: ['read'], expiry: expiry as number | null },
+          'req-1',
+        );
+        expect(result.expiresAt).toBeUndefined();
+        expect(repository.createEnrollmentToken.mock.calls[0][0]).not.toHaveProperty('expiresAt');
+      });
+
+      it.each([0, -1, 1.5, Number.NaN])('rejects expiry=%s with INVALID_EXPIRY', async (expiry) => {
+        await expect(
+          agentService.generateEnrollmentToken({ agentName: 'test', requestedScopes: ['read'], expiry }, 'req-1'),
+        ).rejects.toMatchObject({ code: 'INVALID_EXPIRY', httpStatus: 400 });
+        expect(repository.createEnrollmentToken).not.toHaveBeenCalled();
+      });
+    });
   });
 
   describe('processOnboardStep1', () => {
@@ -93,8 +129,8 @@ describe('AgentService Unit Tests', () => {
         .rejects.toMatchObject({ code: 'INVALID_PUBLIC_KEY' });
     });
 
-    it('throws INVALID_SERVICE_ENDPOINT_URL for non-https domain', async () => {
-      await expect(agentService.processOnboardStep1({ enrollmentToken: rawToken, publicKeyHex, domains: ['http://unsafe.com'] }, 'req-1'))
+    it('throws INVALID_SERVICE_ENDPOINT_URL for non-web domain', async () => {
+      await expect(agentService.processOnboardStep1({ enrollmentToken: rawToken, publicKeyHex, domains: ['ftp://unsafe.com'] }, 'req-1'))
         .rejects.toMatchObject({ code: 'INVALID_SERVICE_ENDPOINT_URL' });
     });
   });

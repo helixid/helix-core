@@ -31,6 +31,7 @@ const agentRoutes: FastifyPluginAsync<AgentRouteOptions> = async (fastify, optio
         requestedScopes: string[];
         requestedDomains?: string[];
         maxDelegationDepth?: number;
+        expiry?: number;
       };
       const result = await options.agentService.generateEnrollmentToken(body, request.id);
       return reply.code(201).send(result);

@@ -118,7 +118,7 @@ CREATE TABLE IF NOT EXISTS enrollment_tokens (
   requested_scopes TEXT NOT NULL,
   requested_domains TEXT NOT NULL,
   max_delegation_depth INTEGER NOT NULL DEFAULT 0,
-  expires_at TEXT NOT NULL,
+  expires_at TEXT,
   used_at TEXT,
   created_at TEXT NOT NULL
 );
