@@ -171,7 +171,7 @@ export class PrismaVcStorageDriver implements VcStorageDriver {
       where.expiresAt = { lte: now };
     } else if (filters.status === 'active') {
       where.revokedAt = null;
-      where.expiresAt = { gt: now };
+      where.OR = [{ expiresAt: null }, { expiresAt: { gt: now } }];
     }
 
     return this.db.vc.findMany({
@@ -187,7 +187,7 @@ export class PrismaVcStorageDriver implements VcStorageDriver {
         where: {
           subjectDid,
           revokedAt: null,
-          expiresAt: { gt: new Date() },
+          OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
         },
         orderBy: { createdAt: 'asc' },
       });
@@ -196,7 +196,7 @@ export class PrismaVcStorageDriver implements VcStorageDriver {
 
     const records = await (this.prisma as PrismaRaw).$queryRawUnsafe<VCRecord[]>(
       `SELECT * FROM "vcs"
-       WHERE "subjectDid" = $1 AND "revokedAt" IS NULL AND "expiresAt" > $2
+       WHERE "subjectDid" = $1 AND "revokedAt" IS NULL AND ("expiresAt" IS NULL OR "expiresAt" > $2)
        ORDER BY "createdAt" ASC`,
       subjectDid,
       new Date(),
@@ -273,7 +273,7 @@ type SqliteVcRow = {
   vc_json: string;
   privilege_scopes: string | null;
   status_list_index: number;
-  expires_at: string;
+  expires_at: string | null;
   revoked_at: string | null;
   renewed_by_vc_id: string | null;
   delegated_from: string | null;
@@ -300,7 +300,7 @@ function fromSqliteVcRow(row: SqliteVcRow | undefined): VCRecord | null {
     vcJson: JSON.parse(row.vc_json),
     privilegeScopes: row.privilege_scopes ? JSON.parse(row.privilege_scopes) : null,
     statusListIndex: row.status_list_index,
-    expiresAt: new Date(row.expires_at),
+    expiresAt: row.expires_at ? new Date(row.expires_at) : null,
     revokedAt: row.revoked_at ? new Date(row.revoked_at) : null,
     renewedByVcId: row.renewed_by_vc_id,
     delegatedFrom: row.delegated_from,
@@ -378,7 +378,7 @@ export class SqliteVcStorageDriver implements VcStorageDriver {
       conditions.push(`expires_at <= ${sqliteLiteral(now.toISOString())}`);
     } else if (filters.status === 'active') {
       conditions.push('revoked_at IS NULL');
-      conditions.push(`expires_at > ${sqliteLiteral(now.toISOString())}`);
+      conditions.push(`(expires_at IS NULL OR expires_at > ${sqliteLiteral(now.toISOString())})`);
     }
     const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
     const rows = this.sqlite.query<SqliteVcRow>(`
@@ -396,7 +396,7 @@ export class SqliteVcStorageDriver implements VcStorageDriver {
       SELECT * FROM vcs
       WHERE subject_did = ${sqliteLiteral(subjectDid)}
         AND revoked_at IS NULL
-        AND expires_at > ${sqliteLiteral(nowIso)}
+        AND (expires_at IS NULL OR expires_at > ${sqliteLiteral(nowIso)})
       ORDER BY created_at ASC
     `);
     const records = rows.map((row) => fromSqliteVcRow(row)).filter((v): v is VCRecord => Boolean(v));
@@ -521,8 +521,8 @@ export class InMemoryVcStorageDriver implements VcStorageDriver {
   private matchesStatus(record: VCRecord, status: ListVcFilters['status'], now = new Date()): boolean {
     if (!status) return true;
     if (status === 'revoked') return Boolean(record.revokedAt);
-    if (status === 'expired') return !record.revokedAt && record.expiresAt.getTime() <= now.getTime();
-    return !record.revokedAt && record.expiresAt.getTime() > now.getTime();
+    if (status === 'expired') return !record.revokedAt && record.expiresAt !== null && record.expiresAt.getTime() <= now.getTime();
+    return !record.revokedAt && (record.expiresAt === null || record.expiresAt.getTime() > now.getTime());
   }
 
   async listVcs(filters: ListVcFilters): Promise<VCRecord[]> {
@@ -537,7 +537,7 @@ export class InMemoryVcStorageDriver implements VcStorageDriver {
   async findActiveBySubjectDid(subjectDid: string, vcType?: string): Promise<VCRecord[]> {
     const now = Date.now();
     const records = [...this.vcs.values()]
-      .filter((r) => r.subjectDid === subjectDid && !r.revokedAt && r.expiresAt.getTime() > now)
+      .filter((r) => r.subjectDid === subjectDid && !r.revokedAt && (r.expiresAt === null || r.expiresAt.getTime() > now))
       .sort((a, b) => (a.createdAt?.getTime() ?? 0) - (b.createdAt?.getTime() ?? 0));
     return filterByType(records, vcType);
   }

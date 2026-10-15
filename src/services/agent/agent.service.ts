@@ -166,7 +166,7 @@ export class AgentService implements IAgentService {
   /**
    * Single-call, server-custody onboarding. Agent self-custody has been
    * retired — the server generates the keypair itself (via `keyCustody`)
-   * and internally drives the same processOnboardStep1/processOnboardVerify
+   * and internally drives the same processOnboardCreateChallenge/processOnboardVerify
    * pair a self-custody caller used to drive over two client round trips,
    * self-signing both the challenge nonce and (for did:hedera) the DID
    * creation payload. The resulting private key is stored encrypted in
@@ -178,7 +178,7 @@ export class AgentService implements IAgentService {
   ): Promise<{ agentDid: string; vcId: string }> {
     const { publicKey, encrypted } = this.keyCustody.generateAndEncrypt();
 
-    const challenge = await this.processOnboardStep1(
+    const challenge = await this.processOnboardCreateChallenge(
       {
         enrollmentToken: input.enrollmentToken,
         publicKeyHex: publicKey,
@@ -374,7 +374,7 @@ export class AgentService implements IAgentService {
     );
   }
 
-  async processOnboardStep1(
+  async processOnboardCreateChallenge(
     input: { enrollmentToken: string; publicKeyHex: string; domains?: string[] },
     requestId: string,
   ): Promise<ChallengeResult> {
@@ -446,19 +446,6 @@ export class AgentService implements IAgentService {
       pendingDidCreatePayloadHex: didCreateRequest.signingPayloadHex,
       expiresAt,
       enrollmentTokenId: tokenRecord.id,
-    });
-
-    this.auditLogger.log(AuditEvents.ENROLLMENT_TOKEN_CONSUMED, {
-      requestId,
-      tokenIdHash: tokenHash,
-      timestamp: new Date().toISOString(),
-    });
-    this.auditLogger.log(AuditEvents.CHALLENGE_ISSUED, {
-      requestId,
-      challengeId,
-      did: '',
-      purpose: 'agent_onboarding',
-      expiresAt: expiresAt.toISOString(),
     });
 
     return {
@@ -548,7 +535,7 @@ export class AgentService implements IAgentService {
         agentName,
         delegationDepth: 0,
         maxDelegationDepth: enrollmentToken?.maxDelegationDepth ?? 0,
-        expiresInSeconds: this.enrollmentTokenTtlSeconds * 100,
+        expiresAt: enrollmentToken?.expiresAt ?? null,
       },
       requestId,
     );

@@ -80,45 +80,45 @@ describe('AgentService Branch Coverage', () => {
     });
   });
 
-  describe('processOnboardStep1 branches', () => {
+  describe('processOnboardCreateChallenge branches', () => {
     it('throws for invalid public key hex', async () => {
-        await expect(service.processOnboardStep1({ enrollmentToken: 't1', publicKeyHex: 'invalid' }, 'req-1'))
+        await expect(service.processOnboardCreateChallenge({ enrollmentToken: 't1', publicKeyHex: 'invalid' }, 'req-1'))
           .rejects.toMatchObject({ code: 'INVALID_PUBLIC_KEY' });
     });
 
     it('throws for invalid domain URL', async () => {
-        await expect(service.processOnboardStep1({ enrollmentToken: 't1', publicKeyHex: '0'.repeat(64), domains: ['ftp://bad.com'] }, 'req-1'))
+        await expect(service.processOnboardCreateChallenge({ enrollmentToken: 't1', publicKeyHex: '0'.repeat(64), domains: ['ftp://bad.com'] }, 'req-1'))
           .rejects.toMatchObject({ code: 'INVALID_SERVICE_ENDPOINT_URL' });
     });
 
     it('accepts http and bare-host domains', async () => {
         repository.findEnrollmentTokenByHash.mockResolvedValue(null);
-        await expect(service.processOnboardStep1({ enrollmentToken: 't1', publicKeyHex: '0'.repeat(64), domains: ['http://a.com', 'example.com'] }, 'req-1'))
+        await expect(service.processOnboardCreateChallenge({ enrollmentToken: 't1', publicKeyHex: '0'.repeat(64), domains: ['http://a.com', 'example.com'] }, 'req-1'))
           .rejects.toThrow(EnrollmentTokenNotFoundError);
     });
 
     it('throws EnrollmentTokenNotFoundError if not found', async () => {
         repository.findEnrollmentTokenByHash.mockResolvedValue(null);
-        await expect(service.processOnboardStep1({ enrollmentToken: 't1', publicKeyHex: '0'.repeat(64) }, 'req-1'))
+        await expect(service.processOnboardCreateChallenge({ enrollmentToken: 't1', publicKeyHex: '0'.repeat(64) }, 'req-1'))
           .rejects.toThrow(EnrollmentTokenNotFoundError);
     });
 
     it('throws EnrollmentTokenAlreadyUsedError if used', async () => {
         repository.findEnrollmentTokenByHash.mockResolvedValue({ usedAt: new Date() });
-        await expect(service.processOnboardStep1({ enrollmentToken: 't1', publicKeyHex: '0'.repeat(64) }, 'req-1'))
+        await expect(service.processOnboardCreateChallenge({ enrollmentToken: 't1', publicKeyHex: '0'.repeat(64) }, 'req-1'))
           .rejects.toThrow(EnrollmentTokenAlreadyUsedError);
     });
 
     it('throws EnrollmentTokenExpiredError if expired', async () => {
         repository.findEnrollmentTokenByHash.mockResolvedValue({ expiresAt: new Date(Date.now() - 10000) });
-        await expect(service.processOnboardStep1({ enrollmentToken: 't1', publicKeyHex: '0'.repeat(64) }, 'req-1'))
+        await expect(service.processOnboardCreateChallenge({ enrollmentToken: 't1', publicKeyHex: '0'.repeat(64) }, 'req-1'))
           .rejects.toThrow(EnrollmentTokenExpiredError);
     });
 
     it('throws EnrollmentTokenAlreadyUsedError if burn fails', async () => {
         repository.findEnrollmentTokenByHash.mockResolvedValue({ expiresAt: new Date(Date.now() + 10000) });
         repository.burnEnrollmentTokenAtomically.mockResolvedValue(false);
-        await expect(service.processOnboardStep1({ enrollmentToken: 't1', publicKeyHex: '0'.repeat(64) }, 'req-1'))
+        await expect(service.processOnboardCreateChallenge({ enrollmentToken: 't1', publicKeyHex: '0'.repeat(64) }, 'req-1'))
           .rejects.toThrow(EnrollmentTokenAlreadyUsedError);
     });
   });

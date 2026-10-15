@@ -68,6 +68,8 @@ export interface IssueVCParams {
   agentName?: string | undefined;
   userId?: string | undefined;
   expiresInSeconds?: number | undefined;
+  /** Explicit expiry. `null` issues a VC with no validUntil. Takes precedence over expiresInSeconds. */
+  expiresAt?: Date | null | undefined;
   delegatedFrom?: string | undefined;
   delegationDepth?: number | undefined;
   maxDelegationDepth?: number | undefined;
@@ -78,14 +80,14 @@ export interface IssueVCResult {
   vcId: string;
   vc: SignedVC;
   statusListIndex: number;
-  expiresAt: string;
+  expiresAt: string | null;
 }
 
 export interface VCDetails {
   vcId: string;
   vc: SignedVC;
   status: 'active' | 'revoked' | 'expired';
-  expiresAt: string;
+  expiresAt: string | null;
   revokedAt: string | null;
   renewedByVcId: string | null;
 }
@@ -103,7 +105,7 @@ export interface VCSummary {
   scopes: string[];
   status: 'active' | 'revoked' | 'expired';
   issuedAt: string;
-  expiresAt: string;
+  expiresAt: string | null;
   parentVcId?: string | undefined;
 }
 
@@ -212,7 +214,7 @@ export class VCService implements IVCService {
       !record ||
       record.subjectDid !== subjectDid ||
       record.revokedAt ||
-      record.expiresAt.getTime() <= Date.now()
+      (record.expiresAt !== null && record.expiresAt.getTime() <= Date.now())
     ) {
       return null;
     }
@@ -240,7 +242,7 @@ export class VCService implements IVCService {
   async registerSignedVC(vc: SignedVC): Promise<void> {
     const subject = (vc as unknown as { credentialSubject: CredentialSubject & { id: string; privilegeScopes?: string[] } })
       .credentialSubject;
-    const validUntil = (vc as unknown as { validUntil: string }).validUntil;
+    const validUntil = (vc as unknown as { validUntil?: string }).validUntil;
     await this.vcRepo.createVc({
       vcId: vc.id,
       subjectDid: subject.id,
@@ -248,7 +250,7 @@ export class VCService implements IVCService {
       vcJson: vc,
       privilegeScopes: subject.privilegeScopes,
       statusListIndex: 0,
-      expiresAt: new Date(validUntil),
+      expiresAt: validUntil ? new Date(validUntil) : null,
       delegatedFrom: subject.delegatedFrom,
       delegationDepth: subject.delegationDepth,
       maxDelegationDepth: subject.maxDelegationDepth,
@@ -302,11 +304,12 @@ export class VCService implements IVCService {
       );
     }
 
-    const expiresAt = new Date((vc as unknown as { validUntil: string }).validUntil);
-    if (Number.isNaN(expiresAt.getTime())) {
+    const validUntil = (vc as unknown as { validUntil?: string }).validUntil;
+    const expiresAt = validUntil ? new Date(validUntil) : null;
+    if (expiresAt && Number.isNaN(expiresAt.getTime())) {
       throw new HelixError(ErrorCode.VALIDATION_ERROR, 'VC has no usable validUntil', 400);
     }
-    if (expiresAt.getTime() <= Date.now()) {
+    if (expiresAt && expiresAt.getTime() <= Date.now()) {
       throw new HelixError(ErrorCode.VC_EXPIRED, 'Cannot register an already-expired VC', 400);
     }
 
@@ -362,7 +365,7 @@ export class VCService implements IVCService {
       subjectDid: subject.id,
       subjectType: 'agent',
       privilegeScopes,
-      expiresAt: expiresAt.toISOString(),
+      expiresAt: expiresAt?.toISOString() ?? null,
     });
 
     return { vcId: vc.id, alreadyRegistered: false };
@@ -444,7 +447,11 @@ export class VCService implements IVCService {
     const cuid = crypto.randomUUID().replace(/-/g, '').slice(0, 24);
     const vcId = `vc:helix:${cuid}`;
     const now = new Date();
-    const expiresAt = new Date(now.getTime() + (params.expiresInSeconds || 7776000) * 1000);
+    const expiresAt =
+      params.expiresAt !== undefined
+        ? params.expiresAt
+        : new Date(now.getTime() + (params.expiresInSeconds || 7776000) * 1000);
+    const validUntilField = expiresAt ? { validUntil: expiresAt.toISOString() } : {};
 
     const credentialStatus = {
       id: `${this.apiBaseUrl}/v1/status-list/${this.DEFAULT_STATUS_LIST_ID}#${claimedIndex}`,
@@ -461,7 +468,7 @@ export class VCService implements IVCService {
             type: ['VerifiableCredential', 'HelixAgentCredential'],
             issuer: this.issuerDid,
             validFrom: now.toISOString(),
-            validUntil: expiresAt.toISOString(),
+            ...validUntilField,
             credentialStatus,
             credentialSubject: {
               id: params.subjectDid,
@@ -484,7 +491,7 @@ export class VCService implements IVCService {
             type: ['VerifiableCredential', 'HelixUserCredential'],
             issuer: this.issuerDid,
             validFrom: now.toISOString(),
-            validUntil: expiresAt.toISOString(),
+            ...validUntilField,
             credentialStatus,
             credentialSubject: {
               id: params.subjectDid,
@@ -520,7 +527,7 @@ export class VCService implements IVCService {
       subjectDid: params.subjectDid,
       subjectType: params.subjectType,
       privilegeScopes: params.privilegeScopes,
-      expiresAt: expiresAt.toISOString(),
+      expiresAt: expiresAt?.toISOString() ?? null,
       statusListIndex: claimedIndex,
     });
 
@@ -528,7 +535,7 @@ export class VCService implements IVCService {
       vcId,
       vc: signedVc,
       statusListIndex: claimedIndex,
-      expiresAt: expiresAt.toISOString(),
+      expiresAt: expiresAt?.toISOString() ?? null,
     };
   }
 
@@ -542,7 +549,7 @@ export class VCService implements IVCService {
     const summaries = records.map((record): VCSummary => {
       let status: 'active' | 'revoked' | 'expired' = 'active';
       if (record.revokedAt) status = 'revoked';
-      else if (record.expiresAt.getTime() <= now) status = 'expired';
+      else if (record.expiresAt && record.expiresAt.getTime() <= now) status = 'expired';
 
       const vcJson =
         typeof record.vcJson === 'string' ? JSON.parse(record.vcJson) : record.vcJson;
@@ -562,7 +569,7 @@ export class VCService implements IVCService {
         scopes,
         status,
         issuedAt: record.createdAt?.toISOString() ?? validFrom,
-        expiresAt: record.expiresAt.toISOString(),
+        expiresAt: record.expiresAt?.toISOString() ?? null,
         ...(parentVcId ? { parentVcId } : {}),
       };
     });
@@ -583,13 +590,13 @@ export class VCService implements IVCService {
     const now = new Date();
     let status: 'active' | 'revoked' | 'expired' = 'active';
     if (record.revokedAt) status = 'revoked';
-    else if (record.expiresAt < now) status = 'expired';
+    else if (record.expiresAt && record.expiresAt < now) status = 'expired';
 
     return {
       vcId: record.vcId,
       vc: asSignedVC(record.vcJson),
       status,
-      expiresAt: record.expiresAt.toISOString(),
+      expiresAt: record.expiresAt?.toISOString() ?? null,
       revokedAt: record.revokedAt?.toISOString() || null,
       renewedByVcId: record.renewedByVcId,
     };
@@ -599,7 +606,7 @@ export class VCService implements IVCService {
     const record = await this.vcRepo.findByVcId(vcId);
     if (!record) throw new HelixError(ErrorCode.VC_NOT_FOUND, 'Credential not found', 404);
     if (record.revokedAt) return 'revoked';
-    if (record.expiresAt < new Date()) return 'expired';
+    if (record.expiresAt && record.expiresAt < new Date()) return 'expired';
     return 'active';
   }
 
@@ -612,7 +619,7 @@ export class VCService implements IVCService {
     if (!record) return null;
     let status: 'active' | 'revoked' | 'expired' = 'active';
     if (record.revokedAt) status = 'revoked';
-    else if (record.expiresAt.getTime() <= Date.now()) status = 'expired';
+    else if (record.expiresAt && record.expiresAt.getTime() <= Date.now()) status = 'expired';
     return {
       vcId: record.vcId,
       vc: asRecord(record.vcJson),

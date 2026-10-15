@@ -133,7 +133,7 @@ export class MockVCService implements IVCService {
         input.subjectType === 'agent' ? 'HelixAgentCredential' : 'HelixUserCredential',
       ],
       credentialSubject: { id: input.subjectDid },
-      validUntil: new Date(Date.now() + input.expiresInSeconds * 1000).toISOString(),
+      validUntil: new Date(Date.now() + (input.expiresInSeconds ?? 7776000) * 1000).toISOString(),
     };
     return {
       vcId: 'vc:mock:issued',

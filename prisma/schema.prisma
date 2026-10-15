@@ -50,7 +50,7 @@ model Vc {
   vcJson           Json
   privilegeScopes  Json?
   statusListIndex  Int
-  expiresAt        DateTime
+  expiresAt        DateTime?
   revokedAt        DateTime?
   renewedByVcId    String?
   delegatedFrom    String?

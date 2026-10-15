@@ -138,7 +138,7 @@ function verifyValidityWindow(vc: SignedVC): void {
   if (new Date(vc.validFrom).getTime() > now) {
     throw new VCNotYetValidError();
   }
-  if (new Date(vc.validUntil).getTime() <= now) {
+  if (vc.validUntil && new Date(vc.validUntil).getTime() <= now) {
     throw new VCExpiredError();
   }
 }

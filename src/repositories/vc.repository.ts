@@ -10,7 +10,7 @@ export interface VCRecord {
   vcJson: unknown;
   privilegeScopes: unknown;
   statusListIndex: number;
-  expiresAt: Date;
+  expiresAt: Date | null;
   revokedAt: Date | null;
   renewedByVcId: string | null;
   delegatedFrom?: string | null;
@@ -41,7 +41,7 @@ export interface CreateVcParams {
   vcJson: unknown;
   privilegeScopes?: string[] | undefined;
   statusListIndex: number;
-  expiresAt: Date;
+  expiresAt: Date | null;
   delegatedFrom?: string | undefined;
   delegationDepth?: number | undefined;
   maxDelegationDepth?: number | undefined;

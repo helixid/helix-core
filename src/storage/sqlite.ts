@@ -72,7 +72,7 @@ CREATE TABLE IF NOT EXISTS vcs (
   vc_json TEXT NOT NULL,
   privilege_scopes TEXT,
   status_list_index INTEGER NOT NULL,
-  expires_at TEXT NOT NULL,
+  expires_at TEXT,
   revoked_at TEXT,
   renewed_by_vc_id TEXT,
   delegated_from TEXT,

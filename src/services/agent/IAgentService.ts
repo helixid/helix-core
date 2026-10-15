@@ -50,7 +50,7 @@ export interface IAgentService {
     },
     requestId: string,
   ): Promise<EnrollmentTokenResult>;
-  processOnboardStep1(
+  processOnboardCreateChallenge(
     input: { enrollmentToken: string; publicKeyHex: string; domains?: string[] },
     requestId: string,
   ): Promise<ChallengeResult>;

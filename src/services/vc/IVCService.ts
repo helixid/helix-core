@@ -8,7 +8,8 @@ export interface IssueVCInput {
   privilegeScopes?: string[];
   agentName?: string;
   userId?: string;
-  expiresInSeconds: number;
+  expiresInSeconds?: number;
+  expiresAt?: Date | null;
   delegatedFrom?: string;
   delegationDepth?: number;
   maxDelegationDepth?: number;
@@ -19,7 +20,7 @@ export interface IssueVCResult {
   vcId: string;
   vc: Record<string, unknown>;
   statusListIndex: number;
-  expiresAt: string;
+  expiresAt: string | null;
 }
 
 export interface IVCService {

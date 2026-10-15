@@ -108,7 +108,7 @@ describe('AgentService Unit Tests', () => {
           'req-1',
         );
         expect(result.expiresAt).toBeUndefined();
-        expect(repository.createEnrollmentToken.mock.calls[0][0]).not.toHaveProperty('expiresAt');
+        expect(repository.createEnrollmentToken.mock.calls[0][0]).toMatchObject({ expiresAt: null });
       });
 
       it.each([0, -1, 1.5, Number.NaN])('rejects expiry=%s with INVALID_EXPIRY', async (expiry) => {
@@ -120,17 +120,17 @@ describe('AgentService Unit Tests', () => {
     });
   });
 
-  describe('processOnboardStep1', () => {
+  describe('processOnboardCreateChallenge', () => {
     const rawToken = 'enroll:abc';
     const publicKeyHex = 'a'.repeat(64);
 
     it('throws VALIDATION_ERROR for invalid public key', async () => {
-      await expect(agentService.processOnboardStep1({ enrollmentToken: rawToken, publicKeyHex: 'short', domains: [] }, 'req-1'))
+      await expect(agentService.processOnboardCreateChallenge({ enrollmentToken: rawToken, publicKeyHex: 'short', domains: [] }, 'req-1'))
         .rejects.toMatchObject({ code: 'INVALID_PUBLIC_KEY' });
     });
 
     it('throws INVALID_SERVICE_ENDPOINT_URL for non-web domain', async () => {
-      await expect(agentService.processOnboardStep1({ enrollmentToken: rawToken, publicKeyHex, domains: ['ftp://unsafe.com'] }, 'req-1'))
+      await expect(agentService.processOnboardCreateChallenge({ enrollmentToken: rawToken, publicKeyHex, domains: ['ftp://unsafe.com'] }, 'req-1'))
         .rejects.toMatchObject({ code: 'INVALID_SERVICE_ENDPOINT_URL' });
     });
   });
