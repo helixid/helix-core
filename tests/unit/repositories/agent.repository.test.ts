@@ -62,21 +62,7 @@ describe('AgentRepository Unit Tests', () => {
     expect(found?.nonce).toBe('n');
   });
 
-  it('lists active services', async () => {
-    await repository.createService({ 
-      serviceName: 's1', 
-      displayName: 'S1', 
-      verifiedDomain: 'v', 
-      publicKeyMultibase: 'z', 
-      apiEndpoint: 'a', 
-      metadata: '{}' 
-    });
-    const list = await repository.listActiveServices();
-    expect(list.length).toBe(1);
-    expect(list[0]!.serviceName).toBe('s1');
-  });
-
-  it('uses Prisma for enrollment tokens, challenges, and services when provided', async () => {
+  it('uses Prisma for enrollment tokens and challenges when provided', async () => {
     const challengeRow = {
       id: 'chdb-1',
       challengeId: 'chal-1',
@@ -97,12 +83,6 @@ describe('AgentRepository Unit Tests', () => {
         create: vi.fn().mockResolvedValue({ id: 'et-1' }),
         findUnique: vi.fn().mockResolvedValue({ id: 'et-1' }),
         updateMany: vi.fn().mockResolvedValue({ count: 1 }),
-      },
-      serviceRegistry: {
-        create: vi.fn().mockResolvedValue({ serviceName: 'svc' }),
-        findFirst: vi.fn().mockResolvedValue({ serviceName: 'svc' }),
-        findUnique: vi.fn().mockResolvedValue({ serviceName: 'svc' }),
-        findMany: vi.fn().mockResolvedValue([{ serviceName: 'svc' }]),
       },
       $queryRawUnsafe: vi.fn()
         .mockResolvedValueOnce([challengeRow])
@@ -135,17 +115,6 @@ describe('AgentRepository Unit Tests', () => {
     })).resolves.toMatchObject({ challengeId: 'chal-1', pendingDidCreatePayloadHex: 'aa' });
     await expect(prismaRepository.findChallengeById('chal-1')).resolves.toMatchObject({ challengeId: 'chal-1' });
     await expect(prismaRepository.markChallengeVerified('chal-1')).resolves.toMatchObject({ verifiedAt: expect.any(Date) });
-    await expect(prismaRepository.createService({
-      serviceName: 'svc',
-      displayName: 'Service',
-      verifiedDomain: 'https://svc.example.com',
-      publicKeyMultibase: 'zKey',
-      apiEndpoint: 'https://svc.example.com/api',
-      metadata: '{}',
-    })).resolves.toEqual({ serviceName: 'svc' });
-    await expect(prismaRepository.getServiceByName('svc')).resolves.toEqual({ serviceName: 'svc' });
-    await expect(prismaRepository.findServiceByName('svc')).resolves.toEqual({ serviceName: 'svc' });
-    await expect(prismaRepository.listActiveServices()).resolves.toEqual([{ serviceName: 'svc' }]);
 
     expect(prisma.enrollmentToken.updateMany).toHaveBeenCalledWith({
       where: { tokenHash: 'hash', usedAt: null },

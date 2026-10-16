@@ -22,7 +22,26 @@ Surfaces used:
 | Enforce scope | `requireScope()`, `checkScope()`, `filterToolsByScope()`, MCP `requiredScopes`. |
 | Optional session | `POST /v1/vp/verify` with `session: true`, `GET /v1/sessions/public-key`, `HelixClient.fetchSessionPublicKey()`, `HelixClient.verifySessionToken()`. |
 
-## 2. Delegation
+## 2. Consent grant (user → agent, through a service)
+
+Brief flow:
+
+1. A Service Provider is enrolled once; the server mints its DID and holds its key.
+2. The user consents on the service's own consent screen.
+3. The service asks the server to issue the grant: a `DelegationGrantCredential` naming the agent as subject and the user as `userDid`, signed with the service's server-held key and stored with a status-list entry. One call, no key material anywhere outside the server.
+4. The agent presents the grant alongside its own VC; the verifier checks both.
+5. Revocation is `POST /v1/vcs/:vcId/revoke`, same as any platform-held credential.
+
+Surfaces used:
+
+| Step | Surfaces |
+| --- | --- |
+| Enroll service | `HelixClient.createService()`, `POST /v1/services`. |
+| Issue grant | `HelixClient.issueServiceDelegationGrant()`, `POST /v1/service-delegation-grants`. |
+| Present | `HelixClient.signVP()` with `grantVC`, `POST /v1/agents/:did/vp`. |
+| Revoke | `HelixClient.revokeVC()`, `POST /v1/vcs/:vcId/revoke`. |
+
+## 3. Delegation (agent → agent)
 
 Brief flow:
 
@@ -39,7 +58,7 @@ Surfaces used:
 | Verify delegation chain | `verifyVP()`, `POST /v1/vp/verify`, `helixidMCPMiddleware()`. |
 | Enforce delegated scopes | `requireScope()`, `checkScope()`, `filterToolsByScope()`, MCP `requiredScopes`. |
 
-## 3. Enrollment, VC Issuance, Revoking
+## 4. Enrollment, VC Issuance, Revoking
 
 Brief flow:
 
@@ -58,7 +77,7 @@ Surfaces used:
 | Check VC status | `HelixClient.checkVCStatus()`. |
 | Verification after revoke | `verifyVP()`, `POST /v1/vp/verify`, `helixidMCPMiddleware()`. |
 
-## 4. DID Lifecycle
+## 5. DID Lifecycle
 
 Brief flow:
 
@@ -77,7 +96,7 @@ Surfaces used:
 | Remove service endpoint | `DELETE /v1/dids/:did/services/:endpointId`, `HelixClient.removeServiceEndpoint()`, `AgentWallet.removeService()`. |
 | Deactivate DID | `POST /v1/dids/:did/deactivate`, `HelixClient.deactivateDID()`, `AgentWallet.deactivate()`. |
 
-## 5. Credential Renewal
+## 6. Credential Renewal
 
 Brief flow:
 
@@ -93,7 +112,7 @@ Surfaces used:
 | Find active VC | `GET /v1/vcs?subjectDid=...&status=active`, `HelixClient.listVCs()`. |
 | Present renewed VC | `POST /v1/agents/:did/vp`, `HelixClient.signVP()` (optional `vcId`). |
 
-## 6. User DID Challenge Verification
+## 7. User DID Challenge Verification
 
 Brief flow:
 
@@ -108,7 +127,7 @@ Surfaces used:
 | Request challenge | `POST /v1/challenges`, `HelixClient.requestUserChallenge()`. |
 | Verify challenge | `POST /v1/challenges/:challengeId/verify`, `HelixClient.verifyUserChallenge()`. |
 
-## 7. Session Bridge
+## 8. Session Bridge
 
 Brief flow:
 
@@ -124,7 +143,7 @@ Surfaces used:
 | Fetch session key | `GET /v1/sessions/public-key`, `HelixClient.fetchSessionPublicKey()`. |
 | Verify session token | `HelixClient.verifySessionToken()`. |
 
-## 8. Wallet Management
+## 9. Wallet Management
 
 Brief flow:
 

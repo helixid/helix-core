@@ -16,7 +16,6 @@ describe('AgentService Unit Tests', () => {
   let auditLogger: any;
   let agentKeyRepository: any;
   let keyCustody: any;
-  let preparedPayloadService: any;
   let agentService: AgentService;
 
   beforeEach(() => {
@@ -52,14 +51,6 @@ describe('AgentService Unit Tests', () => {
       sign: vi.fn(),
       signWith: vi.fn((_encrypted: unknown, use: (key: string) => unknown) => use(TEST_PRIVATE_KEY_HEX)),
     };
-    preparedPayloadService = {
-      prepareDelegation: vi.fn(),
-      finalizeDelegation: vi.fn(),
-      prepareGrant: vi.fn(),
-      finalizeGrant: vi.fn(),
-      prepareAgentRenewal: vi.fn(),
-      finalizeAgentRenewal: vi.fn(),
-    };
 
     agentService = new AgentService(
       repository,
@@ -68,7 +59,6 @@ describe('AgentService Unit Tests', () => {
       auditLogger,
       agentKeyRepository,
       keyCustody,
-      preparedPayloadService,
     );
   });
 
@@ -214,23 +204,6 @@ describe('AgentService Unit Tests', () => {
       credentialSubject: { id: delegatorDid, privilegeScopes: ['read:orders'], maxDelegationDepth: 1 },
     };
 
-    it('throws when preparedPayloadService was not supplied', async () => {
-      const noDelegationService = new AgentService(
-        repository,
-        didService,
-        vcService,
-        auditLogger,
-        agentKeyRepository,
-        keyCustody,
-      );
-      await expect(
-        noDelegationService.delegateAuthority(
-          { did: delegatorDid, to: subAgentDid, scopes: ['read:orders'], expiresIn: 3600 },
-          'req-1',
-        ),
-      ).rejects.toMatchObject({ code: 'INTERNAL_ERROR' });
-    });
-
     it('throws AgentKeyNotFoundError when no server-held key exists for the delegator DID', async () => {
       agentKeyRepository.findByDid.mockResolvedValue(null);
       await expect(
@@ -281,22 +254,11 @@ describe('AgentService Unit Tests', () => {
           'req-1',
         ),
       ).rejects.toMatchObject({ code: 'VP_MULTIPLE_ACTIVE_VC' });
-      expect(preparedPayloadService.prepareDelegation).not.toHaveBeenCalled();
     });
 
     it('pins the fromVC by vcId when one is given, instead of looking up by subject', async () => {
       agentKeyRepository.findByDid.mockResolvedValue(keyRecord);
       vcService.findActiveByVcIdForSubject.mockResolvedValue(fromVC);
-      preparedPayloadService.prepareDelegation.mockResolvedValue({
-        token: 'tok-1',
-        unsignedPayload: {},
-        canonicalHash: 'ab'.repeat(32),
-        expiresAt: new Date().toISOString(),
-      });
-      preparedPayloadService.finalizeDelegation.mockResolvedValue({
-        id: 'vc:test:delegated',
-        credentialSubject: { id: subAgentDid, privilegeScopes: ['read:orders'], delegationDepth: 1 },
-      });
 
       await agentService.delegateAuthority(
         { did: delegatorDid, to: subAgentDid, scopes: ['read:orders'], expiresIn: 3600, vcId: 'vc:test:delegator' },
@@ -311,20 +273,9 @@ describe('AgentService Unit Tests', () => {
       expect(vcService.listActiveBySubjectDid).not.toHaveBeenCalled();
     });
 
-    it('prepares, signs, and finalizes a delegation VC, returning it and logging VC_DELEGATED', async () => {
+    it('builds and signs a delegation VC with the custody-held key, stores it and logs VC_DELEGATED', async () => {
       agentKeyRepository.findByDid.mockResolvedValue(keyRecord);
       vcService.listActiveBySubjectDid.mockResolvedValue([fromVC]);
-      preparedPayloadService.prepareDelegation.mockResolvedValue({
-        token: 'tok-1',
-        unsignedPayload: {},
-        canonicalHash: 'ab'.repeat(32),
-        expiresAt: new Date().toISOString(),
-      });
-      const delegatedVC = {
-        id: 'vc:test:delegated',
-        credentialSubject: { id: subAgentDid, privilegeScopes: ['read:orders'], delegationDepth: 1 },
-      };
-      preparedPayloadService.finalizeDelegation.mockResolvedValue(delegatedVC);
 
       const result = await agentService.delegateAuthority(
         { did: delegatorDid, to: subAgentDid, scopes: ['read:orders'], expiresIn: 3600 },
@@ -332,44 +283,49 @@ describe('AgentService Unit Tests', () => {
       );
 
       expect(vcService.listActiveBySubjectDid).toHaveBeenCalledWith(delegatorDid, 'HelixAgentCredential');
-      expect(preparedPayloadService.prepareDelegation).toHaveBeenCalledWith({
-        delegatorDid,
-        fromVC,
-        to: subAgentDid,
-        scopes: ['read:orders'],
-        expiresIn: 3600,
-      });
       expect(keyCustody.signWith).toHaveBeenCalledWith(keyRecord, expect.any(Function));
-      expect(preparedPayloadService.finalizeDelegation).toHaveBeenCalledWith({
-        token: 'tok-1',
-        verificationMethod: `${delegatorDid}#key-1`,
-        signatureHex: expect.any(String),
+      const delegatedVC = result.delegatedVC as unknown as {
+        issuer: string;
+        credentialSubject: Record<string, unknown>;
+        delegationChain: unknown[];
+        proof: { verificationMethod: string };
+      };
+      expect(delegatedVC.issuer).toBe(delegatorDid);
+      expect(delegatedVC.credentialSubject).toMatchObject({
+        id: subAgentDid,
+        privilegeScopes: ['read:orders'],
+        delegatedFrom: delegatorDid,
+        delegationDepth: 1,
+        parentVcId: 'vc:test:delegator',
       });
-      expect(vcService.registerSignedVC).toHaveBeenCalledWith(delegatedVC);
-      expect(result.delegatedVC).toBe(delegatedVC);
+      expect(delegatedVC.delegationChain).toEqual([fromVC]);
+      expect(delegatedVC.proof.verificationMethod).toBe(`${delegatorDid}#key-1`);
+      expect(vcService.registerSignedVC).toHaveBeenCalledWith(result.delegatedVC);
       expect(auditLogger.log).toHaveBeenCalledWith(
         'VC_DELEGATED',
         expect.objectContaining({
           delegatorDid,
           delegateDid: subAgentDid,
           scopes: ['read:orders'],
-          delegatedVcId: 'vc:test:delegated',
+          delegatedVcId: result.delegatedVC.id,
         }),
       );
     });
 
-    it('propagates MaxDelegationDepthExceededError from prepareDelegation', async () => {
+    it('rejects delegation beyond maxDelegationDepth before signing', async () => {
       agentKeyRepository.findByDid.mockResolvedValue(keyRecord);
-      vcService.listActiveBySubjectDid.mockResolvedValue([fromVC]);
-      preparedPayloadService.prepareDelegation.mockRejectedValue(new MaxDelegationDepthExceededError());
+      vcService.findActiveByVcIdForSubject.mockResolvedValue({
+        ...fromVC,
+        credentialSubject: { ...fromVC.credentialSubject, delegationDepth: 1, maxDelegationDepth: 1 },
+      });
 
       await expect(
         agentService.delegateAuthority(
-          { did: delegatorDid, to: subAgentDid, scopes: ['read:orders'], expiresIn: 3600 },
+          { did: delegatorDid, to: subAgentDid, scopes: ['read:orders'], expiresIn: 3600, vcId: 'vc:test:delegator' },
           'req-1',
         ),
       ).rejects.toBeInstanceOf(MaxDelegationDepthExceededError);
-      expect(preparedPayloadService.finalizeDelegation).not.toHaveBeenCalled();
+      expect(vcService.registerSignedVC).not.toHaveBeenCalled();
     });
   });
 

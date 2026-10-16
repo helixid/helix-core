@@ -49,7 +49,7 @@ The existing `(prisma?: PrismaClient, sqlite?: SqliteStore)` constructor signatu
 
 ## 4. Rollout status: complete
 
-All 8 repositories under `src/repositories/` now follow this pattern — `DidRepository`, `VcRepository`, `AuditLogRepository`, `AgentRepository`, `PreparedPayloadRepository`, `AccountRepository`, `IssuerKeyRepository`, `RefreshTokenRepository`, and `VPRepository`. Each has a companion `repositories/drivers/<name>.drivers.ts` with a `<Name>StorageDriver` interface, three implementing classes (`Prisma*`, `Sqlite*`, `InMemory*`), and a `create<Name>StorageDriver()` factory. Every repository's public constructor signature is unchanged. `ServiceRegistryRepository` needed no changes — it already only depends on `AgentRepository`, not on `prisma`/`sqlite` directly.
+All repositories under `src/repositories/` follow this pattern — `DidRepository`, `VcRepository`, `AuditLogRepository`, `AgentRepository`, `AgentRecordRepository`, `DidKeyRepository`, `ServiceRepository`, and enterprise's `AccountRepository` and `RefreshTokenRepository`. Each has a companion `repositories/drivers/<name>.drivers.ts` with a `<Name>StorageDriver` interface, three implementing classes (`Prisma*`, `Sqlite*`, `InMemory*`), and a `create<Name>StorageDriver()` factory. Every repository's public constructor signature is unchanged.
 
 Net effect: ~2,300 lines of per-method backend branching removed from the 8 repository files (each now a thin delegator), replaced by ~2,700 lines across 8 new `drivers/*.ts` files where that same logic lives, now organized by backend instead of interleaved per-method. The repository files themselves shrank from ~2,900 total lines to under 800.
 

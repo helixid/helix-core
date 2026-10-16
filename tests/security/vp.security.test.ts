@@ -180,8 +180,21 @@ describe('POST /v1/vp/verify — grant matrix (§9.4 A1)', () => {
     const spList = makeSpStatusList(sp);
     const vc = await makeAgentVC(issuer, holder.did);
     const grant = await makeGrant(sp, holder.did, USER_DID, ['book:flights'], spList);
-    const { revokeGrant } = await import('../../src/core/index.js');
-    const revokedList = await revokeGrant(spList, sp, { vc: grant });
+    // Flip the grant's bit on the SP's list and re-sign the list, which is
+    // what POST /v1/vcs/:id/revoke does for a platform-held grant.
+    const { setBit, createEd25519Proof } = await import('../../src/core/index.js');
+    const index = Number(grant.credentialStatus!.statusListIndex);
+    const revokedPayload = {
+      ...spList,
+      credentialSubject: {
+        ...spList.credentialSubject,
+        encodedList: setBit(spList.credentialSubject.encodedList, index, 1),
+      },
+    };
+    const revokedList = {
+      ...revokedPayload,
+      proof: await createEd25519Proof(revokedPayload, sp.privateKeyHex, `${sp.did}#key-1`),
+    };
     stubFetch({ [SP_LIST_URL]: revokedList });
 
     expectRejection(await post(await buildSignedVP([vc, grant], holder, USER_DID)), 'VC_REVOKED');
