@@ -25,9 +25,8 @@ import { DidRepository } from './repositories/did.repository.js';
 import { VcRepository } from './repositories/vc.repository.js';
 import { AuditLogRepository } from './repositories/audit-log.repository.js';
 import { AgentRepository } from './repositories/agent.repository.js';
-import { AgentKeyRepository } from './repositories/agent-key.repository.js';
-import { ServiceRegistryRepository } from './repositories/service-registry.repository.js';
-import { PreparedPayloadRepository } from './repositories/prepared-payload.repository.js';
+import { DidKeyRepository } from './repositories/did-key.repository.js';
+import { ServiceRepository } from './repositories/service.repository.js';
 import { AesGcmKeyCustody } from './services/key-custody/key-custody.js';
 import { createDidCache, createStatusListCache } from './cache/cacheFactory.js';
 import { extractEd25519PublicKeyHexFromDIDDocument } from './services/did/publicKey.js';
@@ -35,7 +34,7 @@ import { DIDService } from './services/did/did.service.js';
 import { VCService } from './services/vc/vc.service.js';
 import { VPService } from './services/vp/vp.service.js';
 import { AgentService } from './services/agent/agent.service.js';
-import { PreparedPayloadService } from './services/prepared-payload/index.js';
+import { ServiceProviderService } from './services/service-provider/service-provider.service.js';
 import didRoutes from './routes/did/index.js';
 import didWebRoutes from './routes/did-web/index.js';
 import vcRoutes from './routes/vc/index.js';
@@ -44,7 +43,7 @@ import vpRoutes from './routes/vp/index.js';
 import agentRoutes from './routes/agent/index.js';
 import auditLogRoutes from './routes/audit-log/index.js';
 import sessionRoutes from './routes/sessions/index.js';
-import preparedPayloadRoutes from './routes/prepared-payload/index.js';
+import serviceProviderRoutes from './routes/service-provider/index.js';
 import type { RedisLike } from './cache/RedisCache.js';
 import { SqliteStore } from './storage/sqlite.js';
 
@@ -87,10 +86,8 @@ const didRepository = new DidRepository(prisma, sqlite);
 const vcRepository = new VcRepository(prisma, sqlite);
 const auditLogRepository = new AuditLogRepository(prisma, sqlite);
 const agentRepository = new AgentRepository(prisma, sqlite);
-const agentKeyRepository = new AgentKeyRepository(prisma, sqlite);
-const serviceRegistry = new ServiceRegistryRepository(agentRepository);
-const preparedPayloadRepository = new PreparedPayloadRepository(prisma, sqlite);
-await serviceRegistry.seedBuiltIns();
+const didKeyRepository = new DidKeyRepository(prisma, sqlite);
+const serviceRepository = new ServiceRepository(prisma, sqlite);
 
 await ensureIssuerDidCached();
 
@@ -127,19 +124,27 @@ const vpService = new VPService(vcService, auditLogger, config.API_BASE_URL, {
 // Agent self-custody has been retired — every agent's private key is now
 // generated and held here, encrypted with this one shared master key. Unset
 // in dev falls back to a random per-process key (fine for local dev; means
-// encrypted AgentKey rows don't survive a restart in that mode) — same
+// encrypted DidKey rows don't survive a restart in that mode) — same
 // pattern as HOSTED_ACCESS_TOKEN_SECRET below it.
 const agentKeyEncryptionKey = config.HOSTED_KEY_ENCRYPTION_KEY ?? crypto.randomBytes(32).toString('hex');
 const keyCustody = new AesGcmKeyCustody(agentKeyEncryptionKey);
-const preparedPayloadService = new PreparedPayloadService(preparedPayloadRepository, didService);
 const agentService = new AgentService(
   agentRepository,
   didService,
   vcService,
   auditLogger,
-  agentKeyRepository,
+  didKeyRepository,
   keyCustody,
-  preparedPayloadService,
+);
+
+// Services are custodial too: same master key and custody object as agents.
+const serviceProviderService = new ServiceProviderService(
+  didService,
+  vcService,
+  serviceRepository,
+  didKeyRepository,
+  keyCustody,
+  auditLogger,
 );
 
 const app = Fastify({
@@ -231,11 +236,6 @@ await app.register(vcRoutes, {
   vcService,
   adminApiKey: config.HELIX_ADMIN_API_KEY,
 });
-await app.register(preparedPayloadRoutes, {
-  prefix: '/v1/vcs',
-  preparedPayloadService,
-  vcService,
-});
 await app.register(statusListRoutes, {
   prefix: '/v1/status-list',
   vcService,
@@ -255,6 +255,11 @@ await app.register(auditLogRoutes, {
 await app.register(agentRoutes, {
   prefix: '/v1',
   agentService,
+  adminApiKey: config.HELIX_ADMIN_API_KEY,
+});
+await app.register(serviceProviderRoutes, {
+  prefix: '/v1',
+  serviceProviderService,
   adminApiKey: config.HELIX_ADMIN_API_KEY,
 });
 

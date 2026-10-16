@@ -26,7 +26,7 @@ export interface IDIDService {
 
   createDID(
     publicKeyHex: string,
-    subjectType: 'agent' | 'user',
+    subjectType: 'agent' | 'user' | 'service',
     domains: string[],
     requestId: string,
     creationProof?: DIDCreationProof,
@@ -48,7 +48,7 @@ export interface IDIDService {
   registerResolvedDID(
     did: string,
     document: DIDDocument,
-    subjectType: 'agent' | 'user',
+    subjectType: 'agent' | 'user' | 'service',
     requestId: string,
   ): Promise<void>;
 

@@ -94,12 +94,12 @@ export interface ResolveDIDResult {
  */
 export interface IDIDService {
   prepareDIDCreation(publicKeyHex: string): Promise<{ stateJson: string; signingPayloadHex: string }>;
-  createDID(publicKeyHex: string, subjectType: 'agent' | 'user', domains: string[], requestId: string, creationProof?: DIDCreationProof): Promise<CreateDIDResult>;
+  createDID(publicKeyHex: string, subjectType: 'agent' | 'user' | 'service', domains: string[], requestId: string, creationProof?: DIDCreationProof): Promise<CreateDIDResult>;
   resolveDID(did: string, options?: { live?: boolean } | string, requestId?: string): Promise<ResolveDIDResult>;
   addServiceEndpoint(did: string, endpoint: ServiceEndpoint, requestId: string): Promise<DIDDocument>;
   removeServiceEndpoint(did: string, endpointId: string, requestId: string): Promise<DIDDocument>;
   deactivateDID(did: string, requestId: string): Promise<void>;
-  registerResolvedDID(did: string, document: DIDDocument, subjectType: 'agent' | 'user', requestId: string): Promise<void>;
+  registerResolvedDID(did: string, document: DIDDocument, subjectType: 'agent' | 'user' | 'service', requestId: string): Promise<void>;
 }
 
 export class DIDService implements IDIDService {
@@ -136,7 +136,7 @@ export class DIDService implements IDIDService {
    * Create a new DID for the configured method. Satisfies SA-2
    * (Deduplication) and, for didMethod === 'hedera', DID-1 (Anchoring).
    */
-  async createDID(publicKeyHex: string, subjectType: 'agent' | 'user', domains: string[] = [], requestId: string, creationProof?: DIDCreationProof): Promise<CreateDIDResult> {
+  async createDID(publicKeyHex: string, subjectType: 'agent' | 'user' | 'service', domains: string[] = [], requestId: string, creationProof?: DIDCreationProof): Promise<CreateDIDResult> {
     // 1. Check for existing DID with this public key (SA-2)
     const existing = await this.repository.findDidByPublicKey(publicKeyHex);
     if (existing) {
@@ -172,10 +172,11 @@ export class DIDService implements IDIDService {
       document = buildDIDDocument(did, publicKeyHex, serviceEndpoints);
       anchoring = { transactionId: `not-anchored:key:${did}` };
     } else if (this.didMethod === 'web') {
-      // Hosted at this same instance's /.well-known path — see
-      // routes/did-web/index.ts, which serves agent DIDs under
-      // /agents/:slug/did.json alongside the issuer's own document.
-      did = `did:web:${this.didDomain}:agents:${deriveAgentSlug(publicKeyHex)}`;
+      // Hosted at this same instance — see routes/did-web/index.ts, which
+      // serves agent/user DIDs under /agents/:slug/did.json and service DIDs
+      // under /services/:slug/did.json alongside the issuer's own document.
+      const segment = subjectType === 'service' ? 'services' : 'agents';
+      did = `did:web:${this.didDomain}:${segment}:${deriveAgentSlug(publicKeyHex)}`;
       document = buildDIDDocument(did, publicKeyHex, serviceEndpoints);
       anchoring = { transactionId: `not-anchored:web:${did}` };
     } else {
@@ -252,7 +253,7 @@ export class DIDService implements IDIDService {
   async registerResolvedDID(
     did: string,
     document: DIDDocument,
-    subjectType: 'agent' | 'user',
+    subjectType: 'agent' | 'user' | 'service',
     requestId: string,
   ): Promise<void> {
     const existing = await this.repository.findDidById(did);

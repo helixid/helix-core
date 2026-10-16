@@ -153,4 +153,24 @@ export class MockVCService implements IVCService {
     if (!alreadyRegistered) this.registeredExternalVCs.push(vc);
     return { vcId: vc.id, alreadyRegistered };
   }
+
+  claimedStatusListIndex = 0;
+  registeredGrants: SignedVC[] = [];
+
+  async claimStatusListEntry(): Promise<{
+    statusList: { credentialSubject: { encodedList: string } };
+    statusListCredentialUrl: string;
+    statusListIndex: number;
+  }> {
+    const { createStatusList } = await import('../../src/core/index.js');
+    return {
+      statusList: { credentialSubject: { encodedList: createStatusList(256) } },
+      statusListCredentialUrl: 'https://api.example/v1/status-list/helix-status-list-1',
+      statusListIndex: this.claimedStatusListIndex++,
+    };
+  }
+
+  async registerIssuedGrant(vc: SignedVC, _requestId: string): Promise<void> {
+    this.registeredGrants.push(vc);
+  }
 }

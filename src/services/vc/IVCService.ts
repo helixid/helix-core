@@ -71,7 +71,7 @@ export interface IVCService {
    * Persists an already-signed VC produced outside issueVC()'s own
    * issuer-signed path — specifically, a delegation VC signed by the
    * delegator agent's own custodial key (see AgentService.delegateAuthority()
-   * and PreparedPayloadService.finalizeDelegation()), not this service's
+   * signing with the delegator's custody-held key), not this service's
    * platform issuer key. Skips issueVC()'s signing and status-list-index
    * claiming entirely; this only makes the VC findable again via
    * findActiveBySubjectDid()/findActiveByVcIdForSubject() for a later hop of
@@ -100,4 +100,25 @@ export interface IVCService {
     vc: SignedVC,
     requestId: string,
   ): Promise<{ vcId: string; alreadyRegistered: boolean }>;
+
+  /**
+   * Claims the next free index on the platform's default status list for a
+   * credential this platform is about to sign on a custody-held key (a
+   * service's delegation grant), so that POST /v1/vcs/:id/revoke flips the
+   * right bit later. Creates the default list if it does not exist yet.
+   */
+  claimStatusListEntry(): Promise<{
+    statusList: { credentialSubject: { encodedList: string } };
+    statusListCredentialUrl: string;
+    statusListIndex: number;
+  }>;
+
+  /**
+   * Persists a DelegationGrantCredential this platform just signed with a
+   * service's custody-held key (ServiceProviderService.issueDelegationGrant()).
+   * Like registerSignedVC(), nothing is verified — the signature was produced
+   * here — but unlike it the real status-list index is stored, since the
+   * grant's credentialStatus points at this platform's own list.
+   */
+  registerIssuedGrant(vc: SignedVC, requestId: string): Promise<void>;
 }

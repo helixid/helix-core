@@ -3,6 +3,7 @@ import { createEd25519Proof } from './proof.js';
 import {
   MaxDelegationDepthExceededError,
   ScopeEscalationDeniedError,
+  SelfDelegationNotAllowedError,
 } from './errors/HelixError.js';
 import type { SignedVC } from './schemas/vc.js';
 
@@ -52,6 +53,9 @@ export async function buildDelegationVC(
   options: DelegateOptions,
   wallet: { did: string; privateKeyHex: string },
 ): Promise<SignedVC> {
+  if (options.to === wallet.did) {
+    throw new SelfDelegationNotAllowedError(wallet.did);
+  }
   assertAgentVC(options.fromVC);
   const parentSubject = options.fromVC.credentialSubject;
   const parentDepth = parentSubject.delegationDepth ?? 0;

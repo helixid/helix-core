@@ -474,39 +474,28 @@ export class AgentKeyNotFoundError extends HelixError {
   }
 }
 
+export class ServiceKeyNotFoundError extends HelixError {
+  constructor(did: string) {
+    super('SERVICE_KEY_NOT_FOUND', `No server-held key for service DID: ${did}`, 404);
+  }
+}
+
+export class ServiceRevokedError extends HelixError {
+  constructor(did: string) {
+    super('SERVICE_REVOKED', `Service has been revoked: ${did}`, 409);
+  }
+}
+
+/** A delegation grant can only name an agent this server holds a key for. */
+export class DelegateeNotAnAgentError extends HelixError {
+  constructor(did: string) {
+    super('DELEGATEE_NOT_AN_AGENT', `Delegatee is not a known agent: ${did}`, 404);
+  }
+}
+
 export class AgentActiveCredentialNotFoundError extends HelixError {
   constructor(did: string) {
     super('AGENT_ACTIVE_CREDENTIAL_NOT_FOUND', `No active credential for agent DID: ${did}`, 404);
-  }
-}
-
-export class PreparedPayloadNotFoundError extends HelixError {
-  constructor(message = 'Prepared payload was not found') {
-    super('PREPARED_PAYLOAD_NOT_FOUND', message, 404);
-  }
-}
-
-export class PreparedPayloadExpiredError extends HelixError {
-  constructor(message = 'Prepared payload has expired') {
-    super('PREPARED_PAYLOAD_EXPIRED', message, 410);
-  }
-}
-
-export class PreparedPayloadAlreadyConsumedError extends HelixError {
-  constructor(message = 'Prepared payload was already consumed') {
-    super('PREPARED_PAYLOAD_ALREADY_CONSUMED', message, 409);
-  }
-}
-
-export class PreparedPayloadSignatureInvalidError extends HelixError {
-  constructor(message = 'Prepared payload signature is invalid') {
-    super('PREPARED_PAYLOAD_SIGNATURE_INVALID', message, 400);
-  }
-}
-
-export class PreparedPayloadPurposeMismatchError extends HelixError {
-  constructor(message = 'Prepared payload purpose does not match finalize endpoint') {
-    super('PREPARED_PAYLOAD_PURPOSE_MISMATCH', message, 400);
   }
 }
 

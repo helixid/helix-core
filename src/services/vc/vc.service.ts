@@ -156,6 +156,16 @@ export interface IVCService {
     vc: SignedVC,
     requestId: string,
   ): Promise<{ vcId: string; alreadyRegistered: boolean }>;
+
+  /** See IVCService.claimStatusListEntry() in ./IVCService.ts. */
+  claimStatusListEntry(): Promise<{
+    statusList: { credentialSubject: { encodedList: string } };
+    statusListCredentialUrl: string;
+    statusListIndex: number;
+  }>;
+
+  /** See IVCService.registerIssuedGrant() in ./IVCService.ts. */
+  registerIssuedGrant(vc: SignedVC, requestId: string): Promise<void>;
 }
 
 /**
@@ -707,6 +717,88 @@ export class VCService implements IVCService {
       ...newVcResult,
       previousVcId: vcId,
     };
+  }
+
+  async claimStatusListEntry(): Promise<{
+    statusList: { credentialSubject: { encodedList: string } };
+    statusListCredentialUrl: string;
+    statusListIndex: number;
+  }> {
+    let list = await this.vcRepo.findStatusListById(this.DEFAULT_STATUS_LIST_ID);
+    if (!list) {
+      const created = await this.createStatusList({ listId: this.DEFAULT_STATUS_LIST_ID });
+      list = {
+        listId: this.DEFAULT_STATUS_LIST_ID,
+        encodedList: created.credentialSubject.encodedList,
+        nextIndex: 0,
+      };
+    }
+    if (list.nextIndex >= 131072) {
+      throw new HelixError(ErrorCode.STATUS_LIST_INDEX_EXHAUSTED, 'Default status list is full', 503);
+    }
+    const { claimedIndex } = await this.vcRepo.claimNextIndex(this.DEFAULT_STATUS_LIST_ID);
+    return {
+      statusList: { credentialSubject: { encodedList: list.encodedList } },
+      statusListCredentialUrl: `${this.apiBaseUrl}/v1/status-list/${this.DEFAULT_STATUS_LIST_ID}`,
+      statusListIndex: claimedIndex,
+    };
+  }
+
+  async registerIssuedGrant(vc: SignedVC, requestId: string): Promise<void> {
+    const subject = vc.credentialSubject as unknown as {
+      id: string;
+      userDid?: string;
+      scopes?: string[];
+      durability?: string;
+    };
+    const validUntil = (vc as unknown as { validUntil?: string }).validUntil;
+    const index = Number(vc.credentialStatus?.statusListIndex ?? 0);
+
+    // vcs.subjectDid is a FK onto dids; an agent that was onboarded here is
+    // already registered, this covers one this server has only seen in a VP.
+    await this.ensureSubjectDidRegistered(subject.id, requestId);
+
+    await this.vcRepo.createVc({
+      vcId: vc.id,
+      subjectDid: subject.id,
+      subjectType: 'agent',
+      vcJson: vc,
+      privilegeScopes: subject.scopes,
+      statusListIndex: Number.isInteger(index) ? index : 0,
+      expiresAt: validUntil ? new Date(validUntil) : null,
+    });
+
+    await this.audit.log({
+      event: 'CONSENT_GRANTED',
+      timestamp: new Date().toISOString(),
+      requestId,
+      vcId: vc.id,
+      issuer: vc.issuer,
+      subjectDid: subject.id,
+      subjectType: 'agent',
+      userDid: subject.userDid,
+      scopes: subject.scopes,
+      durability: subject.durability,
+      expiresAt: validUntil ?? null,
+    });
+  }
+
+  private async ensureSubjectDidRegistered(did: string, requestId: string): Promise<void> {
+    try {
+      await this.didService.resolveDID(did, requestId);
+    } catch (err: unknown) {
+      if (err instanceof HelixError && err.code === ErrorCode.DID_NOT_FOUND) {
+        let resolved: Awaited<ReturnType<typeof resolveDIDCore>>;
+        try {
+          resolved = await resolveDIDCore(did);
+        } catch {
+          throw new HelixError(ErrorCode.VC_SUBJECT_DID_NOT_FOUND, 'Subject DID not found', 404);
+        }
+        await this.didService.registerResolvedDID(did, resolved, 'agent', requestId);
+      } else {
+        throw err;
+      }
+    }
   }
 
   async getStatusList(listId: string): Promise<ReturnType<typeof buildStatusListCredential>> {

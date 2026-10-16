@@ -1,5 +1,6 @@
 import { createHash, randomBytes } from 'node:crypto';
 import {
+  buildDelegationVC,
   AgentAlreadyOnboardedError,
   AgentActiveCredentialNotFoundError,
   AgentKeyNotFoundError,
@@ -23,11 +24,10 @@ import {
   type SignedVP,
 } from '../../core/index.js';
 import type { AgentRepository } from '../../repositories/agent.repository.js';
-import type { AgentKeyRepository } from '../../repositories/agent-key.repository.js';
+import type { DidKeyRepository } from '../../repositories/did-key.repository.js';
 import type { IDIDService } from '../did/IDIDService.js';
 import type { IVCService } from '../vc/IVCService.js';
 import type { IKeyCustody } from '../key-custody/key-custody.js';
-import type { IPreparedPayloadService } from '../prepared-payload/IPreparedPayloadService.js';
 import type {
   IAgentService,
   ChallengeResult,
@@ -102,15 +102,8 @@ export class AgentService implements IAgentService {
     private readonly didService: IDIDService,
     private readonly vcService: IVCService,
     private readonly auditLogger: IAuditLogger,
-    private readonly agentKeyRepository: AgentKeyRepository,
+    private readonly agentKeyRepository: DidKeyRepository,
     private readonly keyCustody: IKeyCustody,
-    /**
-     * Only required for delegateAuthority() — every other method above works
-     * without it. Optional (rather than folded into a larger constructor
-     * everywhere) so the many existing callers that never delegate don't all
-     * need updating just to keep compiling.
-     */
-    private readonly preparedPayloadService?: IPreparedPayloadService,
     private readonly enrollmentTokenTtlSeconds = 900,
     private readonly challengeTtlSeconds = 300,
   ) {}
@@ -205,7 +198,7 @@ export class AgentService implements IAgentService {
       requestId,
     );
 
-    await this.agentKeyRepository.create({ did: result.agentDid, ...encrypted });
+    await this.agentKeyRepository.create({ did: result.agentDid, subjectType: 'agent', ...encrypted });
 
     return { agentDid: result.agentDid, vcId: result.vcId };
   }
@@ -267,24 +260,13 @@ export class AgentService implements IAgentService {
    *
    * Mirrors signVP() exactly: same key lookup, same "which active credential"
    * resolution (default to the one active HelixAgentCredential, or pin one
-   * via vcId when more than one exists — e.g. this agent already holds a
-   * VC delegated to it, alongside its own onboarding VC). The only new step
-   * is calling prepare/finalizeDelegation() instead of building the VP
-   * locally: payload construction (scope-subset and max-depth checks
-   * included) already lives there, so this just signs whatever hash it
-   * returns with the key custody already holds for VP signing.
+   * via vcId when more than one exists -- e.g. this agent already holds a
+   * VC delegated to it, alongside its own onboarding VC).
    */
   async delegateAuthority(
     input: { did: string; to: string; scopes: string[]; expiresIn: number; vcId?: string },
     requestId: string,
   ): Promise<DelegateAuthorityResult> {
-    if (!this.preparedPayloadService) {
-      throw Object.assign(new Error('Delegation is not configured'), {
-        code: 'INTERNAL_ERROR',
-        httpStatus: 500,
-      });
-    }
-
     const keyRecord = await this.agentKeyRepository.findByDid(input.did);
     if (!keyRecord) {
       throw new AgentKeyNotFoundError(input.did);
@@ -297,34 +279,19 @@ export class AgentService implements IAgentService {
       throw new AgentActiveCredentialNotFoundError(input.did);
     }
 
-    const prepared = await this.preparedPayloadService.prepareDelegation({
-      delegatorDid: input.did,
-      fromVC: fromVC as SignedVC,
-      to: input.to,
-      scopes: input.scopes,
-      expiresIn: input.expiresIn,
-    });
-
-    const signatureHex = await this.keyCustody.signWith(keyRecord, (privateKeyHex) =>
-      signBytes(Buffer.from(prepared.canonicalHash, 'hex'), privateKeyHex),
+    // buildDelegationVC() does the scope-subset and max-depth checks and
+    // signs with the custody-held key, all in-process -- there is no
+    // prepare/finalize round trip because nobody outside holds a key.
+    const delegatedVC = await this.keyCustody.signWith(keyRecord, (privateKeyHex) =>
+      buildDelegationVC(
+        { to: input.to, scopes: input.scopes, expiresIn: input.expiresIn, fromVC: fromVC as SignedVC },
+        { did: input.did, privateKeyHex },
+      ),
     );
 
-    const delegatedVC = await this.preparedPayloadService.finalizeDelegation({
-      token: prepared.token,
-      verificationMethod: `${input.did}#key-1`,
-      signatureHex,
-    });
-
     // Without this, the delegate DID could never be looked up again by
-    // vcId/subjectDid -- finalizeDelegation() only marks the prepare/
-    // finalize token consumed, it doesn't persist the VC itself. That made
-    // a second hop of delegation (the delegate delegating further) always
-    // fail with AgentActiveCredentialNotFoundError, regardless of
-    // maxDelegationDepth, since there was never anything for that lookup to
-    // find beyond the delegate's own (typically zero-authority) onboarding
-    // VC. registerSignedVC() stores it as-is, already correctly signed by
-    // this delegator's own key -- no re-signing, no platform-issuer
-    // involvement.
+    // vcId/subjectDid, so a second hop of delegation would always fail.
+    // registerSignedVC() stores it as-is, already signed by the delegator.
     await this.vcService.registerSignedVC(delegatedVC);
 
     this.auditLogger.log(AuditEvents.VC_DELEGATED, {

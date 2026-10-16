@@ -31,19 +31,6 @@ export interface ChallengeRecord {
   enrollmentTokenId: string | null;
 }
 
-export interface ServiceRegistryRecord {
-  id: string;
-  serviceName: string;
-  displayName: string;
-  verifiedDomain: string;
-  publicKeyMultibase: string;
-  apiEndpoint: string;
-  metadata: string;
-  active: boolean;
-  createdAt: Date;
-  updatedAt: Date;
-}
-
 /**
  * AgentRepository is a thin delegator over an AgentStorageDriver — see
  * storage/driver-registry.ts for the pattern and
@@ -105,27 +92,4 @@ export class AgentRepository {
     return this.driver.markChallengeVerified(challengeId);
   }
 
-  async createService(
-    data: Omit<ServiceRegistryRecord, 'id' | 'active' | 'createdAt' | 'updatedAt'>,
-  ): Promise<ServiceRegistryRecord> {
-    return this.driver.createService(data);
-  }
-
-  async upsertService(
-    data: Omit<ServiceRegistryRecord, 'id' | 'active' | 'createdAt' | 'updatedAt'>,
-  ): Promise<ServiceRegistryRecord> {
-    return this.driver.upsertService(data);
-  }
-
-  async getServiceByName(serviceName: string): Promise<ServiceRegistryRecord | null> {
-    return this.driver.getServiceByName(serviceName);
-  }
-
-  async findServiceByName(serviceName: string): Promise<ServiceRegistryRecord | null> {
-    return this.driver.findServiceByName(serviceName);
-  }
-
-  async listActiveServices(): Promise<ServiceRegistryRecord[]> {
-    return this.driver.listActiveServices();
-  }
 }

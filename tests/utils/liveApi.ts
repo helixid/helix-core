@@ -59,13 +59,11 @@ export async function resetLiveTestDatabase(): Promise<void> {
   await prisma.auditLog.deleteMany();
   await prisma.vc.deleteMany();
   await prisma.statusListEntry.deleteMany();
-  await prisma.vpId.deleteMany();
   await prisma.challenge.deleteMany();
   await prisma.enrollmentToken.deleteMany();
-  await prisma.serviceRegistry.deleteMany();
   await prisma.didUpdate.deleteMany();
   await prisma.did.deleteMany();
-  await prisma.agentKey.deleteMany();
+  await prisma.didKey.deleteMany();
   await prisma.$disconnect();
 }
 

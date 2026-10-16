@@ -18,12 +18,10 @@ export type { LinkedDataProof } from './proof.js';
 export { VPBuilder } from './vp-builder.js';
 export { verifyVP, fetchStatusList } from './vp-verifier.js';
 export { buildDelegationVC } from './delegation.js';
-export { issueGrant, revokeGrant } from './grant.js';
+export { issueGrant } from './grant.js';
 export type {
   IssueGrantOptions,
   IssuerKeyMaterial,
-  RevokeGrantTarget,
-  SignedStatusListCredential,
 } from './grant.js';
 export type { VPBuilderOptions, VPBuilderSignOverrides } from './vp-builder.js';
 export type { StatusListResolver, VerifyVPOptions, VerifyVPResult } from './vp-verifier.js';
