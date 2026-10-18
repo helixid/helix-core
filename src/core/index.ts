@@ -19,6 +19,8 @@ export { VPBuilder } from './vp-builder.js';
 export { verifyVP, fetchStatusList } from './vp-verifier.js';
 export { buildDelegationVC } from './delegation.js';
 export { issueGrant } from './grant.js';
+export { normalizeScopes, scopeKey, vcLookupColumns } from './vc-lookup.js';
+export type { VcLookupColumns } from './vc-lookup.js';
 export type {
   IssueGrantOptions,
   IssuerKeyMaterial,

@@ -17,8 +17,19 @@ export interface VCRecord {
   delegationDepth?: number | null;
   maxDelegationDepth?: number | null;
   parentVcId?: string | null;
+  vcType?: string | null;
+  issuerDid?: string | null;
+  userDid?: string | null;
+  scopeKey?: string | null;
   createdAt?: Date;
   updatedAt?: Date;
+}
+
+/** A consent grant's identity: who granted (the service), to whom (the agent), on whose behalf. */
+export interface GrantLookup {
+  subjectDid: string;
+  issuerDid: string;
+  userDid: string;
 }
 
 export interface ListVcFilters {
@@ -46,6 +57,10 @@ export interface CreateVcParams {
   delegationDepth?: number | undefined;
   maxDelegationDepth?: number | undefined;
   parentVcId?: string | undefined;
+  vcType?: string | null | undefined;
+  issuerDid?: string | null | undefined;
+  userDid?: string | null | undefined;
+  scopeKey?: string | null | undefined;
 }
 
 interface LegacyCreateVCParams {
@@ -100,6 +115,11 @@ export class VcRepository {
 
   async findActiveBySubjectDid(subjectDid: string, vcType?: string): Promise<VCRecord[]> {
     return this.driver.findActiveBySubjectDid(subjectDid, vcType);
+  }
+
+  /** Every unrevoked, unexpired DelegationGrantCredential for one (user, agent, service), oldest first. */
+  async findActiveGrants(lookup: GrantLookup): Promise<VCRecord[]> {
+    return this.driver.findActiveGrants(lookup);
   }
 
   async findMany(

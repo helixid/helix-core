@@ -135,4 +135,71 @@ describe('ServiceProviderService', () => {
       await expect(service.issueDelegationGrant(bad, 'r')).rejects.toBeInstanceOf(HelixError);
     }
   });
+
+  describe('one grant per (user, agent, service, scope set)', () => {
+    const userDid = 'did:web:mock.local:users:alice';
+    let serviceDid: string;
+    let agentDid: string;
+
+    beforeEach(async () => {
+      serviceDid = (await service.enroll(ENROLL, 'r')).did;
+      agentDid = await onboardedAgent();
+    });
+
+    it('consenting again to the same scopes refreshes the grant: new VC issued, old one revoked and chained', async () => {
+      const first = await service.issueDelegationGrant({ serviceDid, agentDid, userDid, scopes: ['b', 'a'] }, 'r1');
+      // Same set, listed differently and with a repeat: still the same grant.
+      const second = await service.issueDelegationGrant({ serviceDid, agentDid, userDid, scopes: ['a', 'b', 'a'] }, 'r2');
+
+      expect(second.grantVC.id).not.toBe(first.grantVC.id);
+      expect(second.grantVC.credentialSubject).toMatchObject({ scopes: ['a', 'b'] });
+      expect(second.replacedVcIds).toEqual([first.grantVC.id]);
+      expect(second.revokedVcIds).toEqual([]);
+      expect(vcService.revokedVcIds).toEqual([first.grantVC.id]);
+      expect(vcService.renewals).toEqual([{ oldVcId: first.grantVC.id, newVcId: second.grantVC.id }]);
+      expect(await vcService.listActiveGrants({ agentDid, serviceDid, userDid })).toEqual([second.grantVC]);
+    });
+
+    it('a different scope set is a new grant beside the existing one', async () => {
+      const first = await service.issueDelegationGrant({ serviceDid, agentDid, userDid, scopes: ['a'] }, 'r1');
+      const second = await service.issueDelegationGrant({ serviceDid, agentDid, userDid, scopes: ['a', 'b'] }, 'r2');
+
+      expect(second.replacedVcIds).toEqual([]);
+      expect(second.revokedVcIds).toEqual([]);
+      expect(vcService.revokedVcIds).toEqual([]);
+      expect((await vcService.listActiveGrants({ agentDid, serviceDid, userDid })).map((vc) => vc.id)).toEqual([
+        first.grantVC.id,
+        second.grantVC.id,
+      ]);
+    });
+
+    it('revokeExisting leaves the new grant as the only one standing', async () => {
+      const first = await service.issueDelegationGrant({ serviceDid, agentDid, userDid, scopes: ['a'] }, 'r1');
+      const same = await service.issueDelegationGrant({ serviceDid, agentDid, userDid, scopes: ['b'] }, 'r2');
+      const third = await service.issueDelegationGrant(
+        { serviceDid, agentDid, userDid, scopes: ['b'], revokeExisting: true },
+        'r3',
+      );
+
+      expect(third.replacedVcIds).toEqual([same.grantVC.id]);
+      expect(third.revokedVcIds).toEqual([first.grantVC.id]);
+      expect(await vcService.listActiveGrants({ agentDid, serviceDid, userDid })).toEqual([third.grantVC]);
+    });
+
+    it('grants for another user or another agent are never touched', async () => {
+      const otherUser = await service.issueDelegationGrant(
+        { serviceDid, agentDid, userDid: 'did:web:mock.local:users:bob', scopes: ['a'] },
+        'r1',
+      );
+      const otherAgent = await service.issueDelegationGrant(
+        { serviceDid, agentDid: await onboardedAgent(), userDid, scopes: ['a'] },
+        'r2',
+      );
+      await service.issueDelegationGrant({ serviceDid, agentDid, userDid, scopes: ['a'], revokeExisting: true }, 'r3');
+
+      expect(vcService.revokedVcIds).toEqual([]);
+      expect(vcService.registeredGrants.map((vc) => vc.id)).toContain(otherUser.grantVC.id);
+      expect(vcService.registeredGrants.map((vc) => vc.id)).toContain(otherAgent.grantVC.id);
+    });
+  });
 });

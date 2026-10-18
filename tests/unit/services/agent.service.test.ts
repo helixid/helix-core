@@ -140,7 +140,7 @@ describe('AgentService Unit Tests', () => {
     it('throws AgentKeyNotFoundError when no server-held key exists for the DID', async () => {
       agentKeyRepository.findByDid.mockResolvedValue(null);
       await expect(
-        agentService.signVP({ did: agentDid, targetService: 'https://svc.example.com' }, 'req-1'),
+        agentService.signVP({ did: agentDid, targetService: 'did:web:svc.example.com' }, 'req-1'),
       ).rejects.toBeInstanceOf(AgentKeyNotFoundError);
       expect(vcService.findActiveBySubjectDid).not.toHaveBeenCalled();
     });
@@ -155,7 +155,7 @@ describe('AgentService Unit Tests', () => {
       });
       vcService.findActiveBySubjectDid.mockResolvedValue(null);
       await expect(
-        agentService.signVP({ did: agentDid, targetService: 'https://svc.example.com' }, 'req-1'),
+        agentService.signVP({ did: agentDid, targetService: 'did:web:svc.example.com' }, 'req-1'),
       ).rejects.toBeInstanceOf(AgentActiveCredentialNotFoundError);
     });
 
@@ -174,7 +174,7 @@ describe('AgentService Unit Tests', () => {
       });
 
       const result = await agentService.signVP(
-        { did: agentDid, targetService: 'https://svc.example.com' },
+        { did: agentDid, targetService: 'did:web:svc.example.com' },
         'req-1',
       );
 
@@ -183,8 +183,83 @@ describe('AgentService Unit Tests', () => {
       expect(result.signedVP.proof).toBeDefined();
       expect(auditLogger.log).toHaveBeenCalledWith(
         'AGENT_VP_SIGNED',
-        expect.objectContaining({ agentDid, targetService: 'https://svc.example.com' }),
+        expect.objectContaining({ agentDid, targetService: 'did:web:svc.example.com' }),
       );
+    });
+
+    describe('on a user\'s behalf', () => {
+      const serviceDid = 'did:web:svc.example.com';
+      const userDid = 'did:web:mock.local:users:alice';
+      const agentVC = {
+        id: 'vc:test:1',
+        type: ['VerifiableCredential', 'HelixAgentCredential'],
+        credentialSubject: { id: agentDid, privilegeScopes: ['read', 'write'] },
+      };
+      const grant = (id: string, scopes: string[]) => ({
+        id,
+        type: ['VerifiableCredential', 'DelegationGrantCredential'],
+        issuer: serviceDid,
+        credentialSubject: { id: agentDid, type: 'DelegationGrant', userDid, scopes, durability: 'standing' },
+      });
+
+      beforeEach(() => {
+        agentKeyRepository.findByDid.mockResolvedValue({
+          did: agentDid,
+          encryptedPrivateKey: 'x',
+          iv: 'x',
+          authTag: 'x',
+          algorithm: 'aes-256-gcm',
+        });
+        vcService.findActiveBySubjectDid.mockResolvedValue(agentVC);
+        vcService.listActiveGrants = vi.fn();
+      });
+
+      it('rejects a targetService that is not a DID before touching anything', async () => {
+        await expect(
+          agentService.signVP({ did: agentDid, targetService: 'orders', userDid }, 'req-1'),
+        ).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+        expect(agentKeyRepository.findByDid).not.toHaveBeenCalled();
+      });
+
+      it('looks up every active grant for (user, agent, service) and presents them all', async () => {
+        vcService.listActiveGrants.mockResolvedValue([grant('vc:g1', ['read']), grant('vc:g2', ['write'])]);
+
+        const { signedVP } = await agentService.signVP(
+          { did: agentDid, targetService: serviceDid, userDid },
+          'req-1',
+        );
+
+        expect(vcService.listActiveGrants).toHaveBeenCalledWith({ agentDid, serviceDid, userDid });
+        expect(signedVP.verifiableCredential.map((vc) => vc['id'])).toEqual(['vc:test:1', 'vc:g1', 'vc:g2']);
+        expect(signedVP.delegatedBy).toBe(userDid);
+        expect(auditLogger.log).toHaveBeenCalledWith(
+          'AGENT_VP_SIGNED',
+          expect.objectContaining({ userDid, grantVcIds: ['vc:g1', 'vc:g2'] }),
+        );
+      });
+
+      it('throws ConsentGrantNotFoundError when the user has no active grant', async () => {
+        vcService.listActiveGrants.mockResolvedValue([]);
+        await expect(
+          agentService.signVP({ did: agentDid, targetService: serviceDid, userDid }, 'req-1'),
+        ).rejects.toMatchObject({ code: 'CONSENT_GRANT_NOT_FOUND', httpStatus: 404 });
+      });
+
+      it('uses an explicitly passed grantVC instead of looking one up', async () => {
+        const { signedVP } = await agentService.signVP(
+          { did: agentDid, targetService: serviceDid, userDid, grantVC: grant('vc:mine', ['read']) as never },
+          'req-1',
+        );
+        expect(vcService.listActiveGrants).not.toHaveBeenCalled();
+        expect(signedVP.verifiableCredential.map((vc) => vc['id'])).toEqual(['vc:test:1', 'vc:mine']);
+      });
+
+      it('presents only the agent credential when no user is named', async () => {
+        const { signedVP } = await agentService.signVP({ did: agentDid, targetService: serviceDid }, 'req-1');
+        expect(vcService.listActiveGrants).not.toHaveBeenCalled();
+        expect(signedVP.verifiableCredential).toHaveLength(1);
+        expect(signedVP).not.toHaveProperty('delegatedBy');
+      });
     });
   });
 

@@ -273,6 +273,58 @@ describe('POST /v1/vp/verify — grant matrix (§9.4 A1)', () => {
     expectRejection(await post(await buildSignedVP([vc, malformed], holder, USER_DID)), 'CONSENT_GRANT_INVALID');
   });
 
+  it('G13: several grants for the same user are presented together and their scopes unioned', async () => {
+    const holder = makeActor();
+    const sp = makeActor();
+    const spList = makeSpStatusList(sp);
+    stubFetch({ [SP_LIST_URL]: spList });
+    const vc = await makeAgentVC(issuer, holder.did, ['read:orders', 'book:flights', 'admin:everything']);
+    const readGrant = await makeGrant(sp, holder.did, USER_DID, ['read:orders'], spList);
+    const bookGrant = await makeGrant(sp, holder.did, USER_DID, ['book:flights'], spList);
+
+    const response = await post(await buildSignedVP([vc, readGrant, bookGrant], holder, USER_DID), true);
+    expect(response.statusCode).toBe(200);
+    const token = response.json().session.token as string;
+    const scopes = JSON.parse(Buffer.from(token.split('.')[1] ?? '', 'base64url').toString('utf8'))['scopes'];
+    expect([...scopes].sort()).toEqual(['book:flights', 'read:orders']);
+  });
+
+  it('G14: a revoked grant among several only loses its own scopes', async () => {
+    const holder = makeActor();
+    const sp = makeActor();
+    const spList = makeSpStatusList(sp);
+    const vc = await makeAgentVC(issuer, holder.did, ['read:orders', 'book:flights']);
+    const readGrant = await makeGrant(sp, holder.did, USER_DID, ['read:orders'], spList);
+    const bookGrant = await makeGrant(sp, holder.did, USER_DID, ['book:flights'], spList);
+    const { setBit, createEd25519Proof } = await import('../../src/core/index.js');
+    const revokedPayload = {
+      ...spList,
+      credentialSubject: {
+        ...spList.credentialSubject,
+        encodedList: setBit(spList.credentialSubject.encodedList, Number(bookGrant.credentialStatus!.statusListIndex), 1),
+      },
+    };
+    stubFetch({
+      [SP_LIST_URL]: {
+        ...revokedPayload,
+        proof: await createEd25519Proof(revokedPayload, sp.privateKeyHex, `${sp.did}#key-1`),
+      },
+    });
+
+    const response = await post(await buildSignedVP([vc, readGrant, bookGrant], holder, USER_DID), true);
+    expect(response.statusCode).toBe(200);
+    const token = response.json().session.token as string;
+    const scopes = JSON.parse(Buffer.from(token.split('.')[1] ?? '', 'base64url').toString('utf8'))['scopes'];
+    expect(scopes).toEqual(['read:orders']);
+
+    // A grant for another user is still never merely dropped, however many others there are.
+    const strangersGrant = await makeGrant(sp, holder.did, 'did:web:other-user.example', ['read:orders'], spList);
+    expectRejection(
+      await post(await buildSignedVP([vc, readGrant, strangersGrant], holder, USER_DID)),
+      'CONSENT_GRANT_SUBJECT_MISMATCH',
+    );
+  });
+
   it('non-grant failures are rejected with their own specific code too (expired VP)', async () => {
     const holder = makeActor();
     const vc = await makeAgentVC(issuer, holder.did);

@@ -40,8 +40,9 @@ export interface VerifyVPResult {
   privilegeScopes: string[];
   /**
    * Enforcement scopes: equals privilegeScopes when no consent grant is
-   * present; the intersection of privilegeScopes and the grant's scopes when
-   * one is. checkScope()/requireScope() read this field.
+   * present; otherwise the intersection of privilegeScopes with the union
+   * of every valid grant's scopes. checkScope()/requireScope() read this
+   * field.
    */
   effectiveScopes: string[];
   vpId: string;
@@ -289,19 +290,15 @@ export async function verifyVP(
   }
 
   const entries = vp.verifiableCredential as SignedVC[];
-  if (entries.length < 1 || entries.length > 2) {
-    throw new VPInvalidStructureError('VP must carry 1 or 2 credentials');
+  if (entries.length < 1) {
+    throw new VPInvalidStructureError('VP must carry at least one credential');
   }
 
   const agentEntries = entries.filter(isAgentAuthorityType);
   const grantEntries = entries.filter(isGrantType);
-  if (
-    agentEntries.length !== 1 ||
-    grantEntries.length > 1 ||
-    agentEntries.length + grantEntries.length !== entries.length
-  ) {
+  if (agentEntries.length !== 1 || agentEntries.length + grantEntries.length !== entries.length) {
     throw new VPInvalidStructureError(
-      'VP credential array must contain exactly one agent-authority credential and at most one consent grant',
+      'VP credential array must contain exactly one agent-authority credential, and otherwise only consent grants',
     );
   }
 
@@ -324,22 +321,46 @@ export async function verifyVP(
 
   let effectiveScopes = vc.credentialSubject.privilegeScopes;
 
-  if (grantEntries.length === 1) {
-    const grant = grantEntries[0] as SignedVC;
-    assertGrantVC(grant);
-    await verifyCredential(grant, options);
-
+  if (grantEntries.length > 0) {
     const chainDids = delegationChain.map((link) => link.subject);
-    const agentMatches =
-      grant.credentialSubject.id === vp.holder || chainDids.includes(grant.credentialSubject.id);
-    // Plain string equality — DID or email, either form (§2.6). A VP with no
-    // delegatedBy at all can never satisfy the user-match rule (§9.3 G6).
-    const userMatches = grant.credentialSubject.userDid === vp.delegatedBy;
-    if (!agentMatches || !userMatches) {
-      throw new ConsentGrantSubjectMismatchError();
+    const granted = new Set<string>();
+    let valid = 0;
+    let lastDropped: Error | undefined;
+
+    for (const grant of grantEntries) {
+      assertGrantVC(grant);
+
+      // A grant for another agent or another user is never merely dropped:
+      // it has no business in this VP at all, whatever its status.
+      const agentMatches =
+        grant.credentialSubject.id === vp.holder || chainDids.includes(grant.credentialSubject.id);
+      // Plain string equality — DID or email, either form (§2.6). A VP with no
+      // delegatedBy at all can never satisfy the user-match rule (§9.3 G6).
+      const userMatches = grant.credentialSubject.userDid === vp.delegatedBy;
+      if (!agentMatches || !userMatches) {
+        throw new ConsentGrantSubjectMismatchError();
+      }
+
+      // A grant that has been revoked or has expired contributes nothing;
+      // the others still count. Any other failure (bad signature, not yet
+      // valid, status list unreachable) rejects the whole VP as before.
+      try {
+        await verifyCredential(grant, options);
+      } catch (error) {
+        if (error instanceof VCRevokedError || error instanceof VCExpiredError) {
+          lastDropped = error;
+          continue;
+        }
+        throw error;
+      }
+      valid += 1;
+      for (const scope of grant.credentialSubject.scopes) granted.add(scope);
     }
 
-    effectiveScopes = intersect(effectiveScopes, grant.credentialSubject.scopes);
+    // Grants were presented and none of them still stands: no consent.
+    if (valid === 0) throw lastDropped;
+
+    effectiveScopes = intersect(effectiveScopes, [...granted]);
   }
 
   const result: VerifyVPResult = {

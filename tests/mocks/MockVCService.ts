@@ -173,4 +173,29 @@ export class MockVCService implements IVCService {
   async registerIssuedGrant(vc: SignedVC, _requestId: string): Promise<void> {
     this.registeredGrants.push(vc);
   }
+
+  revokedVcIds: string[] = [];
+  renewals: Array<{ oldVcId: string; newVcId: string }> = [];
+
+  /** The registered grants that match and have not been revoked here, in registration order. */
+  async listActiveGrants(lookup: { agentDid: string; serviceDid: string; userDid: string }): Promise<SignedVC[]> {
+    return this.registeredGrants.filter((vc) => {
+      const subject = vc.credentialSubject as { id?: string; userDid?: string };
+      return (
+        !this.revokedVcIds.includes(vc.id) &&
+        vc.issuer === lookup.serviceDid &&
+        subject.id === lookup.agentDid &&
+        subject.userDid === lookup.userDid
+      );
+    });
+  }
+
+  async revokeVC(vcId: string, _requestId: string): Promise<{ vcId: string; revoked: true; revokedAt: string }> {
+    this.revokedVcIds.push(vcId);
+    return { vcId, revoked: true, revokedAt: new Date().toISOString() };
+  }
+
+  async markAsRenewed(oldVcId: string, newVcId: string): Promise<void> {
+    this.renewals.push({ oldVcId, newVcId });
+  }
 }

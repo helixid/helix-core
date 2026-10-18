@@ -5,7 +5,12 @@ import type { SignedVC } from './schemas/vc.js';
 import type { SignedVP } from './schemas/vp.js';
 
 export interface VPBuilderOptions {
-  /** 1 or 2 entries: exactly one agent-authority VC, optionally one consent grant. */
+  /**
+   * Exactly one agent-authority VC, plus any number of consent grants. A
+   * user's consent to one service may be spread over several grants (each
+   * consent screen with a different scope set issues its own), and the VP
+   * carries all of them: the verifier takes the union of their scopes.
+   */
   credentials: SignedVC[];
   holderDid: string;
   targetService: string;
@@ -42,18 +47,14 @@ function isGrantType(vc: SignedVC): boolean {
 export class VPBuilder {
   constructor(private readonly options: VPBuilderOptions) {
     const credentials = options.credentials;
-    if (!Array.isArray(credentials) || credentials.length < 1 || credentials.length > 2) {
-      throw new VPInvalidStructureError('VP must carry 1 or 2 credentials');
+    if (!Array.isArray(credentials) || credentials.length < 1) {
+      throw new VPInvalidStructureError('VP must carry at least one credential');
     }
     const agentEntries = credentials.filter(isAgentAuthorityType);
     const grantEntries = credentials.filter(isGrantType);
-    if (
-      agentEntries.length !== 1 ||
-      grantEntries.length > 1 ||
-      agentEntries.length + grantEntries.length !== credentials.length
-    ) {
+    if (agentEntries.length !== 1 || agentEntries.length + grantEntries.length !== credentials.length) {
       throw new VPInvalidStructureError(
-        'VP credential array must contain exactly one agent-authority credential and at most one consent grant',
+        'VP credential array must contain exactly one agent-authority credential, and otherwise only consent grants',
       );
     }
   }

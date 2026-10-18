@@ -106,7 +106,7 @@ describe('agent integration', () => {
       method: 'POST',
       url: `/v1/agents/${encodeURIComponent(agentDid)}/vp`,
       headers: { 'x-admin-api-key': TEST_ADMIN_KEY },
-      payload: { targetService: 'https://service.example.com' }
+      payload: { targetService: 'did:web:service.example.com' }
     });
     expect(vp.statusCode).toBe(200);
     expect(vp.json().signedVP.holder).toBe(agentDid);
@@ -118,7 +118,7 @@ describe('agent integration', () => {
     const vp = await app.inject({
       method: 'POST',
       url: '/v1/agents/did:hedera:testnet:testid/vp',
-      payload: { targetService: 'https://service.example.com' }
+      payload: { targetService: 'did:web:service.example.com' }
     });
     expect(vp.statusCode).toBe(403);
   });

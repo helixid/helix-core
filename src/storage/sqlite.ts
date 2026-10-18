@@ -1,6 +1,7 @@
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import Database from 'better-sqlite3';
+import { vcLookupColumns } from '../core/vc-lookup.js';
 
 function shellQuote(value: string): string {
   return `'${value.replace(/'/g, "''")}'`;
@@ -79,6 +80,10 @@ CREATE TABLE IF NOT EXISTS vcs (
   delegation_depth INTEGER,
   max_delegation_depth INTEGER,
   parent_vc_id TEXT,
+  vc_type TEXT,
+  issuer_did TEXT,
+  user_did TEXT,
+  scope_key TEXT,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );
@@ -169,6 +174,7 @@ CREATE TABLE IF NOT EXISTS audit_log (
       `.trim(),
     );
     this.migrateAgentKeysToDidKeys();
+    this.migrateVcLookupColumns();
 
     if (this.extraDdl) {
       this.db.exec(this.extraDdl);
@@ -190,6 +196,33 @@ CREATE TABLE IF NOT EXISTS audit_log (
       SELECT id, did, 'agent', encrypted_private_key, iv, auth_tag, algorithm, created_at FROM agent_keys;
       DROP TABLE agent_keys;
     `);
+  }
+
+  /**
+   * A SQLite file that predates the vcs lookup columns (vc_type, issuer_did,
+   * user_did, scope_key) gets them added and backfilled from vc_json. No-op
+   * on a fresh file or once already migrated.
+   */
+  private migrateVcLookupColumns(): void {
+    const columns = new Set(
+      (this.db.prepare(`PRAGMA table_info(vcs)`).all() as Array<{ name: string }>).map((c) => c.name),
+    );
+    if (columns.has('scope_key')) {
+      this.db.exec(`CREATE INDEX IF NOT EXISTS idx_vcs_grant_lookup ON vcs(subject_did, vc_type, issuer_did, user_did)`);
+      return;
+    }
+    for (const column of ['vc_type', 'issuer_did', 'user_did', 'scope_key']) {
+      if (!columns.has(column)) this.db.exec(`ALTER TABLE vcs ADD COLUMN ${column} TEXT`);
+    }
+    const rows = this.db.prepare(`SELECT vc_id, vc_json FROM vcs`).all() as Array<{ vc_id: string; vc_json: string }>;
+    const update = this.db.prepare(
+      `UPDATE vcs SET vc_type = ?, issuer_did = ?, user_did = ?, scope_key = ? WHERE vc_id = ?`,
+    );
+    for (const row of rows) {
+      const columns = vcLookupColumns(JSON.parse(row.vc_json));
+      update.run(columns.vcType, columns.issuerDid, columns.userDid, columns.scopeKey, row.vc_id);
+    }
+    this.db.exec(`CREATE INDEX IF NOT EXISTS idx_vcs_grant_lookup ON vcs(subject_did, vc_type, issuer_did, user_did)`);
   }
 
   execute(sql: string): void {

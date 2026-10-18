@@ -21,10 +21,13 @@ import {
 } from '../../storage/driver-registry.js';
 import type {
   CreateVcParams,
+  GrantLookup,
   ListVcFilters,
   StatusListEntryRecord,
   VCRecord,
 } from '../vc.repository.js';
+
+const GRANT_TYPE = 'DelegationGrantCredential';
 
 type PrismaRaw = PrismaClient & {
   $queryRawUnsafe<T = unknown>(query: string, ...values: unknown[]): Promise<T>;
@@ -56,6 +59,7 @@ export interface VcStorageDriver {
   findByVcId(vcId: string): Promise<VCRecord | null>;
   listVcs(filters: ListVcFilters): Promise<VCRecord[]>;
   findActiveBySubjectDid(subjectDid: string, vcType?: string): Promise<VCRecord[]>;
+  findActiveGrants(lookup: GrantLookup): Promise<VCRecord[]>;
   findMany(filters: { subjectDid?: string | undefined }): Promise<VCRecord[]>;
   findStatusListById(listId: string): Promise<StatusListEntryRecord | null>;
   createStatusList(listId: string, encodedList: string): Promise<StatusListEntryRecord>;
@@ -113,6 +117,10 @@ export class PrismaVcStorageDriver implements VcStorageDriver {
           privilegeScopes: params.privilegeScopes ?? null,
           statusListIndex: params.statusListIndex,
           expiresAt: params.expiresAt,
+          vcType: params.vcType ?? null,
+          issuerDid: params.issuerDid ?? null,
+          userDid: params.userDid ?? null,
+          scopeKey: params.scopeKey ?? null,
         },
       });
     }
@@ -130,8 +138,12 @@ export class PrismaVcStorageDriver implements VcStorageDriver {
         "delegatedFrom",
         "delegationDepth",
         "maxDelegationDepth",
-        "parentVcId"
-      ) VALUES ($1,$2,$3,$4,$5::jsonb,$6::jsonb,$7,$8,$9,$10,$11,$12)
+        "parentVcId",
+        "vcType",
+        "issuerDid",
+        "userDid",
+        "scopeKey"
+      ) VALUES ($1,$2,$3,$4,$5::jsonb,$6::jsonb,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
       RETURNING *`,
       makeId('vcdb'),
       params.vcId,
@@ -145,6 +157,10 @@ export class PrismaVcStorageDriver implements VcStorageDriver {
       params.delegationDepth ?? null,
       params.maxDelegationDepth ?? null,
       params.parentVcId ?? null,
+      params.vcType ?? null,
+      params.issuerDid ?? null,
+      params.userDid ?? null,
+      params.scopeKey ?? null,
     );
     return requireVcRow(rows[0]);
   }
@@ -202,6 +218,34 @@ export class PrismaVcStorageDriver implements VcStorageDriver {
       new Date(),
     );
     return filterByType(records, vcType);
+  }
+
+  async findActiveGrants(lookup: GrantLookup): Promise<VCRecord[]> {
+    if (!hasRealRaw(this.prisma)) {
+      return this.db.vc.findMany({
+        where: {
+          subjectDid: lookup.subjectDid,
+          vcType: GRANT_TYPE,
+          issuerDid: lookup.issuerDid,
+          userDid: lookup.userDid,
+          revokedAt: null,
+          OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
+        },
+        orderBy: { createdAt: 'asc' },
+      });
+    }
+
+    return (this.prisma as PrismaRaw).$queryRawUnsafe<VCRecord[]>(
+      `SELECT * FROM "vcs"
+       WHERE "subjectDid" = $1 AND "vcType" = $2 AND "issuerDid" = $3 AND "userDid" = $4
+         AND "revokedAt" IS NULL AND ("expiresAt" IS NULL OR "expiresAt" > $5)
+       ORDER BY "createdAt" ASC`,
+      lookup.subjectDid,
+      GRANT_TYPE,
+      lookup.issuerDid,
+      lookup.userDid,
+      new Date(),
+    );
   }
 
   async findMany(filters: { subjectDid?: string | undefined }): Promise<VCRecord[]> {
@@ -280,6 +324,10 @@ type SqliteVcRow = {
   delegation_depth: number | null;
   max_delegation_depth: number | null;
   parent_vc_id: string | null;
+  vc_type: string | null;
+  issuer_did: string | null;
+  user_did: string | null;
+  scope_key: string | null;
   created_at: string | null;
   updated_at: string | null;
 };
@@ -307,6 +355,10 @@ function fromSqliteVcRow(row: SqliteVcRow | undefined): VCRecord | null {
     delegationDepth: row.delegation_depth,
     maxDelegationDepth: row.max_delegation_depth,
     parentVcId: row.parent_vc_id,
+    vcType: row.vc_type,
+    issuerDid: row.issuer_did,
+    userDid: row.user_did,
+    scopeKey: row.scope_key,
   };
   if (row.created_at) base.createdAt = new Date(row.created_at);
   if (row.updated_at) base.updatedAt = new Date(row.updated_at);
@@ -336,6 +388,7 @@ export class SqliteVcStorageDriver implements VcStorageDriver {
         vc_id, subject_did, subject_type, vc_json, privilege_scopes,
         status_list_index, expires_at, revoked_at, renewed_by_vc_id,
         delegated_from, delegation_depth, max_delegation_depth, parent_vc_id,
+        vc_type, issuer_did, user_did, scope_key,
         created_at, updated_at
       ) VALUES (
         ${sqliteLiteral(params.vcId)},
@@ -351,6 +404,10 @@ export class SqliteVcStorageDriver implements VcStorageDriver {
         ${sqliteLiteral(params.delegationDepth ?? null)},
         ${sqliteLiteral(params.maxDelegationDepth ?? null)},
         ${sqliteLiteral(params.parentVcId ?? null)},
+        ${sqliteLiteral(params.vcType ?? null)},
+        ${sqliteLiteral(params.issuerDid ?? null)},
+        ${sqliteLiteral(params.userDid ?? null)},
+        ${sqliteLiteral(params.scopeKey ?? null)},
         ${sqliteLiteral(now)},
         ${sqliteLiteral(now)}
       )
@@ -401,6 +458,21 @@ export class SqliteVcStorageDriver implements VcStorageDriver {
     `);
     const records = rows.map((row) => fromSqliteVcRow(row)).filter((v): v is VCRecord => Boolean(v));
     return filterByType(records, vcType);
+  }
+
+  async findActiveGrants(lookup: GrantLookup): Promise<VCRecord[]> {
+    const nowIso = new Date().toISOString();
+    const rows = this.sqlite.query<SqliteVcRow>(`
+      SELECT * FROM vcs
+      WHERE subject_did = ${sqliteLiteral(lookup.subjectDid)}
+        AND vc_type = ${sqliteLiteral(GRANT_TYPE)}
+        AND issuer_did = ${sqliteLiteral(lookup.issuerDid)}
+        AND user_did = ${sqliteLiteral(lookup.userDid)}
+        AND revoked_at IS NULL
+        AND (expires_at IS NULL OR expires_at > ${sqliteLiteral(nowIso)})
+      ORDER BY created_at ASC
+    `);
+    return rows.map((row) => fromSqliteVcRow(row)).filter((v): v is VCRecord => Boolean(v));
   }
 
   async findMany(filters: { subjectDid?: string | undefined }): Promise<VCRecord[]> {
@@ -507,6 +579,10 @@ export class InMemoryVcStorageDriver implements VcStorageDriver {
       delegationDepth: params.delegationDepth ?? null,
       maxDelegationDepth: params.maxDelegationDepth ?? null,
       parentVcId: params.parentVcId ?? null,
+      vcType: params.vcType ?? null,
+      issuerDid: params.issuerDid ?? null,
+      userDid: params.userDid ?? null,
+      scopeKey: params.scopeKey ?? null,
       createdAt: now,
       updatedAt: now,
     };
@@ -540,6 +616,21 @@ export class InMemoryVcStorageDriver implements VcStorageDriver {
       .filter((r) => r.subjectDid === subjectDid && !r.revokedAt && (r.expiresAt === null || r.expiresAt.getTime() > now))
       .sort((a, b) => (a.createdAt?.getTime() ?? 0) - (b.createdAt?.getTime() ?? 0));
     return filterByType(records, vcType);
+  }
+
+  async findActiveGrants(lookup: GrantLookup): Promise<VCRecord[]> {
+    const now = Date.now();
+    return [...this.vcs.values()]
+      .filter(
+        (r) =>
+          r.subjectDid === lookup.subjectDid &&
+          r.vcType === GRANT_TYPE &&
+          r.issuerDid === lookup.issuerDid &&
+          r.userDid === lookup.userDid &&
+          !r.revokedAt &&
+          (r.expiresAt === null || r.expiresAt.getTime() > now),
+      )
+      .sort((a, b) => (a.createdAt?.getTime() ?? 0) - (b.createdAt?.getTime() ?? 0));
   }
 
   async findMany(filters: { subjectDid?: string | undefined }): Promise<VCRecord[]> {

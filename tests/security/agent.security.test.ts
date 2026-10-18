@@ -79,7 +79,7 @@ describe('agent security', () => {
       method: 'POST',
       url: '/v1/agents/did:hedera:testnet:unknown/vp',
       headers: { 'x-admin-api-key': 'test-admin-key' },
-      payload: { targetService: 'https://svc.example.com' }
+      payload: { targetService: 'did:web:svc.example.com' }
     });
     expect(vp.statusCode).toBe(404);
     expect(vp.json().error.code).toBe('AGENT_KEY_NOT_FOUND');

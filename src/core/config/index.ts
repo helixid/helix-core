@@ -93,7 +93,6 @@ export const ConfigSchema = z.object({
   HOSTED_ACCESS_TOKEN_SECRET: z.string().min(32).optional(),
   HOSTED_ACCESS_TOKEN_TTL_SECONDS: z.coerce.number().int().min(60).max(3600).default(900),
   HOSTED_REFRESH_TOKEN_TTL_DAYS: z.coerce.number().int().min(1).max(365).default(30),
-  HOSTED_DID_DOMAIN: z.string().default('hosted.helixid.io'),
   // Where the console is served, used to build email-verification links
   // (e.g. https://hosted.helixid.io/account/verify-email?token=...).
   HOSTED_CONSOLE_BASE_URL: z.string().url().default('https://hosted.helixid.io'),

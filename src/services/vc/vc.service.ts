@@ -26,6 +26,7 @@ import {
   type HelixVC,
   type SignedVC,
   VPMultipleActiveVCError,
+  vcLookupColumns,
 } from '../../core/index.js';
 import * as crypto from 'node:crypto';
 import { VcRepository } from '../../repositories/vc.repository.js';
@@ -166,6 +167,12 @@ export interface IVCService {
 
   /** See IVCService.registerIssuedGrant() in ./IVCService.ts. */
   registerIssuedGrant(vc: SignedVC, requestId: string): Promise<void>;
+
+  /** See IVCService.listActiveGrants() in ./IVCService.ts. */
+  listActiveGrants(lookup: { agentDid: string; serviceDid: string; userDid: string }): Promise<SignedVC[]>;
+
+  /** See IVCService.markAsRenewed() in ./IVCService.ts. */
+  markAsRenewed(oldVcId: string, newVcId: string): Promise<void>;
 }
 
 /**
@@ -238,6 +245,26 @@ export class VCService implements IVCService {
     return vc;
   }
 
+  async listActiveGrants(lookup: {
+    agentDid: string;
+    serviceDid: string;
+    userDid: string;
+  }): Promise<SignedVC[]> {
+    const records = await this.vcRepo.findActiveGrants({
+      subjectDid: lookup.agentDid,
+      issuerDid: lookup.serviceDid,
+      userDid: lookup.userDid,
+    });
+    return records.map(
+      (record) =>
+        (typeof record.vcJson === 'string' ? JSON.parse(record.vcJson) : record.vcJson) as SignedVC,
+    );
+  }
+
+  async markAsRenewed(oldVcId: string, newVcId: string): Promise<void> {
+    await this.vcRepo.markAsRenewed(oldVcId, newVcId);
+  }
+
   /**
    * Persists an already-signed VC without issuing or re-signing it — see
    * IVCService.registerSignedVC()'s doc comment. Assigns statusListIndex: 0
@@ -265,6 +292,7 @@ export class VCService implements IVCService {
       delegationDepth: subject.delegationDepth,
       maxDelegationDepth: subject.maxDelegationDepth,
       parentVcId: subject.parentVcId,
+      ...vcLookupColumns(vc),
     });
   }
 
@@ -365,6 +393,7 @@ export class VCService implements IVCService {
       // platform claimed.
       statusListIndex: 0,
       expiresAt,
+      ...vcLookupColumns(vc),
     });
 
     await this.audit.log({
@@ -526,6 +555,7 @@ export class VCService implements IVCService {
       delegationDepth: params.delegationDepth,
       maxDelegationDepth: params.maxDelegationDepth,
       parentVcId: params.parentVcId,
+      ...vcLookupColumns(signedVc),
     });
 
     // 7. Audit
@@ -766,6 +796,7 @@ export class VCService implements IVCService {
       privilegeScopes: subject.scopes,
       statusListIndex: Number.isInteger(index) ? index : 0,
       expiresAt: validUntil ? new Date(validUntil) : null,
+      ...vcLookupColumns(vc),
     });
 
     await this.audit.log({

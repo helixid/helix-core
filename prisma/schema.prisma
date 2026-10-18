@@ -57,12 +57,23 @@ model Vc {
   delegationDepth  Int?
   maxDelegationDepth Int?
   parentVcId       String?
+  // Lookup columns, denormalised from vcJson so a credential can be found
+  // without reading every row's JSON: the credential's own type (the entry
+  // of `type` that is not VerifiableCredential), who signed it, the user it
+  // was granted on behalf of (DelegationGrantCredential only) and the
+  // canonical scope set (sorted, space-joined). A consent grant is one of
+  // (userDid, subjectDid, issuerDid, scopeKey): same four, same grant.
+  vcType           String?
+  issuerDid        String?
+  userDid          String?
+  scopeKey         String?
   createdAt        DateTime  @default(now())
   did              Did       @relation(fields: [subjectDid], references: [id])
 
   @@index([subjectDid])
   @@index([vcId])
   @@index([parentVcId])
+  @@index([subjectDid, vcType, issuerDid, userDid])
   @@map("vcs")
 }
 

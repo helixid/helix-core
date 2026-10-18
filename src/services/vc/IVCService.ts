@@ -121,4 +121,17 @@ export interface IVCService {
    * grant's credentialStatus points at this platform's own list.
    */
   registerIssuedGrant(vc: SignedVC, requestId: string): Promise<void>;
+
+  /**
+   * Every unrevoked, unexpired DelegationGrantCredential issued by
+   * `serviceDid` to `agentDid` on `userDid`'s behalf, oldest first. What an
+   * agent presents when it acts for that user at that service: the VP
+   * carries all of them, the verifier takes the union of their scopes.
+   */
+  listActiveGrants(lookup: { agentDid: string; serviceDid: string; userDid: string }): Promise<SignedVC[]>;
+
+  revokeVC(vcId: string, requestId: string): Promise<{ vcId: string; revoked: true; revokedAt: string }>;
+
+  /** Records that `newVcId` replaces `oldVcId` (the renew chain), without touching either's status. */
+  markAsRenewed(oldVcId: string, newVcId: string): Promise<void>;
 }

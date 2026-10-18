@@ -384,6 +384,22 @@ export class ConsentGrantInvalidError extends HelixError {
   }
 }
 
+/**
+ * Presentation-time: the agent was asked to present on a user's behalf to a
+ * service, and this platform holds no active consent grant for that
+ * (user, agent, service). The user has not consented yet, or every grant
+ * they gave has since been revoked or has expired.
+ */
+export class ConsentGrantNotFoundError extends HelixError {
+  constructor(agentDid: string, serviceDid: string, userDid: string) {
+    super(
+      'CONSENT_GRANT_NOT_FOUND',
+      `No active consent grant from ${serviceDid} to ${agentDid} on behalf of ${userDid}`,
+      404,
+    );
+  }
+}
+
 export class VPAgentDIDNotFoundError extends HelixError {
   constructor(message = 'Agent DID not found') {
     super('VP_AGENT_DID_NOT_FOUND', message, 404);

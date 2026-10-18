@@ -9,7 +9,9 @@ import {
   ChallengeExpiredError,
   ChallengeNotFoundError,
   ChallengeSignatureInvalidError,
+  ConsentGrantNotFoundError,
   ErrorCode,
+  HelixError,
   EnrollmentTokenAlreadyUsedError,
   EnrollmentTokenExpiredError,
   EnrollmentTokenNotFoundError,
@@ -18,7 +20,6 @@ import {
   verifySignature,
   VPBuilder,
   VPMultipleActiveVCError,
-  type HelixError,
   type IAuditLogger,
   type SignedVC,
   type SignedVP,
@@ -209,17 +210,25 @@ export class AgentService implements IAgentService {
    * instead of a local VPBuilder.sign(). By default looks up the agent's
    * one active HelixAgentCredential itself; pass `vcId` to pin a specific
    * credential instead (e.g. when more than one active VC exists for the
-   * DID, which findActiveBySubjectDid rejects as ambiguous). An optional
-   * `grantVC` (an SP-issued DelegationGrantCredential the caller already
-   * holds — not secret material, just data to include) is passed straight
-   * through to VPBuilder's second credential slot, for the consent-grant
-   * flow (spec §2a): the grant itself is never held or looked up
-   * server-side, only composed into the VP being signed.
+   * DID, which findActiveBySubjectDid rejects as ambiguous).
+   *
+   * `targetService` is the DID of the service the VP is for. With a
+   * `userDid`, the VP is the agent acting on that user's behalf, and the
+   * consent that allows it is looked up here: every active
+   * DelegationGrantCredential that service issued to this agent for that
+   * user goes into the VP (the verifier takes the union of their scopes).
+   * No such grant means the user has not consented, and the caller should
+   * send them to the service's consent screen. A caller that already holds
+   * a grant may pass it as `grantVC` instead, bypassing the lookup.
    */
   async signVP(
     input: { did: string; targetService: string; userDid?: string; grantVC?: SignedVC; vcId?: string },
     requestId: string,
   ): Promise<{ signedVP: SignedVP }> {
+    if (typeof input.targetService !== 'string' || !input.targetService.startsWith('did:')) {
+      throw new HelixError(ErrorCode.VALIDATION_ERROR, 'targetService must be the service DID', 400);
+    }
+
     const keyRecord = await this.agentKeyRepository.findByDid(input.did);
     if (!keyRecord) {
       throw new AgentKeyNotFoundError(input.did);
@@ -232,7 +241,19 @@ export class AgentService implements IAgentService {
       throw new AgentActiveCredentialNotFoundError(input.did);
     }
 
-    const credentials = input.grantVC ? [vcJson as SignedVC, input.grantVC] : [vcJson as SignedVC];
+    let grants: SignedVC[] = input.grantVC ? [input.grantVC] : [];
+    if (!input.grantVC && input.userDid) {
+      grants = await this.vcService.listActiveGrants({
+        agentDid: input.did,
+        serviceDid: input.targetService,
+        userDid: input.userDid,
+      });
+      if (grants.length === 0) {
+        throw new ConsentGrantNotFoundError(input.did, input.targetService, input.userDid);
+      }
+    }
+
+    const credentials = [vcJson as SignedVC, ...grants];
     const signedVP = await this.keyCustody.signWith(keyRecord, (privateKeyHex) =>
       new VPBuilder({
         credentials,
@@ -246,6 +267,8 @@ export class AgentService implements IAgentService {
       requestId,
       agentDid: input.did,
       targetService: input.targetService,
+      ...(input.userDid ? { userDid: input.userDid } : {}),
+      grantVcIds: grants.map((grant) => grant.id),
     });
 
     return { signedVP };
