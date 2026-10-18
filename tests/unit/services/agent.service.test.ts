@@ -142,7 +142,7 @@ describe('AgentService Unit Tests', () => {
       await expect(
         agentService.signVP({ did: agentDid, targetService: 'did:web:svc.example.com' }, 'req-1'),
       ).rejects.toBeInstanceOf(AgentKeyNotFoundError);
-      expect(vcService.findActiveBySubjectDid).not.toHaveBeenCalled();
+      expect(vcService.listActiveBySubjectDid).not.toHaveBeenCalled();
     });
 
     it('throws AgentActiveCredentialNotFoundError when the agent has no active credential', async () => {
@@ -153,13 +153,13 @@ describe('AgentService Unit Tests', () => {
         authTag: 'x',
         algorithm: 'aes-256-gcm',
       });
-      vcService.findActiveBySubjectDid.mockResolvedValue(null);
+      vcService.listActiveBySubjectDid.mockResolvedValue([]);
       await expect(
         agentService.signVP({ did: agentDid, targetService: 'did:web:svc.example.com' }, 'req-1'),
       ).rejects.toBeInstanceOf(AgentActiveCredentialNotFoundError);
     });
 
-    it('signs and returns a VP for the agent, looking up the active HelixAgentCredential', async () => {
+    it('signs and returns a VP for the agent, presenting every active HelixAgentCredential', async () => {
       agentKeyRepository.findByDid.mockResolvedValue({
         did: agentDid,
         encryptedPrivateKey: 'x',
@@ -167,24 +167,59 @@ describe('AgentService Unit Tests', () => {
         authTag: 'x',
         algorithm: 'aes-256-gcm',
       });
-      vcService.findActiveBySubjectDid.mockResolvedValue({
-        id: 'vc:test:1',
-        type: ['VerifiableCredential', 'HelixAgentCredential'],
-        credentialSubject: { id: agentDid, privilegeScopes: ['read'] },
-      });
+      vcService.listActiveBySubjectDid.mockResolvedValue([
+        {
+          id: 'vc:test:1',
+          type: ['VerifiableCredential', 'HelixAgentCredential'],
+          credentialSubject: { id: agentDid, privilegeScopes: ['read'] },
+        },
+        {
+          id: 'vc:test:2',
+          type: ['VerifiableCredential', 'HelixAgentCredential'],
+          credentialSubject: { id: agentDid, privilegeScopes: ['write'] },
+        },
+      ]);
 
       const result = await agentService.signVP(
         { did: agentDid, targetService: 'did:web:svc.example.com' },
         'req-1',
       );
 
-      expect(vcService.findActiveBySubjectDid).toHaveBeenCalledWith(agentDid, 'HelixAgentCredential');
+      expect(vcService.listActiveBySubjectDid).toHaveBeenCalledWith(agentDid, 'HelixAgentCredential');
       expect(result.signedVP.holder).toBe(agentDid);
       expect(result.signedVP.proof).toBeDefined();
+      expect(result.signedVP.verifiableCredential.map((vc) => vc['id'])).toEqual(['vc:test:1', 'vc:test:2']);
       expect(auditLogger.log).toHaveBeenCalledWith(
         'AGENT_VP_SIGNED',
-        expect.objectContaining({ agentDid, targetService: 'did:web:svc.example.com' }),
+        expect.objectContaining({
+          agentDid,
+          targetService: 'did:web:svc.example.com',
+          vcIds: ['vc:test:1', 'vc:test:2'],
+        }),
       );
+    });
+
+    it('presents only the credential named by vcId when one is pinned', async () => {
+      agentKeyRepository.findByDid.mockResolvedValue({
+        did: agentDid,
+        encryptedPrivateKey: 'x',
+        iv: 'x',
+        authTag: 'x',
+        algorithm: 'aes-256-gcm',
+      });
+      vcService.findActiveByVcIdForSubject.mockResolvedValue({
+        id: 'vc:test:2',
+        type: ['VerifiableCredential', 'HelixAgentCredential'],
+        credentialSubject: { id: agentDid, privilegeScopes: ['write'] },
+      });
+
+      const result = await agentService.signVP(
+        { did: agentDid, targetService: 'did:web:svc.example.com', vcId: 'vc:test:2' },
+        'req-1',
+      );
+
+      expect(vcService.listActiveBySubjectDid).not.toHaveBeenCalled();
+      expect(result.signedVP.verifiableCredential.map((vc) => vc['id'])).toEqual(['vc:test:2']);
     });
 
     describe('on a user\'s behalf', () => {
@@ -210,7 +245,7 @@ describe('AgentService Unit Tests', () => {
           authTag: 'x',
           algorithm: 'aes-256-gcm',
         });
-        vcService.findActiveBySubjectDid.mockResolvedValue(agentVC);
+        vcService.listActiveBySubjectDid.mockResolvedValue([agentVC]);
         vcService.listActiveGrants = vi.fn();
       });
 
@@ -375,7 +410,7 @@ describe('AgentService Unit Tests', () => {
       });
       expect(delegatedVC.delegationChain).toEqual([fromVC]);
       expect(delegatedVC.proof.verificationMethod).toBe(`${delegatorDid}#key-1`);
-      expect(vcService.registerSignedVC).toHaveBeenCalledWith(result.delegatedVC);
+      expect(vcService.registerSignedVC).toHaveBeenCalledWith(result.delegatedVC, { revokeExisting: undefined });
       expect(auditLogger.log).toHaveBeenCalledWith(
         'VC_DELEGATED',
         expect.objectContaining({

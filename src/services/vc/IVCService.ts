@@ -14,13 +14,35 @@ export interface IssueVCInput {
   delegationDepth?: number;
   maxDelegationDepth?: number;
   parentVcId?: string;
+  revokeExisting?: boolean;
 }
 
-export interface IssueVCResult {
+export interface IssueVCResult extends Partial<ReconcileResult> {
   vcId: string;
   vc: Record<string, unknown>;
   statusListIndex: number;
   expiresAt: string | null;
+}
+
+export interface ReconcileOptions {
+  /**
+   * Also revoke every other active credential with the same identity but a
+   * different scope set, so the one just stored is the only one standing.
+   */
+  revokeExisting?: boolean | undefined;
+}
+
+/**
+ * What storing a credential did to the ones active before it. The rule is
+ * the same for every kind of credential -- see VCService.reconcileActive().
+ */
+export interface ReconcileResult {
+  /** Same identity and scope set: revoked in favour of the new one, and chained to it. */
+  replacedVcIds: string[];
+  /** Same identity, other scopes: revoked because `revokeExisting` asked for it. */
+  revokedVcIds: string[];
+  /** Would have been revoked, but active delegations still hang off them, so they stay. */
+  retainedVcIds: string[];
 }
 
 export interface IVCService {
@@ -78,7 +100,7 @@ export interface IVCService {
    * delegation. No audit event here — the caller (delegateAuthority) already
    * logs VC_DELEGATED for this VC.
    */
-  registerSignedVC(vc: SignedVC): Promise<void>;
+  registerSignedVC(vc: SignedVC, options?: ReconcileOptions): Promise<ReconcileResult>;
 
   /**
    * Persists a VC that was signed outside this platform entirely — a Service
@@ -99,7 +121,8 @@ export interface IVCService {
   registerExternalVC(
     vc: SignedVC,
     requestId: string,
-  ): Promise<{ vcId: string; alreadyRegistered: boolean }>;
+    options?: ReconcileOptions,
+  ): Promise<{ vcId: string; alreadyRegistered: boolean } & Partial<ReconcileResult>>;
 
   /**
    * Claims the next free index on the platform's default status list for a
@@ -120,7 +143,7 @@ export interface IVCService {
    * here — but unlike it the real status-list index is stored, since the
    * grant's credentialStatus points at this platform's own list.
    */
-  registerIssuedGrant(vc: SignedVC, requestId: string): Promise<void>;
+  registerIssuedGrant(vc: SignedVC, requestId: string, options?: ReconcileOptions): Promise<ReconcileResult>;
 
   /**
    * Every unrevoked, unexpired DelegationGrantCredential issued by
@@ -131,7 +154,4 @@ export interface IVCService {
   listActiveGrants(lookup: { agentDid: string; serviceDid: string; userDid: string }): Promise<SignedVC[]>;
 
   revokeVC(vcId: string, requestId: string): Promise<{ vcId: string; revoked: true; revokedAt: string }>;
-
-  /** Records that `newVcId` replaces `oldVcId` (the renew chain), without touching either's status. */
-  markAsRenewed(oldVcId: string, newVcId: string): Promise<void>;
 }

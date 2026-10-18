@@ -86,6 +86,8 @@ export type {
   ListVCFilters,
   VCSummary,
   RenewVCOptions,
+  ReconcileOptions,
+  ReconcileResult,
 } from './services/vc/vc.service.js';
 export { VPService } from './services/vp/vp.service.js';
 export type { IVPService } from './services/vp/IVPService.js';

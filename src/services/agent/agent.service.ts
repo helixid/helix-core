@@ -212,6 +212,10 @@ export class AgentService implements IAgentService {
    * credential instead (e.g. when more than one active VC exists for the
    * DID, which findActiveBySubjectDid rejects as ambiguous).
    *
+   * The VP carries every active HelixAgentCredential the agent holds (its
+   * own, plus any delegated to it) -- the verifier takes the union of their
+   * scopes -- or just the one named by `vcId`.
+   *
    * `targetService` is the DID of the service the VP is for. With a
    * `userDid`, the VP is the agent acting on that user's behalf, and the
    * consent that allows it is looked up here: every active
@@ -234,10 +238,12 @@ export class AgentService implements IAgentService {
       throw new AgentKeyNotFoundError(input.did);
     }
 
-    const vcJson = input.vcId
-      ? await this.vcService.findActiveByVcIdForSubject(input.vcId, input.did, 'HelixAgentCredential')
-      : await this.vcService.findActiveBySubjectDid(input.did, 'HelixAgentCredential');
-    if (!vcJson) {
+    const agentVCs = (
+      input.vcId
+        ? [await this.vcService.findActiveByVcIdForSubject(input.vcId, input.did, 'HelixAgentCredential')]
+        : await this.vcService.listActiveBySubjectDid(input.did, 'HelixAgentCredential')
+    ).filter((vc): vc is Record<string, unknown> => vc !== null) as SignedVC[];
+    if (agentVCs.length === 0) {
       throw new AgentActiveCredentialNotFoundError(input.did);
     }
 
@@ -253,7 +259,7 @@ export class AgentService implements IAgentService {
       }
     }
 
-    const credentials = [vcJson as SignedVC, ...grants];
+    const credentials = [...agentVCs, ...grants];
     const signedVP = await this.keyCustody.signWith(keyRecord, (privateKeyHex) =>
       new VPBuilder({
         credentials,
@@ -268,6 +274,7 @@ export class AgentService implements IAgentService {
       agentDid: input.did,
       targetService: input.targetService,
       ...(input.userDid ? { userDid: input.userDid } : {}),
+      vcIds: agentVCs.map((vc) => vc.id),
       grantVcIds: grants.map((grant) => grant.id),
     });
 
@@ -287,7 +294,7 @@ export class AgentService implements IAgentService {
    * VC delegated to it, alongside its own onboarding VC).
    */
   async delegateAuthority(
-    input: { did: string; to: string; scopes: string[]; expiresIn: number; vcId?: string },
+    input: { did: string; to: string; scopes: string[]; expiresIn: number; vcId?: string; revokeExisting?: boolean },
     requestId: string,
   ): Promise<DelegateAuthorityResult> {
     const keyRecord = await this.agentKeyRepository.findByDid(input.did);
@@ -314,8 +321,12 @@ export class AgentService implements IAgentService {
 
     // Without this, the delegate DID could never be looked up again by
     // vcId/subjectDid, so a second hop of delegation would always fail.
-    // registerSignedVC() stores it as-is, already signed by the delegator.
-    await this.vcService.registerSignedVC(delegatedVC);
+    // registerSignedVC() stores it as-is, already signed by the delegator,
+    // and applies the one-credential-per-scope-set rule against whatever
+    // this delegator already delegated to the same DID.
+    const reconciled = await this.vcService.registerSignedVC(delegatedVC, {
+      revokeExisting: input.revokeExisting,
+    });
 
     this.auditLogger.log(AuditEvents.VC_DELEGATED, {
       requestId,
@@ -323,9 +334,10 @@ export class AgentService implements IAgentService {
       delegateDid: input.to,
       scopes: input.scopes,
       delegatedVcId: delegatedVC.id,
+      ...reconciled,
     });
 
-    return { delegatedVC };
+    return { delegatedVC, ...reconciled };
   }
 
   /**

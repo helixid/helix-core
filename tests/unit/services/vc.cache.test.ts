@@ -25,6 +25,8 @@ describe('VCService status-list cache behavior', () => {
       claimNextIndex: vi.fn(),
       revokeVc: vi.fn(),
       markAsRenewed: vi.fn(),
+      findActiveByIdentity: vi.fn().mockResolvedValue([]),
+      findActiveChildren: vi.fn().mockResolvedValue([]),
     };
     didService = { resolveDID: vi.fn() };
     auditLogger = { log: vi.fn() };

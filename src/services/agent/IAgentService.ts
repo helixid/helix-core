@@ -1,4 +1,5 @@
 import type { SignedVC, SignedVP } from '../../core/index.js';
+import type { ReconcileResult } from '../vc/IVCService.js';
 
 export interface EnrollmentTokenResult {
   token: string;
@@ -29,7 +30,8 @@ export interface SignVPResult {
   signedVP: SignedVP;
 }
 
-export interface DelegateAuthorityResult {
+/** The delegated VC, plus what storing it did to earlier delegations from the same delegator to the same DID. */
+export interface DelegateAuthorityResult extends Partial<ReconcileResult> {
   delegatedVC: SignedVC;
 }
 
@@ -67,7 +69,7 @@ export interface IAgentService {
     requestId: string,
   ): Promise<SignVPResult>;
   delegateAuthority(
-    input: { did: string; to: string; scopes: string[]; expiresIn: number; vcId?: string },
+    input: { did: string; to: string; scopes: string[]; expiresIn: number; vcId?: string; revokeExisting?: boolean },
     requestId: string,
   ): Promise<DelegateAuthorityResult>;
   issueUserChallenge(

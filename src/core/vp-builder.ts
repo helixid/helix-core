@@ -6,10 +6,11 @@ import type { SignedVP } from './schemas/vp.js';
 
 export interface VPBuilderOptions {
   /**
-   * Exactly one agent-authority VC, plus any number of consent grants. A
-   * user's consent to one service may be spread over several grants (each
-   * consent screen with a different scope set issues its own), and the VP
-   * carries all of them: the verifier takes the union of their scopes.
+   * At least one agent-authority VC, plus any number of consent grants. An
+   * agent's authority may be spread over several credentials (its own
+   * onboarding one, ones delegated to it, re-issues with other scopes), as
+   * may a user's consent to one service; the VP carries all of them and the
+   * verifier takes the union of each kind's scopes.
    */
   credentials: SignedVC[];
   holderDid: string;
@@ -52,9 +53,9 @@ export class VPBuilder {
     }
     const agentEntries = credentials.filter(isAgentAuthorityType);
     const grantEntries = credentials.filter(isGrantType);
-    if (agentEntries.length !== 1 || agentEntries.length + grantEntries.length !== credentials.length) {
+    if (agentEntries.length < 1 || agentEntries.length + grantEntries.length !== credentials.length) {
       throw new VPInvalidStructureError(
-        'VP credential array must contain exactly one agent-authority credential, and otherwise only consent grants',
+        'VP credential array must contain at least one agent-authority credential, and otherwise only consent grants',
       );
     }
   }

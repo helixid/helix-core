@@ -114,6 +114,7 @@ const agentRoutes: FastifyPluginAsync<AgentRouteOptions> = async (fastify, optio
         scopes: string[];
         expiresIn: number;
         vcId?: string;
+        revokeExisting?: boolean;
       };
       const result = await options.agentService.delegateAuthority(
         {
@@ -122,6 +123,7 @@ const agentRoutes: FastifyPluginAsync<AgentRouteOptions> = async (fastify, optio
           scopes: body.scopes,
           expiresIn: body.expiresIn,
           ...(body.vcId ? { vcId: body.vcId } : {}),
+          ...(body.revokeExisting !== undefined ? { revokeExisting: body.revokeExisting } : {}),
         },
         request.id,
       );

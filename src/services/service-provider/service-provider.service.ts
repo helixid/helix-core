@@ -22,7 +22,6 @@ import {
   ServiceRevokedError,
   issueGrant,
   normalizeScopes,
-  scopeKey,
   AuditEvents,
   type SignedVC,
 } from '../../core/index.js';
@@ -30,7 +29,7 @@ import type { IAuditLogger } from '../../core/audit/index.js';
 import type { DidKeyRepository } from '../../repositories/did-key.repository.js';
 import type { ServiceRecord, ServiceRepository } from '../../repositories/service.repository.js';
 import type { IDIDService } from '../did/IDIDService.js';
-import type { IVCService } from '../vc/IVCService.js';
+import type { IVCService, ReconcileResult } from '../vc/IVCService.js';
 import type { IKeyCustody } from '../key-custody/key-custody.js';
 
 export interface EnrollServiceInput {
@@ -61,12 +60,9 @@ export interface IssueDelegationGrantInput {
   revokeExisting?: boolean;
 }
 
-export interface IssueDelegationGrantResult {
+/** The grant, plus what storing it did to the grants active before it (see IVCService.ReconcileResult). */
+export interface IssueDelegationGrantResult extends ReconcileResult {
   grantVC: SignedVC;
-  /** Earlier grants for the same (user, agent, service, scopes), now revoked in favour of grantVC. */
-  replacedVcIds: string[];
-  /** Other grants for the same (user, agent, service) revoked because `revokeExisting` was set. */
-  revokedVcIds: string[];
 }
 
 export interface IServiceProviderService {
@@ -77,11 +73,8 @@ export interface IServiceProviderService {
   ): Promise<IssueDelegationGrantResult>;
 }
 
-/** What this needs from the VC service; a Pick so either IVCService shape fits. */
-export type GrantVCStore = Pick<
-  IVCService,
-  'claimStatusListEntry' | 'registerIssuedGrant' | 'listActiveGrants' | 'revokeVC' | 'markAsRenewed'
->;
+/** The two things this needs from the VC service; a Pick so either IVCService shape fits. */
+export type GrantVCStore = Pick<IVCService, 'claimStatusListEntry' | 'registerIssuedGrant'>;
 
 /** Same shape as the other ids (`enroll:`, `vc:helix:`) so rows are recognisable on sight. */
 export function generateServiceId(): string {
@@ -134,12 +127,11 @@ export class ServiceProviderService implements IServiceProviderService {
   }
 
   /**
-   * One consent grant per (user, agent, service, scope set). Consenting
-   * again to exactly the scopes an active grant already carries refreshes
-   * that grant: a new credential is issued and the old one revoked, linked
-   * through the renew chain, with the new one registered first so there is
-   * never a moment without consent. A different scope set is a new grant
-   * beside the existing ones, unless `revokeExisting` asks for those to go.
+   * One consent grant per (user, agent, service, scope set): consenting
+   * again to the same scopes refreshes the grant, a different scope set
+   * stands beside the existing ones, `revokeExisting` clears those. That
+   * is the rule every stored credential follows, applied by
+   * registerIssuedGrant() -- see VCService.reconcileActive().
    */
   async issueDelegationGrant(
     input: IssueDelegationGrantInput,
@@ -186,16 +178,6 @@ export class ServiceProviderService implements IServiceProviderService {
     }
 
     const scopes = normalizeScopes(input.scopes);
-    const existing = await this.vcService.listActiveGrants({
-      agentDid: input.agentDid,
-      serviceDid: input.serviceDid,
-      userDid: input.userDid,
-    });
-    const sameScopes = existing.filter(
-      (vc) => scopeKey((vc.credentialSubject as { scopes?: string[] }).scopes ?? []) === scopeKey(scopes),
-    );
-    const otherScopes = input.revokeExisting ? existing.filter((vc) => !sameScopes.includes(vc)) : [];
-
     const entry = await this.vcService.claimStatusListEntry();
     const { grantVC } = await this.keyCustody.signWith(keyRecord, (privateKeyHex) =>
       issueGrant(
@@ -213,20 +195,10 @@ export class ServiceProviderService implements IServiceProviderService {
       ),
     );
 
-    await this.vcService.registerIssuedGrant(grantVC, requestId);
+    const reconciled = await this.vcService.registerIssuedGrant(grantVC, requestId, {
+      revokeExisting: input.revokeExisting,
+    });
 
-    for (const old of sameScopes) {
-      await this.vcService.revokeVC(old.id, requestId);
-      await this.vcService.markAsRenewed(old.id, grantVC.id);
-    }
-    for (const old of otherScopes) {
-      await this.vcService.revokeVC(old.id, requestId);
-    }
-
-    return {
-      grantVC,
-      replacedVcIds: sameScopes.map((vc) => vc.id),
-      revokedVcIds: otherScopes.map((vc) => vc.id),
-    };
+    return { grantVC, ...reconciled };
   }
 }

@@ -21,13 +21,11 @@ import {
 } from '../../storage/driver-registry.js';
 import type {
   CreateVcParams,
-  GrantLookup,
   ListVcFilters,
   StatusListEntryRecord,
+  VcIdentity,
   VCRecord,
 } from '../vc.repository.js';
-
-const GRANT_TYPE = 'DelegationGrantCredential';
 
 type PrismaRaw = PrismaClient & {
   $queryRawUnsafe<T = unknown>(query: string, ...values: unknown[]): Promise<T>;
@@ -59,7 +57,8 @@ export interface VcStorageDriver {
   findByVcId(vcId: string): Promise<VCRecord | null>;
   listVcs(filters: ListVcFilters): Promise<VCRecord[]>;
   findActiveBySubjectDid(subjectDid: string, vcType?: string): Promise<VCRecord[]>;
-  findActiveGrants(lookup: GrantLookup): Promise<VCRecord[]>;
+  findActiveByIdentity(identity: VcIdentity): Promise<VCRecord[]>;
+  findActiveChildren(parentVcId: string): Promise<VCRecord[]>;
   findMany(filters: { subjectDid?: string | undefined }): Promise<VCRecord[]>;
   findStatusListById(listId: string): Promise<StatusListEntryRecord | null>;
   createStatusList(listId: string, encodedList: string): Promise<StatusListEntryRecord>;
@@ -220,14 +219,42 @@ export class PrismaVcStorageDriver implements VcStorageDriver {
     return filterByType(records, vcType);
   }
 
-  async findActiveGrants(lookup: GrantLookup): Promise<VCRecord[]> {
+  async findActiveByIdentity(identity: VcIdentity): Promise<VCRecord[]> {
     if (!hasRealRaw(this.prisma)) {
       return this.db.vc.findMany({
         where: {
-          subjectDid: lookup.subjectDid,
-          vcType: GRANT_TYPE,
-          issuerDid: lookup.issuerDid,
-          userDid: lookup.userDid,
+          subjectDid: identity.subjectDid,
+          vcType: identity.vcType,
+          issuerDid: identity.issuerDid,
+          userDid: identity.userDid,
+          revokedAt: null,
+          OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
+        },
+        orderBy: { createdAt: 'asc' },
+      });
+    }
+
+    // IS NOT DISTINCT FROM: a null userDid (any credential but a consent
+    // grant) must match rows whose userDid is null.
+    return (this.prisma as PrismaRaw).$queryRawUnsafe<VCRecord[]>(
+      `SELECT * FROM "vcs"
+       WHERE "subjectDid" = $1 AND "vcType" = $2 AND "issuerDid" = $3
+         AND "userDid" IS NOT DISTINCT FROM $4::text
+         AND "revokedAt" IS NULL AND ("expiresAt" IS NULL OR "expiresAt" > $5)
+       ORDER BY "createdAt" ASC`,
+      identity.subjectDid,
+      identity.vcType,
+      identity.issuerDid,
+      identity.userDid,
+      new Date(),
+    );
+  }
+
+  async findActiveChildren(parentVcId: string): Promise<VCRecord[]> {
+    if (!hasRealRaw(this.prisma)) {
+      return this.db.vc.findMany({
+        where: {
+          parentVcId,
           revokedAt: null,
           OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
         },
@@ -237,13 +264,10 @@ export class PrismaVcStorageDriver implements VcStorageDriver {
 
     return (this.prisma as PrismaRaw).$queryRawUnsafe<VCRecord[]>(
       `SELECT * FROM "vcs"
-       WHERE "subjectDid" = $1 AND "vcType" = $2 AND "issuerDid" = $3 AND "userDid" = $4
-         AND "revokedAt" IS NULL AND ("expiresAt" IS NULL OR "expiresAt" > $5)
+       WHERE "parentVcId" = $1
+         AND "revokedAt" IS NULL AND ("expiresAt" IS NULL OR "expiresAt" > $2)
        ORDER BY "createdAt" ASC`,
-      lookup.subjectDid,
-      GRANT_TYPE,
-      lookup.issuerDid,
-      lookup.userDid,
+      parentVcId,
       new Date(),
     );
   }
@@ -460,14 +484,27 @@ export class SqliteVcStorageDriver implements VcStorageDriver {
     return filterByType(records, vcType);
   }
 
-  async findActiveGrants(lookup: GrantLookup): Promise<VCRecord[]> {
+  async findActiveByIdentity(identity: VcIdentity): Promise<VCRecord[]> {
+    const nowIso = new Date().toISOString();
+    // `IS` is SQLite's null-safe equality, so a null userDid matches null rows.
+    const rows = this.sqlite.query<SqliteVcRow>(`
+      SELECT * FROM vcs
+      WHERE subject_did = ${sqliteLiteral(identity.subjectDid)}
+        AND vc_type = ${sqliteLiteral(identity.vcType)}
+        AND issuer_did = ${sqliteLiteral(identity.issuerDid)}
+        AND user_did IS ${sqliteLiteral(identity.userDid)}
+        AND revoked_at IS NULL
+        AND (expires_at IS NULL OR expires_at > ${sqliteLiteral(nowIso)})
+      ORDER BY created_at ASC
+    `);
+    return rows.map((row) => fromSqliteVcRow(row)).filter((v): v is VCRecord => Boolean(v));
+  }
+
+  async findActiveChildren(parentVcId: string): Promise<VCRecord[]> {
     const nowIso = new Date().toISOString();
     const rows = this.sqlite.query<SqliteVcRow>(`
       SELECT * FROM vcs
-      WHERE subject_did = ${sqliteLiteral(lookup.subjectDid)}
-        AND vc_type = ${sqliteLiteral(GRANT_TYPE)}
-        AND issuer_did = ${sqliteLiteral(lookup.issuerDid)}
-        AND user_did = ${sqliteLiteral(lookup.userDid)}
+      WHERE parent_vc_id = ${sqliteLiteral(parentVcId)}
         AND revoked_at IS NULL
         AND (expires_at IS NULL OR expires_at > ${sqliteLiteral(nowIso)})
       ORDER BY created_at ASC
@@ -618,19 +655,25 @@ export class InMemoryVcStorageDriver implements VcStorageDriver {
     return filterByType(records, vcType);
   }
 
-  async findActiveGrants(lookup: GrantLookup): Promise<VCRecord[]> {
+  private activeSorted(predicate: (record: VCRecord) => boolean): VCRecord[] {
     const now = Date.now();
     return [...this.vcs.values()]
-      .filter(
-        (r) =>
-          r.subjectDid === lookup.subjectDid &&
-          r.vcType === GRANT_TYPE &&
-          r.issuerDid === lookup.issuerDid &&
-          r.userDid === lookup.userDid &&
-          !r.revokedAt &&
-          (r.expiresAt === null || r.expiresAt.getTime() > now),
-      )
+      .filter((r) => predicate(r) && !r.revokedAt && (r.expiresAt === null || r.expiresAt.getTime() > now))
       .sort((a, b) => (a.createdAt?.getTime() ?? 0) - (b.createdAt?.getTime() ?? 0));
+  }
+
+  async findActiveByIdentity(identity: VcIdentity): Promise<VCRecord[]> {
+    return this.activeSorted(
+      (r) =>
+        r.subjectDid === identity.subjectDid &&
+        r.vcType === identity.vcType &&
+        r.issuerDid === identity.issuerDid &&
+        (r.userDid ?? null) === identity.userDid,
+    );
+  }
+
+  async findActiveChildren(parentVcId: string): Promise<VCRecord[]> {
+    return this.activeSorted((r) => r.parentVcId === parentVcId);
   }
 
   async findMany(filters: { subjectDid?: string | undefined }): Promise<VCRecord[]> {

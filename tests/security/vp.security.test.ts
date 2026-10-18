@@ -325,6 +325,44 @@ describe('POST /v1/vp/verify — grant matrix (§9.4 A1)', () => {
     );
   });
 
+  it('G15: several agent credentials are presented together and their scopes unioned', async () => {
+    const holder = makeActor();
+    stubFetch({});
+    const readVC = await makeAgentVC(issuer, holder.did, ['read:orders']);
+    const bookVC = await makeAgentVC(issuer, holder.did, ['book:flights']);
+
+    const response = await post(await buildSignedVP([readVC, bookVC], holder));
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      valid: true,
+      agentDid: holder.did,
+      privilegeScopes: ['read:orders', 'book:flights'],
+      effectiveScopes: ['read:orders', 'book:flights'],
+    });
+    expect(response.json().delegationChain.map((link: { vcId: string }) => link.vcId)).toEqual([readVC.id, bookVC.id]);
+  });
+
+  it('G16: an expired agent credential among several only loses its own scopes; one for another DID rejects', async () => {
+    const holder = makeActor();
+    stubFetch({});
+    const readVC = await makeAgentVC(issuer, holder.did, ['read:orders']);
+    const bookVC = await makeAgentVC(issuer, holder.did, ['book:flights']);
+    const { proof: _unused, ...payload } = bookVC;
+    const expired = await signVC({ ...payload, validUntil: new Date(Date.now() - 1000).toISOString() }, issuer);
+
+    const response = await post(await buildSignedVP([readVC, expired], holder));
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({ effectiveScopes: ['read:orders'] });
+
+    // With nothing left standing, the VP is rejected as before.
+    expectRejection(await post(await buildSignedVP([expired], holder)), 'VC_EXPIRED');
+
+    // A credential issued to some other DID has no place in this holder's VP.
+    const stranger = makeActor();
+    const strangersVC = await makeAgentVC(issuer, stranger.did, ['admin:everything']);
+    expectRejection(await post(await buildSignedVP([readVC, strangersVC], holder)), 'VP_INVALID_STRUCTURE');
+  });
+
   it('non-grant failures are rejected with their own specific code too (expired VP)', async () => {
     const holder = makeActor();
     const vc = await makeAgentVC(issuer, holder.did);

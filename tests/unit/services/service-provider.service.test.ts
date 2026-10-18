@@ -158,6 +158,8 @@ describe('ServiceProviderService', () => {
       expect(vcService.revokedVcIds).toEqual([first.grantVC.id]);
       expect(vcService.renewals).toEqual([{ oldVcId: first.grantVC.id, newVcId: second.grantVC.id }]);
       expect(await vcService.listActiveGrants({ agentDid, serviceDid, userDid })).toEqual([second.grantVC]);
+      // The grant was stored before anything was revoked, and with the rule's options.
+      expect(vcService.registeredGrants.map((vc) => vc.id)).toEqual([first.grantVC.id, second.grantVC.id]);
     });
 
     it('a different scope set is a new grant beside the existing one', async () => {

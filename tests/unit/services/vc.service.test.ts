@@ -25,6 +25,8 @@ describe('VCService Branch Coverage', () => {
       revokeVc: vi.fn(),
       markAsRenewed: vi.fn(),
       findActiveStatusList: vi.fn(),
+      findActiveByIdentity: vi.fn().mockResolvedValue([]),
+      findActiveChildren: vi.fn().mockResolvedValue([]),
     };
     didService = {
       resolveDID: vi.fn().mockImplementation((did: string) => {

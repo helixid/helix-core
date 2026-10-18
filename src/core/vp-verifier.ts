@@ -37,6 +37,7 @@ export interface VerifyVPOptions {
 export interface VerifyVPResult {
   valid: boolean;
   agentDid: string;
+  /** The union of every valid agent credential's privilegeScopes. */
   privilegeScopes: string[];
   /**
    * Enforcement scopes: equals privilegeScopes when no consent grant is
@@ -46,6 +47,11 @@ export interface VerifyVPResult {
    */
   effectiveScopes: string[];
   vpId: string;
+  /**
+   * The verified delegation links, root to leaf per agent credential and
+   * concatenated in presentation order, each VC once. A single
+   * non-delegated credential yields its own one link.
+   */
   delegationChain: DelegationLink[];
   warning?: string;
   error?: string;
@@ -296,30 +302,65 @@ export async function verifyVP(
 
   const agentEntries = entries.filter(isAgentAuthorityType);
   const grantEntries = entries.filter(isGrantType);
-  if (agentEntries.length !== 1 || agentEntries.length + grantEntries.length !== entries.length) {
+  if (agentEntries.length < 1 || agentEntries.length + grantEntries.length !== entries.length) {
     throw new VPInvalidStructureError(
-      'VP credential array must contain exactly one agent-authority credential, and otherwise only consent grants',
+      'VP credential array must contain at least one agent-authority credential, and otherwise only consent grants',
     );
   }
 
-  const vc = agentEntries[0] as SignedVC;
-  if (!vc?.proof) {
-    throw new VPInvalidStructureError('VP does not contain a signed VC');
-  }
-  assertAgentVC(vc);
-  if (vc.targetService && vc.targetService !== vp.targetService) {
-    throw new VPInvalidStructureError('VC targetService does not match VP targetService');
-  }
+  // The agent's authority is the union of every agent credential that still
+  // stands. Each is verified on its own -- a delegated one once as a
+  // complete chain, so a status-less child inherits revocation from its
+  // status-bearing ancestors; a non-delegated one directly. A revoked or
+  // expired credential contributes nothing but does not sink the others;
+  // any other failure rejects the VP, as does a VP with none left.
+  const privilegeScopeSet = new Set<string>();
+  const delegationChain: DelegationLink[] = [];
+  const seenLinks = new Set<string>();
+  let warning: string | undefined;
+  let validAgentVCs = 0;
+  let lastDropped: Error | undefined;
 
-  // Delegated credentials are verified once as a complete chain so that a
-  // status-less child inherits revocation from its status-bearing ancestors.
-  // Non-delegated credentials continue to verify their own status directly.
-  const warning = vc.credentialSubject.delegatedFrom
-    ? undefined
-    : await verifyCredential(vc, options);
-  const delegationChain = await verifyDelegationChain(vc, options);
+  for (const vc of agentEntries) {
+    if (!vc?.proof) {
+      throw new VPInvalidStructureError('VP does not contain a signed VC');
+    }
+    assertAgentVC(vc);
+    if (vc.credentialSubject.id !== vp.holder) {
+      throw new VPInvalidStructureError('agent credential subject does not match VP holder');
+    }
+    if (vc.targetService && vc.targetService !== vp.targetService) {
+      throw new VPInvalidStructureError('VC targetService does not match VP targetService');
+    }
 
-  let effectiveScopes = vc.credentialSubject.privilegeScopes;
+    let chain: DelegationLink[];
+    try {
+      const selfSignedWarning = vc.credentialSubject.delegatedFrom
+        ? undefined
+        : await verifyCredential(vc, options);
+      chain = await verifyDelegationChain(vc, options);
+      if (selfSignedWarning) warning = selfSignedWarning;
+    } catch (error) {
+      if (error instanceof VCRevokedError || error instanceof VCExpiredError) {
+        lastDropped = error;
+        continue;
+      }
+      throw error;
+    }
+
+    validAgentVCs += 1;
+    for (const scope of vc.credentialSubject.privilegeScopes) privilegeScopeSet.add(scope);
+    for (const link of chain) {
+      if (!seenLinks.has(link.vcId)) {
+        seenLinks.add(link.vcId);
+        delegationChain.push(link);
+      }
+    }
+  }
+  if (validAgentVCs === 0) throw lastDropped;
+
+  const privilegeScopes = [...privilegeScopeSet];
+  let effectiveScopes = privilegeScopes;
 
   if (grantEntries.length > 0) {
     const chainDids = delegationChain.map((link) => link.subject);
@@ -365,8 +406,8 @@ export async function verifyVP(
 
   const result: VerifyVPResult = {
     valid: true,
-    agentDid: vc.credentialSubject.id,
-    privilegeScopes: vc.credentialSubject.privilegeScopes,
+    agentDid: vp.holder,
+    privilegeScopes,
     effectiveScopes,
     vpId: vp.id,
     delegationChain,

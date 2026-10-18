@@ -29,7 +29,7 @@ import {
   vcLookupColumns,
 } from '../../core/index.js';
 import * as crypto from 'node:crypto';
-import { VcRepository } from '../../repositories/vc.repository.js';
+import { VcRepository, type VCRecord } from '../../repositories/vc.repository.js';
 import type { IDIDService } from '../did/did.service.js';
 import type { ApiAuditLogger } from '../../audit/index.js';
 import type { ICache } from '../../cache/ICache.js';
@@ -62,7 +62,7 @@ function getCredentialSubject(value: unknown): CredentialSubject {
   return asRecord(record.credentialSubject) as CredentialSubject;
 }
 
-export interface IssueVCParams {
+export interface IssueVCParams extends ReconcileOptions {
   subjectDid: string;
   subjectType: 'agent' | 'user';
   privilegeScopes?: string[] | undefined;
@@ -77,11 +77,29 @@ export interface IssueVCParams {
   parentVcId?: string | undefined;
 }
 
-export interface IssueVCResult {
+export interface IssueVCResult extends Partial<ReconcileResult> {
   vcId: string;
   vc: SignedVC;
   statusListIndex: number;
   expiresAt: string | null;
+}
+
+export interface ReconcileOptions {
+  /**
+   * Also revoke every other active credential with the same identity but
+   * a different scope set, so the one just stored is the only one standing.
+   */
+  revokeExisting?: boolean | undefined;
+}
+
+/** What reconcileActive() did to the credentials that were active before this one. */
+export interface ReconcileResult {
+  /** Same identity and scope set: revoked in favour of the new one, and chained to it. */
+  replacedVcIds: string[];
+  /** Same identity, other scopes: revoked because `revokeExisting` asked for it. */
+  revokedVcIds: string[];
+  /** Would have been revoked, but active delegations still hang off them, so they stay. */
+  retainedVcIds: string[];
 }
 
 export interface VCDetails {
@@ -102,6 +120,8 @@ export interface ListVCFilters {
 export interface VCSummary {
   vcId: string;
   subjectDid: string;
+  /** The credential's own type, e.g. HelixAgentCredential or DelegationGrantCredential. */
+  vcType?: string | undefined;
   agentName?: string | undefined;
   scopes: string[];
   status: 'active' | 'revoked' | 'expired';
@@ -150,13 +170,14 @@ export interface IVCService {
     listId?: string;
     length?: number;
   }): Promise<ReturnType<typeof buildStatusListCredential>>;
-  registerSignedVC(vc: SignedVC): Promise<void>;
+  registerSignedVC(vc: SignedVC, options?: ReconcileOptions): Promise<ReconcileResult>;
 
   /** See IVCService.registerExternalVC() in ./IVCService.ts. */
   registerExternalVC(
     vc: SignedVC,
     requestId: string,
-  ): Promise<{ vcId: string; alreadyRegistered: boolean }>;
+    options?: ReconcileOptions,
+  ): Promise<{ vcId: string; alreadyRegistered: boolean } & Partial<ReconcileResult>>;
 
   /** See IVCService.claimStatusListEntry() in ./IVCService.ts. */
   claimStatusListEntry(): Promise<{
@@ -166,13 +187,10 @@ export interface IVCService {
   }>;
 
   /** See IVCService.registerIssuedGrant() in ./IVCService.ts. */
-  registerIssuedGrant(vc: SignedVC, requestId: string): Promise<void>;
+  registerIssuedGrant(vc: SignedVC, requestId: string, options?: ReconcileOptions): Promise<ReconcileResult>;
 
   /** See IVCService.listActiveGrants() in ./IVCService.ts. */
   listActiveGrants(lookup: { agentDid: string; serviceDid: string; userDid: string }): Promise<SignedVC[]>;
-
-  /** See IVCService.markAsRenewed() in ./IVCService.ts. */
-  markAsRenewed(oldVcId: string, newVcId: string): Promise<void>;
 }
 
 /**
@@ -250,7 +268,8 @@ export class VCService implements IVCService {
     serviceDid: string;
     userDid: string;
   }): Promise<SignedVC[]> {
-    const records = await this.vcRepo.findActiveGrants({
+    const records = await this.vcRepo.findActiveByIdentity({
+      vcType: 'DelegationGrantCredential',
       subjectDid: lookup.agentDid,
       issuerDid: lookup.serviceDid,
       userDid: lookup.userDid,
@@ -261,8 +280,82 @@ export class VCService implements IVCService {
     );
   }
 
-  async markAsRenewed(oldVcId: string, newVcId: string): Promise<void> {
-    await this.vcRepo.markAsRenewed(oldVcId, newVcId);
+  /**
+   * The one rule every kind of credential follows once it is stored: a
+   * credential is identified by (type, issuer, subject, user) plus its scope
+   * set. Storing one whose identity and scopes an active credential already
+   * carries *refreshes* that credential -- the old one is revoked and
+   * chained to the new through renewedByVcId, the new one having been stored
+   * first so there is never a moment without one. A different scope set
+   * stands beside the existing ones (a VP presents them all and the
+   * verifier takes the union), unless `revokeExisting` asks for the others
+   * to go.
+   *
+   * One exception, for delegation: a credential that active delegated
+   * credentials still point at (their parentVcId) is never revoked here,
+   * since the sub-agents' chains would break -- it is reported as retained
+   * and stays active until those delegations lapse.
+   */
+  async reconcileActive(
+    vc: SignedVC,
+    options: ReconcileOptions,
+    requestId: string,
+  ): Promise<ReconcileResult> {
+    const result: ReconcileResult = { replacedVcIds: [], revokedVcIds: [], retainedVcIds: [] };
+    const columns = vcLookupColumns(vc);
+    const subjectDid = (vc.credentialSubject as { id?: unknown }).id;
+    if (!columns.vcType || !columns.issuerDid || typeof subjectDid !== 'string') return result;
+
+    const siblings = (
+      await this.vcRepo.findActiveByIdentity({
+        vcType: columns.vcType,
+        issuerDid: columns.issuerDid,
+        subjectDid,
+        userDid: columns.userDid,
+      })
+    ).filter((record) => record.vcId !== vc.id);
+    const sameScopes = siblings.filter((record) => (record.scopeKey ?? null) === columns.scopeKey);
+    const otherScopes = options.revokeExisting ? siblings.filter((record) => !sameScopes.includes(record)) : [];
+
+    for (const old of sameScopes) {
+      await this.vcRepo.markAsRenewed(old.vcId, vc.id);
+      (await this.retire(old, requestId) ? result.replacedVcIds : result.retainedVcIds).push(old.vcId);
+    }
+    for (const old of otherScopes) {
+      (await this.retire(old, requestId) ? result.revokedVcIds : result.retainedVcIds).push(old.vcId);
+    }
+    return result;
+  }
+
+  /** Revokes `record` unless active delegations hang off it. True when revoked. */
+  private async retire(record: VCRecord, requestId: string): Promise<boolean> {
+    if ((await this.vcRepo.findActiveChildren(record.vcId)).length > 0) return false;
+
+    const list = await this.vcRepo.findStatusListById(this.DEFAULT_STATUS_LIST_ID);
+    if (!list) throw new Error('Status list missing during revocation');
+    // Only a credential whose status entry is on this platform's own list
+    // has a bit to flip; a delegation VC (no status entry, placeholder index
+    // 0) or an externally-signed one (the SP's list) is revoked by its row
+    // alone, and must not flip someone else's bit 0.
+    const ownsBit = this.pointsAtDefaultList(record.vcJson);
+    const encoded = ownsBit ? setBit(list.encodedList, record.statusListIndex, 1) : list.encodedList;
+    await this.vcRepo.revokeVc(record.vcId, this.DEFAULT_STATUS_LIST_ID, encoded);
+    if (ownsBit) await this.statusListCache.delete(this.DEFAULT_STATUS_LIST_ID);
+
+    await this.audit.log({
+      event: 'VC_REVOKED',
+      timestamp: new Date().toISOString(),
+      requestId,
+      vcId: record.vcId,
+      subjectDid: record.subjectDid,
+      reason: 'superseded',
+    });
+    return true;
+  }
+
+  private pointsAtDefaultList(vcJson: unknown): boolean {
+    const status = asRecord(asRecord(vcJson).credentialStatus);
+    return status.statusListCredential === `${this.apiBaseUrl}/v1/status-list/${this.DEFAULT_STATUS_LIST_ID}`;
   }
 
   /**
@@ -276,7 +369,7 @@ export class VCService implements IVCService {
    * is tracked the same way as everywhere else in this repository, via the
    * row's own revokedAt column.
    */
-  async registerSignedVC(vc: SignedVC): Promise<void> {
+  async registerSignedVC(vc: SignedVC, options: ReconcileOptions = {}): Promise<ReconcileResult> {
     const subject = (vc as unknown as { credentialSubject: CredentialSubject & { id: string; privilegeScopes?: string[] } })
       .credentialSubject;
     const validUntil = (vc as unknown as { validUntil?: string }).validUntil;
@@ -294,6 +387,7 @@ export class VCService implements IVCService {
       parentVcId: subject.parentVcId,
       ...vcLookupColumns(vc),
     });
+    return this.reconcileActive(vc, options, 'register-signed-vc');
   }
 
   /**
@@ -305,7 +399,8 @@ export class VCService implements IVCService {
   async registerExternalVC(
     vc: SignedVC,
     requestId: string,
-  ): Promise<{ vcId: string; alreadyRegistered: boolean }> {
+    options: ReconcileOptions = {},
+  ): Promise<{ vcId: string; alreadyRegistered: boolean } & Partial<ReconcileResult>> {
     // Idempotent by vcId: a retried consent callback or a re-run seed must
     // not duplicate the row, and must not look like a failure to the caller.
     const existing = await this.vcRepo.findByVcId(vc.id);
@@ -407,7 +502,8 @@ export class VCService implements IVCService {
       expiresAt: expiresAt?.toISOString() ?? null,
     });
 
-    return { vcId: vc.id, alreadyRegistered: false };
+    const reconciled = await this.reconcileActive(vc, options, requestId);
+    return { vcId: vc.id, alreadyRegistered: false, ...reconciled };
   }
 
   async issueVC(params: IssueVCParams, requestId: string): Promise<IssueVCResult> {
@@ -571,11 +667,18 @@ export class VCService implements IVCService {
       statusListIndex: claimedIndex,
     });
 
+    const reconciled = await this.reconcileActive(
+      signedVc,
+      { revokeExisting: params.revokeExisting },
+      requestId,
+    );
+
     return {
       vcId,
       vc: signedVc,
       statusListIndex: claimedIndex,
       expiresAt: expiresAt?.toISOString() ?? null,
+      ...reconciled,
     };
   }
 
@@ -602,9 +705,12 @@ export class VCService implements IVCService {
       const validFrom = (asRecord(vcJson).validFrom as string | undefined) ?? '';
       const parentVcId = record.parentVcId ?? subject.parentVcId;
 
+      const vcType = record.vcType ?? vcLookupColumns(vcJson).vcType;
+
       return {
         vcId: record.vcId,
         subjectDid: record.subjectDid,
+        ...(vcType ? { vcType } : {}),
         ...(subject.agentName ? { agentName: subject.agentName } : {}),
         scopes,
         status,
@@ -774,7 +880,11 @@ export class VCService implements IVCService {
     };
   }
 
-  async registerIssuedGrant(vc: SignedVC, requestId: string): Promise<void> {
+  async registerIssuedGrant(
+    vc: SignedVC,
+    requestId: string,
+    options: ReconcileOptions = {},
+  ): Promise<ReconcileResult> {
     const subject = vc.credentialSubject as unknown as {
       id: string;
       userDid?: string;
@@ -812,6 +922,8 @@ export class VCService implements IVCService {
       durability: subject.durability,
       expiresAt: validUntil ?? null,
     });
+
+    return this.reconcileActive(vc, options, requestId);
   }
 
   private async ensureSubjectDidRegistered(did: string, requestId: string): Promise<void> {

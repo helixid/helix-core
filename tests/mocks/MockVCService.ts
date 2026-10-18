@@ -4,8 +4,11 @@ import type {
   IVCService,
   IssueVCInput,
   IssueVCResult,
+  ReconcileOptions,
+  ReconcileResult,
   VCStatus,
 } from '../../src/services/vc/IVCService.js';
+import { scopeKey } from '../../src/core/vc-lookup.js';
 
 export class MockVCService implements IVCService {
   private status: VCStatus = 'active';
@@ -53,8 +56,9 @@ export class MockVCService implements IVCService {
     return this.activeVC;
   }
 
-  async registerSignedVC(vc: SignedVC): Promise<void> {
+  async registerSignedVC(vc: SignedVC, _options?: ReconcileOptions): Promise<ReconcileResult> {
     this.activeVC = vc as unknown as Record<string, unknown>;
+    return { replacedVcIds: [], revokedVcIds: [], retainedVcIds: [] };
   }
 
   async listActiveBySubjectDid(
@@ -170,12 +174,38 @@ export class MockVCService implements IVCService {
     };
   }
 
-  async registerIssuedGrant(vc: SignedVC, _requestId: string): Promise<void> {
-    this.registeredGrants.push(vc);
-  }
-
   revokedVcIds: string[] = [];
   renewals: Array<{ oldVcId: string; newVcId: string }> = [];
+
+  /** Stores the grant and applies the same one-per-scope-set rule VCService.reconcileActive() does. */
+  async registerIssuedGrant(
+    vc: SignedVC,
+    _requestId: string,
+    options: ReconcileOptions = {},
+  ): Promise<ReconcileResult> {
+    const subject = vc.credentialSubject as { id?: string; userDid?: string; scopes?: string[] };
+    const siblings = await this.listActiveGrants({
+      agentDid: subject.id ?? '',
+      serviceDid: vc.issuer,
+      userDid: subject.userDid ?? '',
+    });
+    this.registeredGrants.push(vc);
+
+    const key = scopeKey(subject.scopes ?? []);
+    const result: ReconcileResult = { replacedVcIds: [], revokedVcIds: [], retainedVcIds: [] };
+    for (const old of siblings) {
+      const oldScopes = (old.credentialSubject as { scopes?: string[] }).scopes ?? [];
+      if (scopeKey(oldScopes) === key) {
+        this.renewals.push({ oldVcId: old.id, newVcId: vc.id });
+        this.revokedVcIds.push(old.id);
+        result.replacedVcIds.push(old.id);
+      } else if (options.revokeExisting) {
+        this.revokedVcIds.push(old.id);
+        result.revokedVcIds.push(old.id);
+      }
+    }
+    return result;
+  }
 
   /** The registered grants that match and have not been revoked here, in registration order. */
   async listActiveGrants(lookup: { agentDid: string; serviceDid: string; userDid: string }): Promise<SignedVC[]> {
@@ -193,9 +223,5 @@ export class MockVCService implements IVCService {
   async revokeVC(vcId: string, _requestId: string): Promise<{ vcId: string; revoked: true; revokedAt: string }> {
     this.revokedVcIds.push(vcId);
     return { vcId, revoked: true, revokedAt: new Date().toISOString() };
-  }
-
-  async markAsRenewed(oldVcId: string, newVcId: string): Promise<void> {
-    this.renewals.push({ oldVcId, newVcId });
   }
 }

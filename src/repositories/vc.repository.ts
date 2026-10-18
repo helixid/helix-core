@@ -25,11 +25,17 @@ export interface VCRecord {
   updatedAt?: Date;
 }
 
-/** A consent grant's identity: who granted (the service), to whom (the agent), on whose behalf. */
-export interface GrantLookup {
-  subjectDid: string;
+/**
+ * What makes two credentials "the same one": kind, who signed it, whom it is
+ * about, and (for a consent grant) on whose behalf. Together with the scope
+ * set this is a credential's identity across re-issuance; see
+ * VCService.reconcileActive().
+ */
+export interface VcIdentity {
+  vcType: string;
   issuerDid: string;
-  userDid: string;
+  subjectDid: string;
+  userDid: string | null;
 }
 
 export interface ListVcFilters {
@@ -117,9 +123,14 @@ export class VcRepository {
     return this.driver.findActiveBySubjectDid(subjectDid, vcType);
   }
 
-  /** Every unrevoked, unexpired DelegationGrantCredential for one (user, agent, service), oldest first. */
-  async findActiveGrants(lookup: GrantLookup): Promise<VCRecord[]> {
-    return this.driver.findActiveGrants(lookup);
+  /** Every unrevoked, unexpired credential with this identity, oldest first. */
+  async findActiveByIdentity(identity: VcIdentity): Promise<VCRecord[]> {
+    return this.driver.findActiveByIdentity(identity);
+  }
+
+  /** Every unrevoked, unexpired credential delegated from `parentVcId`. */
+  async findActiveChildren(parentVcId: string): Promise<VCRecord[]> {
+    return this.driver.findActiveChildren(parentVcId);
   }
 
   async findMany(
