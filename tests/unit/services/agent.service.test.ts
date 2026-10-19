@@ -199,29 +199,6 @@ describe('AgentService Unit Tests', () => {
       );
     });
 
-    it('presents only the credential named by vcId when one is pinned', async () => {
-      agentKeyRepository.findByDid.mockResolvedValue({
-        did: agentDid,
-        encryptedPrivateKey: 'x',
-        iv: 'x',
-        authTag: 'x',
-        algorithm: 'aes-256-gcm',
-      });
-      vcService.findActiveByVcIdForSubject.mockResolvedValue({
-        id: 'vc:test:2',
-        type: ['VerifiableCredential', 'HelixAgentCredential'],
-        credentialSubject: { id: agentDid, privilegeScopes: ['write'] },
-      });
-
-      const result = await agentService.signVP(
-        { did: agentDid, targetService: 'did:web:svc.example.com', vcId: 'vc:test:2' },
-        'req-1',
-      );
-
-      expect(vcService.listActiveBySubjectDid).not.toHaveBeenCalled();
-      expect(result.signedVP.verifiableCredential.map((vc) => vc['id'])).toEqual(['vc:test:2']);
-    });
-
     describe('on a user\'s behalf', () => {
       const serviceDid = 'did:web:svc.example.com';
       const userDid = 'did:web:mock.local:users:alice';
@@ -278,15 +255,6 @@ describe('AgentService Unit Tests', () => {
         await expect(
           agentService.signVP({ did: agentDid, targetService: serviceDid, userDid }, 'req-1'),
         ).rejects.toMatchObject({ code: 'CONSENT_GRANT_NOT_FOUND', httpStatus: 404 });
-      });
-
-      it('uses an explicitly passed grantVC instead of looking one up', async () => {
-        const { signedVP } = await agentService.signVP(
-          { did: agentDid, targetService: serviceDid, userDid, grantVC: grant('vc:mine', ['read']) as never },
-          'req-1',
-        );
-        expect(vcService.listActiveGrants).not.toHaveBeenCalled();
-        expect(signedVP.verifiableCredential.map((vc) => vc['id'])).toEqual(['vc:test:1', 'vc:mine']);
       });
 
       it('presents only the agent credential when no user is named', async () => {

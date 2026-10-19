@@ -46,29 +46,17 @@ describe('VC Renewal Live Integration', () => {
     const oldVcDetails = await client.getVC(agent.vcId);
     expect(oldVcDetails.renewedByVcId).toBe(renewed.vcId);
 
-    // The old VC still verifies with its original (wider) scopes — renewal
-    // doesn't revoke it, it's a separate credential lineage. Both VCs are
-    // active at once now, so vcId pins which one gets signed.
-    const oldSignedVP = await signLiveVP(api, agent.did, {
-      targetService: 'amazon',
-      userDid: 'did:hedera:testnet:live-user-placeholder',
-      vcId: agent.vcId,
-    });
-    const oldVerifyRes = await http.post('/v1/vp/verify').send({ signedVP: oldSignedVP });
-    expect(oldVerifyRes.statusCode).toBe(200);
-    expect(oldVerifyRes.body.privilegeScopes).toEqual(
+    // The old VC stays active with its original (wider) scopes — renewal
+    // doesn't revoke it, it's a separate credential lineage. The VP carries
+    // both, and the verifier takes the union of their scopes.
+    const signedVP = await signLiveVP(api, agent.did, { targetService: 'amazon' });
+    const credentialIds = signedVP.verifiableCredential.map((vc) => (vc as { id: string }).id);
+    expect(credentialIds).toEqual(expect.arrayContaining([agent.vcId, renewed.vcId]));
+    const verifyRes = await http.post('/v1/vp/verify').send({ signedVP });
+    expect(verifyRes.statusCode).toBe(200);
+    expect(verifyRes.body.privilegeScopes).toEqual(
       expect.arrayContaining(['read:orders', 'write:orders']),
     );
-
-    // The new (renewed) VC verifies too, with the narrowed scopes.
-    const newSignedVP = await signLiveVP(api, agent.did, {
-      targetService: 'amazon',
-      userDid: 'did:hedera:testnet:live-user-placeholder',
-      vcId: renewed.vcId,
-    });
-    const newVerifyRes = await http.post('/v1/vp/verify').send({ signedVP: newSignedVP });
-    expect(newVerifyRes.statusCode).toBe(200);
-    expect(newVerifyRes.body.privilegeScopes).toEqual(['read:orders']);
   }, LIVE_HEDERA_TIMEOUT_MS);
 
   it('rejects renewing an already-revoked VC', async () => {

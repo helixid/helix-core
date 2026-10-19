@@ -24,7 +24,9 @@ from `helix-sdk-py`.
 `helix_langchain`/`helix_crewai`.**
 This is not a standalone tool — it's a peer-dependency library that other
 people's MCP servers/clients import to verify inbound VPs
-(`helixid_mcp_middleware`) and attach outbound ones (`attach_helix_vp`).
+(`helixid_mcp_middleware`) and attach outbound ones (`attach_helix_vp`); the
+VP rides in the MCP request's `params._meta["x-helix-vp"]`, never in tool
+arguments.
 MCP-in-JS and MCP-in-Python are genuinely different runtime SDKs
 (`@modelcontextprotocol/sdk` vs `mcp`), so JS and Python versions are real,
 not duplicated, work — exactly the same reasoning that already applied to

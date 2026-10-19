@@ -3,6 +3,7 @@
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  AgentActiveCredentialNotFoundError,
   DelegateeNotAnAgentError,
   ServiceKeyNotFoundError,
   ServiceRevokedError,
@@ -120,6 +121,16 @@ describe('ServiceProviderService', () => {
     await expect(
       service.issueDelegationGrant({ serviceDid, agentDid: otherService, userDid: 'did:key:zU', scopes: ['x'] }, 'r'),
     ).rejects.toBeInstanceOf(DelegateeNotAnAgentError);
+  });
+
+  it('refuses an agent with no active HelixAgentCredential', async () => {
+    const { did: serviceDid } = await service.enroll(ENROLL, 'r');
+    const agentDid = await onboardedAgent();
+    vcService.setActiveVC(null);
+    await expect(
+      service.issueDelegationGrant({ serviceDid, agentDid, userDid: 'did:key:zU', scopes: ['x'] }, 'r'),
+    ).rejects.toBeInstanceOf(AgentActiveCredentialNotFoundError);
+    expect(vcService.registeredGrants).toEqual([]);
   });
 
   it('validates the grant input', async () => {

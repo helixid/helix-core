@@ -17,6 +17,7 @@ import { randomBytes } from 'node:crypto';
 import {
   ErrorCode,
   HelixError,
+  AgentActiveCredentialNotFoundError,
   DelegateeNotAnAgentError,
   ServiceKeyNotFoundError,
   ServiceRevokedError,
@@ -73,8 +74,8 @@ export interface IServiceProviderService {
   ): Promise<IssueDelegationGrantResult>;
 }
 
-/** The two things this needs from the VC service; a Pick so either IVCService shape fits. */
-export type GrantVCStore = Pick<IVCService, 'claimStatusListEntry' | 'registerIssuedGrant'>;
+/** What this needs from the VC service; a Pick so either IVCService shape fits. */
+export type GrantVCStore = Pick<IVCService, 'claimStatusListEntry' | 'registerIssuedGrant' | 'listActiveBySubjectDid'>;
 
 /** Same shape as the other ids (`enroll:`, `vc:helix:`) so rows are recognisable on sight. */
 export function generateServiceId(): string {
@@ -175,6 +176,12 @@ export class ServiceProviderService implements IServiceProviderService {
     const agentKey = await this.didKeyRepository.findByDid(input.agentDid);
     if (!agentKey || agentKey.subjectType !== 'agent') {
       throw new DelegateeNotAnAgentError(input.agentDid);
+    }
+    // ...and that still holds an active HelixAgentCredential per the DB: a
+    // grant to a revoked or expired agent could never be presented anyway.
+    const agentVCs = await this.vcService.listActiveBySubjectDid(input.agentDid, 'HelixAgentCredential');
+    if (agentVCs.length === 0) {
+      throw new AgentActiveCredentialNotFoundError(input.agentDid);
     }
 
     const scopes = normalizeScopes(input.scopes);

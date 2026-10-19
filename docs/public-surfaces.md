@@ -105,6 +105,9 @@ Local encrypted wallet and credential store for a DID whose key the caller holds
 | `verifyVP(vp, client, options?)` | Verify VP signature, VC signature, expiry, revocation, target service, and delegation chain via `POST /v1/vp/verify` (no local fallback). |
 | `checkScope(result, requiredScope)` | Boolean scope check on `VerifyVPResult`. |
 | `requireScope(result, requiredScope)` | Throw if required scope is missing. |
+| `encodeHelixVP(vp)` / `decodeHelixVP(str)` | Encode a signed VP as base64url JSON / decode it (throws `VP_INVALID_STRUCTURE`). This is the only VP wire format: HTTP carries it in the `X-Helix-VP` header (`HELIX_VP_HEADER`), MCP in the request's `params._meta["x-helix-vp"]` (`HELIX_VP_META_KEY`). VPs never travel in tool arguments. |
+| `helixVPHeaders(vp)` | Returns `{ 'X-Helix-VP': <encoded VP> }`. |
+| `readHelixVPHeader(headers)` / `readHelixVPMeta(meta)` | Read and decode the VP from request headers (`Headers` or plain object, case-insensitive) or MCP `_meta`; `undefined` when absent. |
 | `new SessionManager({ secret, ttl }).issue(input)` | Issue HMAC session JWT from verified agent/scopes. |
 | `SessionManager.verify(token)` | Verify session JWT and return claims. |
 | `new HelixDidResolver({ baseUrl }).resolve(did, options?)` | Resolve DID via Helix API into DID Resolution result. |
@@ -116,12 +119,12 @@ Package: `@helixid/langchain`.
 
 | Export | Purpose |
 | --- | --- |
-| `HelixIDMiddleware(options)` | Returns LangChain callback config that injects `_helixVP` into object tool input before tool start. |
-| `HelixIDToolWrapper(tool, options)` | Wraps a structured tool and injects `_helixVP` before calling the original `_call`. |
+| `HelixIDToolWrapper(tool, options)` | Wraps a structured tool so each call signs a fresh VP; tool input is passed through unchanged. |
+| `currentHelixVPHeaders()` | Inside a wrapped tool call, returns `{ 'X-Helix-VP': <encoded VP> }` for the tool's outbound request; empty outside one. |
 | `filterToolsByScope(tools, client, agentDid)` | Filters tools by `tool.metadata.requiredScope` or tool name against the scopes of the agent's active VC (`client.listVCs()`). |
 | `encodeBase64UrlJson(value)` | Encodes VP/object as base64url JSON. |
 
-Options: `client` (`HelixClient`), `agentDid`, `targetService`, optional `userDid`. VPs are signed server-side via `client.signVP()`.
+Options (`HelixIDToolWrapperOptions`, alias `LangChainMiddlewareOptions`): `client` (`HelixClient`), `agentDid`, `targetService`, optional `userDid`. VPs are signed server-side via `client.signVP()`.
 
 ## MCP Adapter
 
@@ -129,8 +132,8 @@ Package: `@helixid/mcp`.
 
 | Export | Purpose |
 | --- | --- |
-| `attachHelixVP(toolCall, options)` | Client-side helper that requests a server-signed VP (`client.signVP()`) and attaches `_helixVP` to MCP tool input. |
-| `helixidMCPMiddleware(options)` | Server-side middleware that requires `_helixVP`, verifies it, and enforces optional scopes. |
+| `attachHelixVP(toolCall, options)` | Client-side helper that requests a server-signed VP (`client.signVP()`) and sets `toolCall._meta["x-helix-vp"]`, leaving `input` untouched; pass `_meta` as the MCP request's `params._meta`. |
+| `helixidMCPMiddleware(options)` | Server-side middleware that reads the VP from `toolCall._meta["x-helix-vp"]` or, over HTTP, `toolCall.headers` (`X-Helix-VP`), never from `input`; verifies it and enforces optional scopes. Throws `VPMissingError` when absent. |
 
 Options:
 

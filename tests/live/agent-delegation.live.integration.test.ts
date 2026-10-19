@@ -62,7 +62,7 @@ describe('Agent Delegation Live Integration', () => {
 
     // The child now holds two active credentials (its own onboarding VC and
     // the delegated one), so it pins the delegated one explicitly.
-    const signedVP = await signLiveVP(api, child.did, { targetService: 'amazon', vcId: delegatedVC.id });
+    const signedVP = await signLiveVP(api, child.did, { targetService: 'amazon' });
     const verifyRes = await supertest(api.baseUrl).post('/v1/vp/verify').send({ signedVP });
     expect(verifyRes.statusCode).toBe(200);
     expect(verifyRes.body).toMatchObject({ valid: true, agentDid: child.did, privilegeScopes: ['read:orders'] });

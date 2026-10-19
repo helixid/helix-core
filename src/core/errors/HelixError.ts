@@ -325,7 +325,7 @@ export class InsufficientScopeError extends HelixError {
 }
 
 export class VPMissingError extends HelixError {
-  constructor(message = 'No _helixVP in tool call input') {
+  constructor(message = 'No Verifiable Presentation in the X-Helix-VP header or MCP _meta["x-helix-vp"]') {
     super('VP_MISSING', message, 401);
   }
 }

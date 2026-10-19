@@ -64,11 +64,15 @@ describe('Consent Grant Live Integration', () => {
       client,
     );
 
-    const signedVP = await signLiveVP(api, agent.did, {
-      targetService: 'amazon',
-      userDid,
-      grantVC,
-    });
+    // signVP looks the grant up by (agent, service, user), so it has to be
+    // held by the platform first.
+    const registerRes = await http
+      .post('/v1/vcs/register')
+      .set('x-admin-api-key', api.adminApiKey)
+      .send({ vc: grantVC });
+    expect(registerRes.statusCode).toBe(201);
+
+    const signedVP = await signLiveVP(api, agent.did, { targetService: spDid, userDid });
 
     const verifyRes = await http.post('/v1/vp/verify').send({ signedVP });
     expect(verifyRes.statusCode).toBe(200);
@@ -81,7 +85,7 @@ describe('Consent Grant Live Integration', () => {
     });
   }, LIVE_HEDERA_TIMEOUT_MS);
 
-  it('rejects a VP when the grant is for a different user than the VP claims', async () => {
+  it('refuses to sign a VP for a user the agent holds no grant for', async () => {
     const client = new HelixClient(api.baseUrl, { adminApiKey: api.adminApiKey });
     const http = supertest(api.baseUrl);
     const agent = await onboardLiveAgent(api, {
@@ -107,15 +111,15 @@ describe('Consent Grant Live Integration', () => {
       client,
     );
 
-    // Signed as if acting for a *different* user than the grant covers.
-    const signedVP = await signLiveVP(api, agent.did, {
-      targetService: 'amazon',
-      userDid: 'did:key:zSomeoneElseEntirely',
-      grantVC,
-    });
+    await http.post('/v1/vcs/register').set('x-admin-api-key', api.adminApiKey).send({ vc: grantVC }).expect(201);
 
-    const verifyRes = await http.post('/v1/vp/verify').send({ signedVP });
-    expect(verifyRes.statusCode).toBe(400);
-    expect(verifyRes.body.error.code).toBe('CONSENT_GRANT_SUBJECT_MISMATCH');
+    // Asked to act for a *different* user than the grant covers: there is
+    // no grant to look up, so no VP is signed at all.
+    const signRes = await http
+      .post(`/v1/agents/${encodeURIComponent(agent.did)}/vp`)
+      .set('x-admin-api-key', api.adminApiKey)
+      .send({ targetService: spDid, userDid: 'did:key:zSomeoneElseEntirely' });
+    expect(signRes.statusCode).toBe(404);
+    expect(signRes.body.error.code).toBe('CONSENT_GRANT_NOT_FOUND');
   }, LIVE_HEDERA_TIMEOUT_MS);
 });

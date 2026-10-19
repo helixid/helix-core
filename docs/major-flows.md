@@ -17,7 +17,7 @@ Surfaces used:
 | --- | --- |
 | Create enrollment token | `POST /v1/enrollment-tokens`, or operator-side setup with `helix vc issue` in CLI flows. |
 | Onboard agent | `HelixClient.onboardAgent()`, `POST /v1/onboard`. |
-| Issue VP | `HelixClient.signVP()`, `POST /v1/agents/:did/vp`, or (for local signing by other actors, e.g. issuers/SPs) `VPBuilder.sign()`, `HelixIDMiddleware()`, `HelixIDToolWrapper()`, `attachHelixVP()`. |
+| Issue VP | `HelixClient.signVP()`, `POST /v1/agents/:did/vp`, or (for local signing by other actors, e.g. issuers/SPs) `VPBuilder.sign()`, `HelixIDToolWrapper()`, `attachHelixVP()`. |
 | Verify VP | `POST /v1/vp/verify`, `verifyVP()`, `helixidMCPMiddleware()`. |
 | Enforce scope | `requireScope()`, `checkScope()`, `filterToolsByScope()`, MCP `requiredScopes`. |
 | Optional session | `POST /v1/vp/verify` with `session: true`, `GET /v1/sessions/public-key`, `HelixClient.fetchSessionPublicKey()`, `HelixClient.verifySessionToken()`. |
@@ -54,7 +54,7 @@ Surfaces used:
 | Step | Surfaces |
 | --- | --- |
 | Create delegated VC | `HelixClient.delegateAuthority()`, `POST /v1/agents/:did/delegate`. |
-| Issue VP from delegated VC | `HelixClient.signVP()`, `POST /v1/agents/:did/vp`, or (for local signing by other actors) `VPBuilder.sign()`, LangChain `HelixIDMiddleware()`, MCP `attachHelixVP()`. |
+| Issue VP from delegated VC | `HelixClient.signVP()`, `POST /v1/agents/:did/vp`, or (for local signing by other actors) `VPBuilder.sign()`, LangChain `HelixIDToolWrapper()`, MCP `attachHelixVP()`. |
 | Verify delegation chain | `verifyVP()`, `POST /v1/vp/verify`, `helixidMCPMiddleware()`. |
 | Enforce delegated scopes | `requireScope()`, `checkScope()`, `filterToolsByScope()`, MCP `requiredScopes`. |
 

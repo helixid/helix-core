@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createServer } from 'node:net';
 import { expect } from 'vitest';
-import type { SignedVC, SignedVP } from '@helixid/sdk-js';
+import type { SignedVP } from '@helixid/sdk-js';
 import { createTestPrisma } from './prisma.js';
 
 export const LIVE_HEDERA_TIMEOUT_MS = 240_000;
@@ -227,7 +227,7 @@ export async function onboardLiveAgent(
 export async function signLiveVP(
   api: LiveApi,
   holderDid: string,
-  options: { targetService: string; userDid?: string; grantVC?: SignedVC; vcId?: string },
+  options: { targetService: string; userDid?: string },
 ): Promise<SignedVP> {
   const res = await fetch(`${api.baseUrl}/v1/agents/${encodeURIComponent(holderDid)}/vp`, {
     method: 'POST',
@@ -235,8 +235,6 @@ export async function signLiveVP(
     body: JSON.stringify({
       targetService: options.targetService,
       ...(options.userDid !== undefined ? { userDid: options.userDid } : {}),
-      ...(options.grantVC !== undefined ? { grantVC: options.grantVC } : {}),
-      ...(options.vcId !== undefined ? { vcId: options.vcId } : {}),
     }),
   });
   expect(res.status).toBe(200);
