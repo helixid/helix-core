@@ -65,7 +65,7 @@ export interface IAgentService {
     requestId: string,
   ): Promise<OnboardWithCustodyResult>;
   signVP(
-    input: { did: string; targetService: string; userDid?: string; grantVC?: SignedVC; vcId?: string },
+    input: { did: string; targetService: string; userDid?: string },
     requestId: string,
   ): Promise<SignVPResult>;
   delegateAuthority(

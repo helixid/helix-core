@@ -207,14 +207,12 @@ export class AgentService implements IAgentService {
   /**
    * Signs a VP on behalf of a server-custody agent — the caller never has,
    * and never can have, the private key, so "present a VP" is an API call
-   * instead of a local VPBuilder.sign(). By default looks up the agent's
-   * one active HelixAgentCredential itself; pass `vcId` to pin a specific
-   * credential instead (e.g. when more than one active VC exists for the
-   * DID, which findActiveBySubjectDid rejects as ambiguous).
+   * instead of a local VPBuilder.sign().
    *
-   * The VP carries every active HelixAgentCredential the agent holds (its
-   * own, plus any delegated to it) -- the verifier takes the union of their
-   * scopes -- or just the one named by `vcId`.
+   * The credentials are picked from the DIDs alone, never named by the
+   * caller: the VP carries every active HelixAgentCredential the agent holds
+   * (its own, plus any delegated to it) -- the verifier takes the union of
+   * their scopes.
    *
    * `targetService` is the DID of the service the VP is for. With a
    * `userDid`, the VP is the agent acting on that user's behalf, and the
@@ -222,11 +220,10 @@ export class AgentService implements IAgentService {
    * DelegationGrantCredential that service issued to this agent for that
    * user goes into the VP (the verifier takes the union of their scopes).
    * No such grant means the user has not consented, and the caller should
-   * send them to the service's consent screen. A caller that already holds
-   * a grant may pass it as `grantVC` instead, bypassing the lookup.
+   * send them to the service's consent screen.
    */
   async signVP(
-    input: { did: string; targetService: string; userDid?: string; grantVC?: SignedVC; vcId?: string },
+    input: { did: string; targetService: string; userDid?: string },
     requestId: string,
   ): Promise<{ signedVP: SignedVP }> {
     if (typeof input.targetService !== 'string' || !input.targetService.startsWith('did:')) {
@@ -238,17 +235,13 @@ export class AgentService implements IAgentService {
       throw new AgentKeyNotFoundError(input.did);
     }
 
-    const agentVCs = (
-      input.vcId
-        ? [await this.vcService.findActiveByVcIdForSubject(input.vcId, input.did, 'HelixAgentCredential')]
-        : await this.vcService.listActiveBySubjectDid(input.did, 'HelixAgentCredential')
-    ).filter((vc): vc is Record<string, unknown> => vc !== null) as SignedVC[];
+    const agentVCs = (await this.vcService.listActiveBySubjectDid(input.did, 'HelixAgentCredential')) as SignedVC[];
     if (agentVCs.length === 0) {
       throw new AgentActiveCredentialNotFoundError(input.did);
     }
 
-    let grants: SignedVC[] = input.grantVC ? [input.grantVC] : [];
-    if (!input.grantVC && input.userDid) {
+    let grants: SignedVC[] = [];
+    if (input.userDid) {
       grants = await this.vcService.listActiveGrants({
         agentDid: input.did,
         serviceDid: input.targetService,
@@ -288,10 +281,11 @@ export class AgentService implements IAgentService {
    * agent self-custody was retired (see helix-sdk-js's delegation.ts and
    * helix-sdk-py's agent_delegation_demo.py for the prior state of that gap).
    *
-   * Mirrors signVP() exactly: same key lookup, same "which active credential"
-   * resolution (default to the one active HelixAgentCredential, or pin one
-   * via vcId when more than one exists -- e.g. this agent already holds a
-   * VC delegated to it, alongside its own onboarding VC).
+   * Same key lookup as signVP(). The credential delegated from must be an
+   * active HelixAgentCredential the agent holds per the DB: picked by
+   * resolveDelegationSourceVC(), or pinned via vcId when more than one is
+   * eligible (e.g. this agent already holds a VC delegated to it, alongside
+   * its own onboarding VC).
    */
   async delegateAuthority(
     input: { did: string; to: string; scopes: string[]; expiresIn: number; vcId?: string; revokeExisting?: boolean },

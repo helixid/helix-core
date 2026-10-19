@@ -38,7 +38,7 @@ Surfaces used:
 | --- | --- |
 | Enroll service | `HelixClient.createService()`, `POST /v1/services`. |
 | Issue grant | `HelixClient.issueServiceDelegationGrant()`, `POST /v1/service-delegation-grants`. |
-| Present | `HelixClient.signVP()` with `grantVC`, `POST /v1/agents/:did/vp`. |
+| Present | `HelixClient.signVP()` with `userDid` (the grant is looked up by agent, service and user), `POST /v1/agents/:did/vp`. |
 | Revoke | `HelixClient.revokeVC()`, `POST /v1/vcs/:vcId/revoke`. |
 
 ## 3. Delegation (agent → agent)
@@ -101,7 +101,7 @@ Surfaces used:
 Brief flow:
 
 1. Issuer renews an existing VC.
-2. The renewed VC is stored server-side alongside the agent's custodial key; `signVP()` picks the active one (or pin it with `vcId`).
+2. The renewed VC is stored server-side alongside the agent's custodial key; `signVP()` presents every active `HelixAgentCredential` the agent holds.
 3. Verifiers use the latest VC and status list as usual.
 
 Surfaces used:
@@ -110,7 +110,7 @@ Surfaces used:
 | --- | --- |
 | Renew VC | `POST /v1/vcs/:vcId/renew`, `HelixClient.renewVC()`. |
 | Find active VC | `GET /v1/vcs?subjectDid=...&status=active`, `HelixClient.listVCs()`. |
-| Present renewed VC | `POST /v1/agents/:did/vp`, `HelixClient.signVP()` (optional `vcId`). |
+| Present renewed VC | `POST /v1/agents/:did/vp`, `HelixClient.signVP()`. |
 
 ## 7. User DID Challenge Verification
 
