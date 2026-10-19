@@ -18,7 +18,7 @@ import { ServiceProviderService } from '../../../src/services/service-provider/s
 import { MockVCService } from '../../mocks/MockVCService.js';
 
 const MASTER_KEY = 'a'.repeat(64);
-const ENROLL = { name: 'orders', domain: 'orders.example', requiredScope: 'read:orders' };
+const ENROLL = { name: 'orders', domain: 'orders.example', requiredScopes: ['read:orders'] };
 
 describe('ServiceProviderService', () => {
   let didKeys: DidKeyRepository;
@@ -63,6 +63,33 @@ describe('ServiceProviderService', () => {
     expect(didService.createDID).toHaveBeenCalledWith(expect.any(String), 'service', [], 'req-1');
   });
 
+  it('enrolls with several scopes, split by the scope rule and de-duplicated', async () => {
+    const record = await service.enroll(
+      { ...ENROLL, requiredScopes: ['calendar.events,calendar.freebusy', ' https://www.googleapis.com/auth/gmail.readonly\tcalendar.events '] },
+      'r',
+    );
+    expect(record.requiredScopes).toEqual([
+      'calendar.events',
+      'calendar.freebusy',
+      'https://www.googleapis.com/auth/gmail.readonly',
+    ]);
+    expect((await services.findByDid(record.did))?.requiredScopes).toEqual(record.requiredScopes);
+  });
+
+  it('refuses to enroll without a scope', async () => {
+    await expect(service.enroll({ ...ENROLL, requiredScopes: [' , '] }, 'r')).rejects.toMatchObject({
+      code: 'VALIDATION_ERROR',
+    });
+  });
+
+  it('refuses a grant whose scopes contain whitespace', async () => {
+    const { did: serviceDid } = await service.enroll(ENROLL, 'r');
+    const agentDid = await onboardedAgent();
+    await expect(
+      service.issueDelegationGrant({ serviceDid, agentDid, userDid: 'did:web:u', scopes: ['read calendar'] }, 'r'),
+    ).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+  });
+
   it('refuses to enroll a name that is already taken', async () => {
     await service.enroll(ENROLL, 'r');
     await expect(service.enroll(ENROLL, 'r')).rejects.toMatchObject({ code: 'SERVICE_ALREADY_EXISTS' });
@@ -105,7 +132,7 @@ describe('ServiceProviderService', () => {
       ServiceRevokedError,
     );
 
-    await services.create({ id: 'svc:nokey', did: 'did:key:zNoKey', name: 'n', domain: 'd', requiredScope: 's', description: null, framework: null });
+    await services.create({ id: 'svc:nokey', did: 'did:key:zNoKey', name: 'n', domain: 'd', requiredScopes: ['s'], description: null, framework: null });
     await expect(service.issueDelegationGrant({ ...base, serviceDid: 'did:key:zNoKey' }, 'r')).rejects.toBeInstanceOf(
       ServiceKeyNotFoundError,
     );

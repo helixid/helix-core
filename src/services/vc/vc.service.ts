@@ -16,7 +16,7 @@ import {
   createStatusList,
   setBit,
   buildStatusListCredential,
-  SCOPE_PATTERN,
+  findScopeProblem,
   base58btcEncode,
   derivePublicKey,
   hashCanonicalPayload,
@@ -545,14 +545,9 @@ export class VCService implements IVCService {
         400,
       );
     }
-    for (const scope of params.privilegeScopes ?? []) {
-      if (!SCOPE_PATTERN.test(scope)) {
-        throw new HelixError(
-          ErrorCode.VC_INVALID_PRIVILEGE_SCOPE,
-          `Invalid scope format: ${scope}`,
-          400,
-        );
-      }
+    const scopeProblem = findScopeProblem(params.privilegeScopes ?? []);
+    if (scopeProblem) {
+      throw new HelixError(ErrorCode.VC_INVALID_PRIVILEGE_SCOPE, `Invalid scopes: ${scopeProblem}`, 400);
     }
 
     // 3. Claim status list index

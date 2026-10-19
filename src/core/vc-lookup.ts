@@ -28,7 +28,7 @@ export function normalizeScopes(scopes: readonly string[]): string[] {
 /**
  * One string per scope set, independent of order and repeats, so "the same
  * scopes" is an equality test the database can index. Space-joined because
- * SCOPE_PATTERN admits no whitespace.
+ * a scope never contains whitespace (see findScopeProblem).
  */
 export function scopeKey(scopes: readonly string[]): string {
   return normalizeScopes(scopes).join(' ');

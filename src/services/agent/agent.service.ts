@@ -16,6 +16,8 @@ import {
   EnrollmentTokenExpiredError,
   EnrollmentTokenNotFoundError,
   base58btcDecode,
+  findScopeProblem,
+  parseScopes,
   signBytes,
   verifySignature,
   VPBuilder,
@@ -131,6 +133,15 @@ export class AgentService implements IAgentService {
         httpStatus: 400,
       });
     }
+    // Checked here, not only when the credential is issued, so a bad scope is
+    // refused when the token is minted rather than at onboarding.
+    const requestedScopes = Array.isArray(input.requestedScopes) ? parseScopes(input.requestedScopes) : [];
+    const scopeProblem = Array.isArray(input.requestedScopes)
+      ? findScopeProblem(requestedScopes)
+      : 'requestedScopes must be an array';
+    if (scopeProblem) {
+      throw new HelixError(ErrorCode.VC_INVALID_PRIVILEGE_SCOPE, `Invalid scopes: ${scopeProblem}`, 400);
+    }
     const token = `enroll:${randomBytes(12).toString('hex')}`;
     const tokenHash = hashToken(token);
     let expiresAt: Date | undefined;
@@ -142,7 +153,7 @@ export class AgentService implements IAgentService {
     await this.repository.createEnrollmentToken({
       tokenHash,
       agentName: input.agentName,
-      requestedScopes: JSON.stringify(input.requestedScopes),
+      requestedScopes: JSON.stringify(requestedScopes),
       requestedDomains: JSON.stringify(input.requestedDomains ?? []),
       maxDelegationDepth: input.maxDelegationDepth ?? 0,
       expiresAt: expiresAt ?? null,

@@ -22,7 +22,9 @@ import {
   ServiceKeyNotFoundError,
   ServiceRevokedError,
   issueGrant,
+  findScopeProblem,
   normalizeScopes,
+  parseScopes,
   AuditEvents,
   type SignedVC,
 } from '../../core/index.js';
@@ -38,7 +40,11 @@ export interface EnrollServiceInput {
   name: string;
   /** Host the service is reachable at, e.g. api.sp.example. */
   domain: string;
-  requiredScope: string;
+  /**
+   * Scopes an agent may present to this service; holding any one of them is
+   * enough. Each entry is split by the scope rule, so ['a,b', 'c'] is a, b, c.
+   */
+  requiredScopes: string[];
   description?: string;
   /** Informational label ('express', 'flask', ...). */
   framework?: string;
@@ -95,9 +101,13 @@ export class ServiceProviderService implements IServiceProviderService {
   async enroll(input: EnrollServiceInput, requestId: string): Promise<ServiceRecord> {
     const name = input.name?.trim();
     const domain = input.domain?.trim();
-    const requiredScope = input.requiredScope?.trim();
-    if (!name || !domain || !requiredScope) {
-      throw new HelixError(ErrorCode.VALIDATION_ERROR, 'name, domain and requiredScope are required', 400);
+    const requiredScopes = Array.isArray(input.requiredScopes) ? parseScopes(input.requiredScopes) : [];
+    if (!name || !domain || requiredScopes.length === 0) {
+      throw new HelixError(ErrorCode.VALIDATION_ERROR, 'name, domain and requiredScopes are required', 400);
+    }
+    const scopeProblem = findScopeProblem(requiredScopes);
+    if (scopeProblem) {
+      throw new HelixError(ErrorCode.VALIDATION_ERROR, `requiredScopes: ${scopeProblem}`, 400);
     }
     if (await this.serviceRepository.findByName(name)) {
       throw new HelixError(ErrorCode.SERVICE_ALREADY_EXISTS, `Service already enrolled: ${name}`, 409);
@@ -112,7 +122,7 @@ export class ServiceProviderService implements IServiceProviderService {
       did: created.did,
       name,
       domain,
-      requiredScope,
+      requiredScopes,
       description: input.description?.trim() || null,
       framework: input.framework?.trim() || null,
     });
@@ -141,6 +151,10 @@ export class ServiceProviderService implements IServiceProviderService {
     const durability = input.durability ?? 'standing';
     if (!Array.isArray(input.scopes) || input.scopes.length === 0) {
       throw new HelixError(ErrorCode.VALIDATION_ERROR, 'scopes must be a non-empty array', 400);
+    }
+    const scopeProblem = findScopeProblem(input.scopes);
+    if (scopeProblem) {
+      throw new HelixError(ErrorCode.VALIDATION_ERROR, `scopes: ${scopeProblem}`, 400);
     }
     if (durability !== 'standing' && durability !== 'session') {
       throw new HelixError(ErrorCode.VALIDATION_ERROR, "durability must be 'standing' or 'session'", 400);

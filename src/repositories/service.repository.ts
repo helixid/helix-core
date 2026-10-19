@@ -9,7 +9,8 @@ export interface ServiceRecord {
   did: string;
   name: string;
   domain: string;
-  requiredScope: string;
+  /** Any one of these is enough. Stored space-joined in the `required_scope` column. */
+  requiredScopes: string[];
   description: string | null;
   framework: string | null;
   createdAt: Date;
@@ -22,7 +23,7 @@ export interface ServiceCreateData {
   did: string;
   name: string;
   domain: string;
-  requiredScope: string;
+  requiredScopes: string[];
   description: string | null;
   framework: string | null;
 }

@@ -15,7 +15,12 @@ import {
   type StorageDriverDeps,
   type StorageDriverKind,
 } from '../../storage/driver-registry.js';
+import { parseScopes } from '../../core/schemas/privilegeScopes.js';
 import type { ServiceCreateData, ServiceRecord } from '../service.repository.js';
+
+// One text column holds the scope list, space-joined: a scope never contains
+// whitespace, and a row written before lists existed reads back as one scope.
+const joinScopes = (scopes: readonly string[]): string => scopes.join(' ');
 
 export interface ServiceStorageDriver {
   create(data: ServiceCreateData): Promise<ServiceRecord>;
@@ -26,15 +31,23 @@ export interface ServiceStorageDriver {
   revoke(id: string): Promise<void>;
 }
 
+type PrismaServiceRow = Omit<ServiceRecord, 'requiredScopes'> & { requiredScope: string };
+
 type PrismaLike = PrismaClient & {
   service: {
-    create(args: unknown): Promise<ServiceRecord>;
-    findUnique(args: unknown): Promise<ServiceRecord | null>;
-    findFirst(args: unknown): Promise<ServiceRecord | null>;
-    findMany(args: unknown): Promise<ServiceRecord[]>;
+    create(args: unknown): Promise<PrismaServiceRow>;
+    findUnique(args: unknown): Promise<PrismaServiceRow | null>;
+    findFirst(args: unknown): Promise<PrismaServiceRow | null>;
+    findMany(args: unknown): Promise<PrismaServiceRow[]>;
     updateMany(args: unknown): Promise<unknown>;
   };
 };
+
+function fromPrismaRow(row: PrismaServiceRow | null): ServiceRecord | null {
+  if (!row) return null;
+  const { requiredScope, ...rest } = row;
+  return { ...rest, requiredScopes: parseScopes(requiredScope) };
+}
 
 export class PrismaServiceStorageDriver implements ServiceStorageDriver {
   private readonly db: PrismaLike;
@@ -44,23 +57,26 @@ export class PrismaServiceStorageDriver implements ServiceStorageDriver {
   }
 
   async create(data: ServiceCreateData): Promise<ServiceRecord> {
-    return this.db.service.create({ data });
+    const { requiredScopes, ...rest } = data;
+    const row = await this.db.service.create({ data: { ...rest, requiredScope: joinScopes(requiredScopes) } });
+    return fromPrismaRow(row)!;
   }
 
   async findById(id: string): Promise<ServiceRecord | null> {
-    return this.db.service.findUnique({ where: { id } });
+    return fromPrismaRow(await this.db.service.findUnique({ where: { id } }));
   }
 
   async findByDid(did: string): Promise<ServiceRecord | null> {
-    return this.db.service.findUnique({ where: { did } });
+    return fromPrismaRow(await this.db.service.findUnique({ where: { did } }));
   }
 
   async findByName(name: string): Promise<ServiceRecord | null> {
-    return this.db.service.findFirst({ where: { name } });
+    return fromPrismaRow(await this.db.service.findFirst({ where: { name } }));
   }
 
   async list(): Promise<ServiceRecord[]> {
-    return this.db.service.findMany({ orderBy: { createdAt: 'desc' } });
+    const rows = await this.db.service.findMany({ orderBy: { createdAt: 'desc' } });
+    return rows.map((row) => fromPrismaRow(row)!);
   }
 
   async revoke(id: string): Promise<void> {
@@ -87,7 +103,7 @@ function fromSqliteRow(row: SqliteServiceRow | undefined): ServiceRecord | null 
     did: row.did,
     name: row.name,
     domain: row.domain,
-    requiredScope: row.required_scope,
+    requiredScopes: parseScopes(row.required_scope),
     description: row.description,
     framework: row.framework,
     createdAt: new Date(row.created_at),
@@ -108,7 +124,7 @@ export class SqliteServiceStorageDriver implements ServiceStorageDriver {
         ${sqliteLiteral(data.did)},
         ${sqliteLiteral(data.name)},
         ${sqliteLiteral(data.domain)},
-        ${sqliteLiteral(data.requiredScope)},
+        ${sqliteLiteral(joinScopes(data.requiredScopes))},
         ${sqliteLiteral(data.description)},
         ${sqliteLiteral(data.framework)},
         ${sqliteLiteral(createdAt)},
@@ -151,7 +167,7 @@ export class InMemoryServiceStorageDriver implements ServiceStorageDriver {
   private readonly rows = new Map<string, ServiceRecord>();
 
   async create(data: ServiceCreateData): Promise<ServiceRecord> {
-    const record: ServiceRecord = { ...data, createdAt: new Date(), revokedAt: null };
+    const record: ServiceRecord = { ...data, requiredScopes: [...data.requiredScopes], createdAt: new Date(), revokedAt: null };
     this.rows.set(record.id, record);
     return record;
   }
