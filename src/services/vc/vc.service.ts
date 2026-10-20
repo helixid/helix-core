@@ -31,7 +31,7 @@ import {
 import * as crypto from 'node:crypto';
 import { VcRepository, type VCRecord } from '../../repositories/vc.repository.js';
 import type { IDIDService } from '../did/did.service.js';
-import type { ApiAuditLogger } from '../../audit/index.js';
+import type { IAuditLogger } from '../../core/index.js';
 import type { ICache } from '../../cache/ICache.js';
 import { NoopCache } from '../../cache/NoopCache.js';
 import { extractEd25519PublicKeyHexFromDIDDocument } from '../did/publicKey.js';
@@ -202,7 +202,7 @@ export class VCService implements IVCService {
   constructor(
     private readonly vcRepo: VcRepository,
     private readonly didService: IDIDService,
-    private readonly audit: ApiAuditLogger,
+    private readonly audit: IAuditLogger,
     private readonly signingKeyHex: string,
     private readonly issuerDid: string,
     private readonly apiBaseUrl: string,
