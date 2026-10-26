@@ -57,6 +57,10 @@ export async function resetLiveTestDatabase(): Promise<void> {
   assertTestDatabaseUrl(process.env['DATABASE_URL']);
   const prisma = createTestPrisma();
   await prisma.auditLog.deleteMany();
+  // services and agents came with the service-provider revamp; a service name
+  // is unique per server, so a stale 'amazon' would 409 the next file.
+  await prisma.service.deleteMany();
+  await prisma.agent.deleteMany();
   await prisma.vc.deleteMany();
   await prisma.statusListEntry.deleteMany();
   await prisma.challenge.deleteMany();
