@@ -1,8 +1,9 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import supertest from 'supertest';
-import { HelixClient, generateKeyPair, issueGrant, publicKeyToMultibase } from '@helixid/sdk-js';
 import {
   LIVE_HEDERA_TIMEOUT_MS,
+  enrollLiveService,
+  issueLiveGrant,
   onboardLiveAgent,
   resetLiveTestDatabase,
   signLiveVP,
@@ -12,12 +13,11 @@ import {
 
 // Consent-grant flow (§2a) — a user's consent for an agent to act on their
 // behalf, within a service provider's context. Modeled the way a real SP
-// integration would: the SP holds its own signing key (never the hosted
-// issuer's, never the agent's) and issues the grant via prepare/finalize, so
-// its private key never leaves this process either. The SP's DID is a
-// locally-resolvable did:key here rather than one registered through this
-// API — grants can come from any issuer whose key the API can resolve, and
-// did:key is the simplest real one that needs no separate registration step.
+// integration works since the service-provider revamp: the service is
+// enrolled on this API, which mints its DID and holds its key, and the
+// service issues the grant through POST /v1/service-delegation-grants, so
+// the platform both signs and holds it. signVP then looks the grant up by
+// (agent, service, user).
 describe('Consent Grant Live Integration', () => {
   let api: LiveApi;
 
@@ -31,7 +31,6 @@ describe('Consent Grant Live Integration', () => {
   });
 
   it('narrows an agent VP to the grant-intersected scopes a user actually consented to', async () => {
-    const client = new HelixClient(api.baseUrl, { adminApiKey: api.adminApiKey });
     const http = supertest(api.baseUrl);
     const agent = await onboardLiveAgent(api, {
       agentName: 'Live Consent Grant Agent',
@@ -39,38 +38,13 @@ describe('Consent Grant Live Integration', () => {
       requestedDomains: ['https://live-consent.agent.example.com'],
     });
 
-    // The SP's own identity — issues the grant with its own key.
-    const sp = generateKeyPair();
-    const spDid = `did:key:${publicKeyToMultibase(sp.publicKey)}`;
+    // The SP's own identity — the grant's issuer.
+    const spDid = (await enrollLiveService(api, 'live-consent-sp')).did;
     const userDid = 'did:key:zLiveConsentUser';
-
-    // Hosted on this same API instance via its public status-list endpoint
-    // — a real HTTP-fetchable status list, exercising the real revocation
-    // plumbing rather than an in-memory stand-in.
-    const statusList = await client.createStatusList({ length: 64 });
 
     // The user consented to read-only access — narrower than the agent's
     // full onboarded privilege scopes (read+write).
-    const { grantVC } = await issueGrant(
-      {
-        agentDid: agent.did,
-        userDid,
-        scopes: ['read:orders'],
-        durability: 'standing',
-        statusList,
-        statusListCredentialUrl: statusList.id,
-      },
-      { did: spDid, privateKeyHex: sp.privateKey },
-      client,
-    );
-
-    // signVP looks the grant up by (agent, service, user), so it has to be
-    // held by the platform first.
-    const registerRes = await http
-      .post('/v1/vcs/register')
-      .set('x-admin-api-key', api.adminApiKey)
-      .send({ vc: grantVC });
-    expect(registerRes.statusCode).toBe(201);
+    await issueLiveGrant(api, { serviceDid: spDid, agentDid: agent.did, userDid, scopes: ['read:orders'] });
 
     const signedVP = await signLiveVP(api, agent.did, { targetService: spDid, userDid });
 
@@ -86,7 +60,6 @@ describe('Consent Grant Live Integration', () => {
   }, LIVE_HEDERA_TIMEOUT_MS);
 
   it('refuses to sign a VP for a user the agent holds no grant for', async () => {
-    const client = new HelixClient(api.baseUrl, { adminApiKey: api.adminApiKey });
     const http = supertest(api.baseUrl);
     const agent = await onboardLiveAgent(api, {
       agentName: 'Live Consent Mismatch Agent',
@@ -94,24 +67,13 @@ describe('Consent Grant Live Integration', () => {
       requestedDomains: ['https://live-consent-mismatch.agent.example.com'],
     });
 
-    const sp = generateKeyPair();
-    const spDid = `did:key:${publicKeyToMultibase(sp.publicKey)}`;
-    const statusList = await client.createStatusList({ length: 64 });
-
-    const { grantVC } = await issueGrant(
-      {
-        agentDid: agent.did,
-        userDid: 'did:key:zGrantedForThisUser',
-        scopes: ['read:orders'],
-        durability: 'standing',
-        statusList,
-        statusListCredentialUrl: statusList.id,
-      },
-      { did: spDid, privateKeyHex: sp.privateKey },
-      client,
-    );
-
-    await http.post('/v1/vcs/register').set('x-admin-api-key', api.adminApiKey).send({ vc: grantVC }).expect(201);
+    const spDid = (await enrollLiveService(api, 'live-consent-mismatch-sp')).did;
+    await issueLiveGrant(api, {
+      serviceDid: spDid,
+      agentDid: agent.did,
+      userDid: 'did:key:zGrantedForThisUser',
+      scopes: ['read:orders'],
+    });
 
     // Asked to act for a *different* user than the grant covers: there is
     // no grant to look up, so no VP is signed at all.

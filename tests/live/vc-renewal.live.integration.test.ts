@@ -5,6 +5,7 @@ import {
   LIVE_HEDERA_TIMEOUT_MS,
   onboardLiveAgent,
   resetLiveTestDatabase,
+  enrollLiveService,
   signLiveVP,
   startLiveApi,
   type LiveApi,
@@ -49,7 +50,8 @@ describe('VC Renewal Live Integration', () => {
     // The old VC stays active with its original (wider) scopes — renewal
     // doesn't revoke it, it's a separate credential lineage. The VP carries
     // both, and the verifier takes the union of their scopes.
-    const signedVP = await signLiveVP(api, agent.did, { targetService: 'amazon' });
+    const service = await enrollLiveService(api);
+    const signedVP = await signLiveVP(api, agent.did, { targetService: service.did });
     const credentialIds = signedVP.verifiableCredential.map((vc) => (vc as { id: string }).id);
     expect(credentialIds).toEqual(expect.arrayContaining([agent.vcId, renewed.vcId]));
     const verifyRes = await http.post('/v1/vp/verify').send({ signedVP });

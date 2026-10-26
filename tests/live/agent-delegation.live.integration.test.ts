@@ -5,6 +5,7 @@ import {
   LIVE_HEDERA_TIMEOUT_MS,
   onboardLiveAgent,
   resetLiveTestDatabase,
+  enrollLiveService,
   signLiveVP,
   startLiveApi,
   type LiveAgent,
@@ -61,15 +62,22 @@ describe('Agent Delegation Live Integration', () => {
     });
 
     // The child now holds two active credentials (its own onboarding VC and
-    // the delegated one), so it pins the delegated one explicitly.
-    const signedVP = await signLiveVP(api, child.did, { targetService: 'amazon' });
+    // the delegated one); the VP carries both, and the verifier takes the
+    // union of their scopes.
+    const service = await enrollLiveService(api);
+    const signedVP = await signLiveVP(api, child.did, { targetService: service.did });
     const verifyRes = await supertest(api.baseUrl).post('/v1/vp/verify').send({ signedVP });
     expect(verifyRes.statusCode).toBe(200);
-    expect(verifyRes.body).toMatchObject({ valid: true, agentDid: child.did, privilegeScopes: ['read:orders'] });
-    expect(verifyRes.body.delegationChain.map((link: { subject: string }) => link.subject)).toEqual([
-      parent.did,
-      child.did,
-    ]);
+    expect(verifyRes.body).toMatchObject({
+      valid: true,
+      agentDid: child.did,
+      privilegeScopes: expect.arrayContaining(['read:orders']),
+    });
+    // The chain lists every credential in the VP — the child's own, the
+    // parent's own, then the delegated one — so the delegated link is last.
+    const chain = verifyRes.body.delegationChain as { issuer: string; subject: string; delegationDepth: number }[];
+    expect(chain.map((link) => link.subject)).toEqual(expect.arrayContaining([parent.did, child.did]));
+    expect(chain.at(-1)).toMatchObject({ issuer: parent.did, subject: child.did, delegationDepth: 1 });
   }, LIVE_HEDERA_TIMEOUT_MS);
 
   it("rejects delegation past the parent VC's maxDelegationDepth", async () => {

@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createServer } from 'node:net';
 import { expect } from 'vitest';
-import type { SignedVP } from '@helixid/sdk-js';
+import type { SignedVC, SignedVP } from '@helixid/sdk-js';
 import { createTestPrisma } from './prisma.js';
 
 export const LIVE_HEDERA_TIMEOUT_MS = 240_000;
@@ -240,6 +240,46 @@ export async function signLiveVP(
   expect(res.status).toBe(200);
   const { signedVP } = (await res.json()) as { signedVP: SignedVP };
   return signedVP;
+}
+
+/**
+ * Enrolls a service (POST /v1/services) and returns its DID. A VP names its
+ * targetService by DID, and the platform mints and holds the service's key,
+ * so a live test registers a real service rather than naming one. Names are
+ * unique per server, so a file with several tests enrolls once in beforeAll.
+ */
+export async function enrollLiveService(api: LiveApi, name = 'amazon'): Promise<{ did: string; name: string }> {
+  const res = await fetch(`${api.baseUrl}/v1/services`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'x-admin-api-key': api.adminApiKey },
+    body: JSON.stringify({
+      name,
+      domain: `${name}.example.com`,
+      requiredScopes: ['read:orders', 'write:orders'],
+    }),
+  });
+  expect(res.status).toBe(201);
+  const record = (await res.json()) as { did: string; name: string };
+  return { did: record.did, name: record.name };
+}
+
+/**
+ * A user's consent for an agent, issued by the service through
+ * POST /v1/service-delegation-grants. signVP with a userDid refuses without
+ * one, so any test that signs on a user's behalf issues it first.
+ */
+export async function issueLiveGrant(
+  api: LiveApi,
+  input: { serviceDid: string; agentDid: string; userDid: string; scopes: string[] },
+): Promise<SignedVC> {
+  const res = await fetch(`${api.baseUrl}/v1/service-delegation-grants`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'x-admin-api-key': api.adminApiKey },
+    body: JSON.stringify({ ...input, durability: 'standing' }),
+  });
+  expect(res.status).toBe(201);
+  const { grantVC } = (await res.json()) as { grantVC: SignedVC };
+  return grantVC;
 }
 
 async function getAvailablePort(): Promise<number> {

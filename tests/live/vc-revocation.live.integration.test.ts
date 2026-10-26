@@ -5,6 +5,8 @@ import {
   LIVE_HEDERA_TIMEOUT_MS,
   onboardLiveAgent,
   resetLiveTestDatabase,
+  enrollLiveService,
+  issueLiveGrant,
   signLiveVP,
   startLiveApi,
   type LiveApi,
@@ -31,10 +33,10 @@ describe('VC Revocation Live Integration', () => {
       requestedDomains: ['https://live-revocation.agent.example.com'],
     });
 
-    const signedVP = await signLiveVP(api, agent.did, {
-      targetService: 'amazon',
-      userDid: 'did:hedera:testnet:live-user-placeholder',
-    });
+    const service = await enrollLiveService(api);
+    const userDid = 'did:hedera:testnet:live-user-placeholder';
+    await issueLiveGrant(api, { serviceDid: service.did, agentDid: agent.did, userDid, scopes: ['read:orders'] });
+    const signedVP = await signLiveVP(api, agent.did, { targetService: service.did, userDid });
 
     const unauthenticatedRevoke = await http.post(`/v1/vcs/${agent.vcId}/revoke`).send({});
     expect(unauthenticatedRevoke.statusCode).toBe(403);

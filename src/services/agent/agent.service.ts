@@ -160,13 +160,14 @@ export class AgentService implements IAgentService {
       maxDelegationDepth: input.maxDelegationDepth ?? 0,
       expiresAt: expiresAt ?? null,
     });
-    // this.auditLogger.log(AuditEvents.ENROLLMENT_TOKEN_GENERATED, {
-    //   requestId,
-    //   tokenIdHash: tokenHash,
-    //   agentName: input.agentName,
-    //   requestedScopes: input.requestedScopes,
-    //   expiresAt: expiresAt.toISOString(),
-    // });
+    this.auditLogger.log(AuditEvents.ENROLLMENT_TOKEN_GENERATED, {
+      requestId,
+      tokenIdHash: tokenHash,
+      agentName: input.agentName,
+      requestedScopes: input.requestedScopes,
+      // null: the token, and the agent it onboards, never expire.
+      expiresAt: expiresAt ? expiresAt.toISOString() : null,
+    });
     return { token, ...(expiresAt ? { expiresAt: expiresAt.toISOString() } : {}) };
   }
 
@@ -539,6 +540,19 @@ export class AgentService implements IAgentService {
       pendingDidCreatePayloadHex: didCreateRequest.signingPayloadHex,
       expiresAt,
       enrollmentTokenId: tokenRecord.id,
+    });
+
+    this.auditLogger.log(AuditEvents.ENROLLMENT_TOKEN_CONSUMED, {
+      requestId,
+      tokenIdHash: tokenHash,
+      timestamp: new Date().toISOString(),
+    });
+    this.auditLogger.log(AuditEvents.CHALLENGE_ISSUED, {
+      requestId,
+      challengeId,
+      did: '',
+      purpose: 'agent_onboarding',
+      expiresAt: expiresAt.toISOString(),
     });
 
     return {

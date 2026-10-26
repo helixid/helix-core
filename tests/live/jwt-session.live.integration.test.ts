@@ -5,6 +5,8 @@ import {
   LIVE_HEDERA_TIMEOUT_MS,
   onboardLiveAgent,
   resetLiveTestDatabase,
+  enrollLiveService,
+  issueLiveGrant,
   signLiveVP,
   startLiveApi,
   type LiveApi,
@@ -30,8 +32,15 @@ describe('JWT Session Live Integration', () => {
       requestedDomains: ['https://live-jwt-session.agent.example.com'],
     });
 
+    const service = await enrollLiveService(api);
+    await issueLiveGrant(api, {
+      serviceDid: service.did,
+      agentDid: agent.did,
+      userDid: 'did:hedera:testnet:live-book-buyer',
+      scopes: ['read:orders', 'write:orders'],
+    });
     const signedVP = await signLiveVP(api, agent.did, {
-      targetService: 'amazon',
+      targetService: service.did,
       userDid: 'did:hedera:testnet:live-book-buyer',
     });
 
@@ -41,7 +50,7 @@ describe('JWT Session Live Integration', () => {
       valid: true,
       agentDid: agent.did,
       userDid: 'did:hedera:testnet:live-book-buyer',
-      targetService: 'amazon',
+      targetService: service.did,
     });
     expect(verifyRes.body.session?.token).toMatch(/^[^.]+\.[^.]+\.[^.]+$/);
     expect(verifyRes.body.session?.publicKeyEndpoint).toBe('/v1/sessions/public-key');
@@ -68,7 +77,7 @@ describe('JWT Session Live Integration', () => {
       const payload = verifyJWT(sessionToken, publicKeyHex);
       expect(payload.sub).toBe(agent.did);
       expect(payload.userDid).toBe('did:hedera:testnet:live-book-buyer');
-      expect(payload.targetService).toBe('amazon');
+      expect(payload.targetService).toBe(service.did);
       expect(payload.scopes).toEqual(expect.arrayContaining(['read:orders', 'write:orders']));
       expect(payload.vpId).toBe(signedVP.id);
       expect(action).toMatch(/book/);
