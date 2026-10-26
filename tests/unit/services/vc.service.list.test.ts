@@ -61,7 +61,15 @@ describe('VCService.listVCs', () => {
 
     await service.listVCs({ subjectDid: 'did:1' });
 
-    expect(repository.findMany).toHaveBeenCalledWith({ subjectDid: 'did:1' });
+    expect(repository.findMany).toHaveBeenCalledWith({ subjectDid: 'did:1', issuerDid: undefined });
+  });
+
+  it('passes issuerDid through to the repository, so an agent\'s delegations can be listed', async () => {
+    repository.findMany.mockResolvedValue([]);
+
+    await service.listVCs({ issuerDid: 'did:agent' });
+
+    expect(repository.findMany).toHaveBeenCalledWith({ subjectDid: undefined, issuerDid: 'did:agent' });
   });
 
   it('derives revoked and expired statuses and filters by status', async () => {

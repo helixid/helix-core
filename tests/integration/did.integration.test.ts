@@ -24,6 +24,9 @@ import didRoutes from '../../src/routes/did/index.js';
 import { createTestPrisma } from '../utils/prisma.js';
 import { registerErrorSchemas } from '../utils/registerErrorSchemas.js';
 
+const ADMIN_KEY = 'integration-test-admin-key';
+const ADMIN = { 'x-admin-api-key': ADMIN_KEY };
+
 describe('DID API Integration', () => {
   let app: any;
   let prisma: PrismaClient;
@@ -39,7 +42,7 @@ describe('DID API Integration', () => {
     app = Fastify({ logger: false });
     registerErrorSchemas(app);
     app.setErrorHandler(errorHandler);
-    await app.register(didRoutes, { didService });
+    await app.register(didRoutes, { didService, adminApiKey: ADMIN_KEY });
     await app.ready();
   });
 
@@ -63,6 +66,7 @@ describe('DID API Integration', () => {
       const response = await app.inject({
         method: 'POST',
         url: '/v1/dids',
+        headers: ADMIN,
         payload: {
           publicKeyHex: publicKey,
           subjectType: 'agent',
@@ -80,8 +84,8 @@ describe('DID API Integration', () => {
       const { publicKey } = generateKeyPair();
       const payload = { publicKeyHex: publicKey, subjectType: 'agent' };
 
-      await app.inject({ method: 'POST', url: '/v1/dids', payload });
-      const response = await app.inject({ method: 'POST', url: '/v1/dids', payload });
+      await app.inject({ method: 'POST', url: '/v1/dids', headers: ADMIN, payload });
+      const response = await app.inject({ method: 'POST', url: '/v1/dids', headers: ADMIN, payload });
 
       expect(response.statusCode).toBe(409);
       expect(JSON.parse(response.body).error.code).toBe(ErrorCode.DID_ALREADY_EXISTS);
@@ -91,6 +95,7 @@ describe('DID API Integration', () => {
       const response = await app.inject({
         method: 'POST',
         url: '/v1/dids',
+        headers: ADMIN,
         payload: { publicKeyHex: 'too-short', subjectType: 'agent' },
       });
 
@@ -104,6 +109,7 @@ describe('DID API Integration', () => {
       const createRes = await app.inject({
         method: 'POST',
         url: '/v1/dids',
+        headers: ADMIN,
         payload: { publicKeyHex: publicKey, subjectType: 'user' },
       });
       const { id: did } = JSON.parse(createRes.body);
@@ -132,6 +138,7 @@ describe('DID API Integration', () => {
       const createRes = await app.inject({
         method: 'POST',
         url: '/v1/dids',
+        headers: ADMIN,
         payload: { publicKeyHex: publicKey, subjectType: 'agent' },
       });
       const { id: did } = JSON.parse(createRes.body);
@@ -139,6 +146,7 @@ describe('DID API Integration', () => {
       const response = await app.inject({
         method: 'POST',
         url: `/v1/dids/${did}/services`,
+        headers: ADMIN,
         payload: {
           id: '#service-1',
           type: 'LinkedDomains',

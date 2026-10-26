@@ -153,7 +153,7 @@ describe('PrismaAgentRecordStorageDriver', () => {
       const sql = sqlOf(prisma.calls[0]);
       expect(sql).toContain(`WHERE "visibility" = 'public' AND "publishedAt" IS NOT NULL ORDER BY`);
       expect(sql).toContain(
-        `CASE WHEN ("revokedAt" IS NULL AND "credentialExpiresAt" IS NOT NULL AND "credentialExpiresAt" > $1) THEN 'active' ELSE 'revoked' END AS "status"`,
+        `CASE WHEN ("revokedAt" IS NULL AND "credentialVcId" IS NOT NULL AND ("credentialExpiresAt" IS NULL OR "credentialExpiresAt" > $1)) THEN 'active' ELSE 'revoked' END AS "status"`,
       );
       expect(sql).toContain('ORDER BY "publishedAt" DESC, "did" ASC LIMIT $2');
       expect(prisma.calls[0]?.params).toEqual([NOW, 25]);
@@ -161,8 +161,8 @@ describe('PrismaAgentRecordStorageDriver', () => {
     });
 
     it.each([
-      ['active', `AND ("revokedAt" IS NULL AND "credentialExpiresAt" IS NOT NULL AND "credentialExpiresAt" > $1)`],
-      ['revoked', `AND NOT ("revokedAt" IS NULL AND "credentialExpiresAt" IS NOT NULL AND "credentialExpiresAt" > $1)`],
+      ['active', `AND ("revokedAt" IS NULL AND "credentialVcId" IS NOT NULL AND ("credentialExpiresAt" IS NULL OR "credentialExpiresAt" > $1))`],
+      ['revoked', `AND NOT ("revokedAt" IS NULL AND "credentialVcId" IS NOT NULL AND ("credentialExpiresAt" IS NULL OR "credentialExpiresAt" > $1))`],
     ] as const)('filters %s agents in the WHERE clause', async (status, predicate) => {
       const { prisma, driver } = setup();
 

@@ -157,11 +157,13 @@ describe('agent integration', () => {
       return { app, agentKeyRepository, vcService, encrypted };
     }
 
-    it('delegates a scope from an onboarded agent to another DID, admin-key gated', async () => {
+    it('delegates a scope from an onboarded agent to another registered agent, admin-key gated', async () => {
       const delegatorDid = 'did:hedera:testnet:delegator-1';
       const subAgentDid = 'did:key:z6MkSubAgentPlaceholder';
       const { app, agentKeyRepository, vcService, encrypted } = makeDelegationApp(delegatorDid);
       await agentKeyRepository.create({ did: delegatorDid, subjectType: 'agent', ...encrypted });
+      // The delegatee must be registered too.
+      await agentKeyRepository.create({ did: subAgentDid, subjectType: 'agent', ...encrypted });
       vcService.setActiveVC({
         id: 'vc:test:delegator',
         type: ['VerifiableCredential', 'HelixAgentCredential'],
@@ -181,6 +183,29 @@ describe('agent integration', () => {
       expect(body.delegatedVC.credentialSubject.privilegeScopes).toEqual(['read:orders']);
       expect(body.delegatedVC.credentialSubject.delegationDepth).toBe(1);
       expect(body.delegatedVC.proof).toBeTruthy();
+      // Its own revocation entry, so revoking this delegation reaches verifiers.
+      expect(body.delegatedVC.credentialStatus).toMatchObject({ statusPurpose: 'revocation' });
+    });
+
+    it('refuses to delegate to a DID that is not a registered agent', async () => {
+      const delegatorDid = 'did:hedera:testnet:delegator-5';
+      const { app, agentKeyRepository, vcService, encrypted } = makeDelegationApp(delegatorDid);
+      await agentKeyRepository.create({ did: delegatorDid, subjectType: 'agent', ...encrypted });
+      vcService.setActiveVC({
+        id: 'vc:test:delegator',
+        type: ['VerifiableCredential', 'HelixAgentCredential'],
+        credentialSubject: { id: delegatorDid, privilegeScopes: ['read:orders'], maxDelegationDepth: 1 },
+      });
+
+      const res = await app.inject({
+        method: 'POST',
+        url: `/v1/agents/${encodeURIComponent(delegatorDid)}/delegate`,
+        headers: { 'x-admin-api-key': TEST_ADMIN_KEY },
+        payload: { to: 'did:key:z6MkNeverRegistered', scopes: ['read:orders'], expiresIn: 3600 },
+      });
+
+      expect(res.statusCode).toBe(404);
+      expect(res.json().error.code).toBe('DELEGATEE_NOT_AN_AGENT');
     });
 
     it('rejects delegating without the admin key', async () => {
@@ -232,6 +257,7 @@ describe('agent integration', () => {
       const delegatorDid = 'did:hedera:testnet:delegator-4';
       const { app, agentKeyRepository, vcService, encrypted } = makeDelegationApp(delegatorDid);
       await agentKeyRepository.create({ did: delegatorDid, subjectType: 'agent', ...encrypted });
+      await agentKeyRepository.create({ did: 'did:key:z6MkSubAgentPlaceholder', subjectType: 'agent', ...encrypted });
       vcService.setActiveVC({
         id: 'vc:test:delegator-4',
         type: ['VerifiableCredential', 'HelixAgentCredential'],

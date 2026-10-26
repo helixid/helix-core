@@ -5,6 +5,7 @@ import {
   AgentKeyNotFoundError,
   AgentActiveCredentialNotFoundError,
   MaxDelegationDepthExceededError,
+  DelegateeNotAnAgentError,
 } from '../../../src/core/index.js';
 
 const TEST_PRIVATE_KEY_HEX = '00'.repeat(32);
@@ -43,6 +44,11 @@ describe('AgentService Unit Tests', () => {
       findActiveByVcIdForSubject: vi.fn(),
       listActiveBySubjectDid: vi.fn(),
       registerSignedVC: vi.fn(),
+      claimStatusListEntry: vi.fn().mockResolvedValue({
+        statusList: { credentialSubject: { encodedList: '' } },
+        statusListCredentialUrl: 'http://localhost/v1/status-list/helix-status-list-1',
+        statusListIndex: 42,
+      }),
     };
     auditLogger = { log: vi.fn() };
     agentKeyRepository = { create: vi.fn(), findByDid: vi.fn() };
@@ -257,6 +263,80 @@ describe('AgentService Unit Tests', () => {
         ).rejects.toMatchObject({ code: 'CONSENT_GRANT_NOT_FOUND', httpStatus: 404 });
       });
 
+      describe('consent passes down a delegation', () => {
+        const parentDid = 'did:key:z6Mkparent';
+        const grandparentDid = 'did:key:z6Mkgrandparent';
+        const link = (id: string, did: string) => ({
+          id,
+          type: ['VerifiableCredential', 'HelixAgentCredential'],
+          credentialSubject: { id: did, privilegeScopes: ['read', 'write'] },
+        });
+        // This agent's own onboarding credential (agentVC, read+write) plus
+        // one delegated to it by parentDid, narrowed to read.
+        const delegatedVC = (chain: Array<ReturnType<typeof link>>) => ({
+          id: 'vc:delegated:1',
+          type: ['VerifiableCredential', 'HelixAgentCredential'],
+          credentialSubject: { id: agentDid, privilegeScopes: ['read'], delegatedFrom: parentDid },
+          delegationChain: chain,
+        });
+        const grantTo = (id: string, holder: string) => ({
+          ...grant(id, ['read']),
+          credentialSubject: { id: holder, type: 'DelegationGrant', userDid, scopes: ['read'], durability: 'standing' },
+        });
+        const grantsByHolder = (byHolder: Record<string, unknown[]>) =>
+          vcService.listActiveGrants.mockImplementation(async ({ agentDid: holder }: { agentDid: string }) => byHolder[holder] ?? []);
+
+        it("uses the delegator's grant, presenting only the delegated credential that chains to it", async () => {
+          vcService.listActiveBySubjectDid.mockResolvedValue([agentVC, delegatedVC([link('vc:parent', parentDid)])]);
+          grantsByHolder({ [parentDid]: [grantTo('vc:g-parent', parentDid)] });
+
+          const { signedVP } = await agentService.signVP({ did: agentDid, targetService: serviceDid, userDid }, 'req-1');
+
+          expect(vcService.listActiveGrants).toHaveBeenCalledWith({ agentDid, serviceDid, userDid });
+          expect(vcService.listActiveGrants).toHaveBeenCalledWith({ agentDid: parentDid, serviceDid, userDid });
+          // Not agentVC: with it, the verifier's union of agent scopes would
+          // include write, which the delegator never delegated.
+          expect(signedVP.verifiableCredential.map((vc) => vc['id'])).toEqual(['vc:delegated:1', 'vc:g-parent']);
+          expect(signedVP.delegatedBy).toBe(userDid);
+          expect(auditLogger.log).toHaveBeenCalledWith(
+            'AGENT_VP_SIGNED',
+            expect.objectContaining({ vcIds: ['vc:delegated:1'], grantVcIds: ['vc:g-parent'], grantHolderDids: [parentDid] }),
+          );
+        });
+
+        it("prefers the agent's own grant and never looks further up", async () => {
+          vcService.listActiveBySubjectDid.mockResolvedValue([agentVC, delegatedVC([link('vc:parent', parentDid)])]);
+          grantsByHolder({ [agentDid]: [grant('vc:g-own', ['read'])], [parentDid]: [grantTo('vc:g-parent', parentDid)] });
+
+          const { signedVP } = await agentService.signVP({ did: agentDid, targetService: serviceDid, userDid }, 'req-1');
+
+          expect(vcService.listActiveGrants).toHaveBeenCalledTimes(1);
+          expect(signedVP.verifiableCredential.map((vc) => vc['id'])).toEqual(['vc:test:1', 'vc:delegated:1', 'vc:g-own']);
+        });
+
+        it('walks the whole chain, nearest delegator first', async () => {
+          vcService.listActiveBySubjectDid.mockResolvedValue([
+            delegatedVC([link('vc:grandparent', grandparentDid), link('vc:parent', parentDid)]),
+          ]);
+          grantsByHolder({ [grandparentDid]: [grantTo('vc:g-grandparent', grandparentDid)] });
+
+          const { signedVP } = await agentService.signVP({ did: agentDid, targetService: serviceDid, userDid }, 'req-1');
+
+          const holders = vcService.listActiveGrants.mock.calls.map(([lookup]: [{ agentDid: string }]) => lookup.agentDid);
+          expect(holders).toEqual([agentDid, parentDid, grandparentDid]);
+          expect(signedVP.verifiableCredential.map((vc) => vc['id'])).toEqual(['vc:delegated:1', 'vc:g-grandparent']);
+        });
+
+        it('still throws ConsentGrantNotFoundError when no agent in the chain holds a grant', async () => {
+          vcService.listActiveBySubjectDid.mockResolvedValue([agentVC, delegatedVC([link('vc:parent', parentDid)])]);
+          grantsByHolder({});
+
+          await expect(
+            agentService.signVP({ did: agentDid, targetService: serviceDid, userDid }, 'req-1'),
+          ).rejects.toMatchObject({ code: 'CONSENT_GRANT_NOT_FOUND' });
+        });
+      });
+
       it('presents only the agent credential when no user is named', async () => {
         const { signedVP } = await agentService.signVP({ did: agentDid, targetService: serviceDid }, 'req-1');
         expect(vcService.listActiveGrants).not.toHaveBeenCalled();
@@ -271,16 +351,88 @@ describe('AgentService Unit Tests', () => {
     const subAgentDid = 'did:key:z6Mktestsubagent';
     const keyRecord = {
       did: delegatorDid,
+      subjectType: 'agent',
       encryptedPrivateKey: 'x',
       iv: 'x',
       authTag: 'x',
       algorithm: 'aes-256-gcm',
     };
+
+    // By default the delegatee is a registered, active agent; the tests
+    // about the delegator override these per case.
+    beforeEach(() => {
+      vcService.listActiveBySubjectDid.mockResolvedValue([
+        { id: 'vc:test:subagent', credentialSubject: { id: subAgentDid, privilegeScopes: ['read:profile'] } },
+      ]);
+    });
     const fromVC = {
       id: 'vc:test:delegator',
       type: ['VerifiableCredential', 'HelixAgentCredential'],
       credentialSubject: { id: delegatorDid, privilegeScopes: ['read:orders'], maxDelegationDepth: 1 },
     };
+
+    describe('the delegatee must be a registered, active agent', () => {
+      const delegate = () =>
+        agentService.delegateAuthority(
+          { did: delegatorDid, to: subAgentDid, scopes: ['read:orders'], expiresIn: 3600, vcId: 'vc:test:delegator' },
+          'req-1',
+        );
+      beforeEach(() => {
+        vcService.findActiveByVcIdForSubject.mockResolvedValue(fromVC);
+      });
+
+      it('refuses a DID this server never onboarded, before signing anything', async () => {
+        agentKeyRepository.findByDid.mockImplementation(async (did: string) => (did === delegatorDid ? keyRecord : null));
+        await expect(delegate()).rejects.toMatchObject({ code: 'DELEGATEE_NOT_AN_AGENT', httpStatus: 404 });
+        expect(keyCustody.signWith).not.toHaveBeenCalled();
+        expect(vcService.registerSignedVC).not.toHaveBeenCalled();
+      });
+
+      it('refuses a DID whose key belongs to something other than an agent (e.g. a service)', async () => {
+        agentKeyRepository.findByDid.mockImplementation(async (did: string) =>
+          did === delegatorDid ? keyRecord : { ...keyRecord, did, subjectType: 'service' },
+        );
+        await expect(delegate()).rejects.toMatchObject({ code: 'DELEGATEE_NOT_AN_AGENT' });
+      });
+
+      it("hands the deployment's authorizeDelegatee the delegatee and the source credential, before reserving or signing", async () => {
+        agentKeyRepository.findByDid.mockResolvedValue(keyRecord);
+        const seen: Array<{ to: string; fromVcId: string }> = [];
+        await agentService.delegateAuthority(
+          { did: delegatorDid, to: subAgentDid, scopes: ['read:orders'], expiresIn: 3600, vcId: 'vc:test:delegator' },
+          'req-1',
+          {
+            authorizeDelegatee: async ({ to, fromVC }) => {
+              seen.push({ to, fromVcId: fromVC.id });
+              expect(vcService.claimStatusListEntry).not.toHaveBeenCalled();
+              expect(keyCustody.signWith).not.toHaveBeenCalled();
+            },
+          },
+        );
+        expect(seen).toEqual([{ to: subAgentDid, fromVcId: 'vc:test:delegator' }]);
+      });
+
+      it('a refusal from authorizeDelegatee stops the delegation before anything is reserved or signed', async () => {
+        agentKeyRepository.findByDid.mockResolvedValue(keyRecord);
+        await expect(
+          agentService.delegateAuthority(
+            { did: delegatorDid, to: subAgentDid, scopes: ['read:orders'], expiresIn: 3600, vcId: 'vc:test:delegator' },
+            'req-1',
+            { authorizeDelegatee: async ({ to }) => Promise.reject(new DelegateeNotAnAgentError(to)) },
+          ),
+        ).rejects.toMatchObject({ code: 'DELEGATEE_NOT_AN_AGENT' });
+        expect(vcService.claimStatusListEntry).not.toHaveBeenCalled();
+        expect(keyCustody.signWith).not.toHaveBeenCalled();
+        expect(vcService.registerSignedVC).not.toHaveBeenCalled();
+      });
+
+      it('refuses an agent that no longer holds an active credential', async () => {
+        agentKeyRepository.findByDid.mockResolvedValue(keyRecord);
+        vcService.listActiveBySubjectDid.mockResolvedValue([]);
+        await expect(delegate()).rejects.toMatchObject({ code: 'DELEGATEE_NOT_AN_AGENT' });
+        expect(vcService.listActiveBySubjectDid).toHaveBeenCalledWith(subAgentDid, 'HelixAgentCredential');
+      });
+    });
 
     it('throws AgentKeyNotFoundError when no server-held key exists for the delegator DID', async () => {
       agentKeyRepository.findByDid.mockResolvedValue(null);
@@ -348,7 +500,9 @@ describe('AgentService Unit Tests', () => {
         delegatorDid,
         'HelixAgentCredential',
       );
-      expect(vcService.listActiveBySubjectDid).not.toHaveBeenCalled();
+      // The delegator's credential is never looked up by subject when pinned
+      // (the only subject lookup is the delegatee check).
+      expect(vcService.listActiveBySubjectDid).not.toHaveBeenCalledWith(delegatorDid, 'HelixAgentCredential');
     });
 
     it('builds and signs a delegation VC with the custody-held key, stores it and logs VC_DELEGATED', async () => {
@@ -378,6 +532,16 @@ describe('AgentService Unit Tests', () => {
       });
       expect(delegatedVC.delegationChain).toEqual([fromVC]);
       expect(delegatedVC.proof.verificationMethod).toBe(`${delegatorDid}#key-1`);
+      // Its own revocation entry, signed into the credential, so the chain
+      // walk can see this one delegation revoked.
+      expect(vcService.claimStatusListEntry).toHaveBeenCalledTimes(1);
+      expect((result.delegatedVC as { credentialStatus?: unknown }).credentialStatus).toEqual({
+        id: 'http://localhost/v1/status-list/helix-status-list-1#42',
+        type: 'BitstringStatusListEntry',
+        statusPurpose: 'revocation',
+        statusListIndex: '42',
+        statusListCredential: 'http://localhost/v1/status-list/helix-status-list-1',
+      });
       expect(vcService.registerSignedVC).toHaveBeenCalledWith(result.delegatedVC, { revokeExisting: undefined });
       expect(auditLogger.log).toHaveBeenCalledWith(
         'VC_DELEGATED',

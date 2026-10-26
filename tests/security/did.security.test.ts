@@ -23,6 +23,10 @@ import { MockHederaClient } from '../../src/hedera/mock/MockHederaClient.js';
 import { errorHandler } from '../../src/middleware/errorHandler.js';
 import didRoutes from '../../src/routes/did/index.js';
 
+const ADMIN_KEY = 'security-test-admin-key';
+
+const ADMIN = { 'x-admin-api-key': ADMIN_KEY };
+
 describe('DID API Security', () => {
   let app: any;
   let prisma: PrismaClient;
@@ -58,7 +62,7 @@ describe('DID API Security', () => {
     app.addSchema({ $id: 'Conflict', type: 'object', $ref: 'Error#' });
 
     app.setErrorHandler(errorHandler);
-    await app.register(didRoutes, { didService });
+    await app.register(didRoutes, { didService, adminApiKey: ADMIN_KEY });
     await app.ready();
   });
 
@@ -80,8 +84,8 @@ describe('DID API Security', () => {
     const { publicKey } = generateKeyPair();
     const payload = { publicKeyHex: publicKey, subjectType: 'agent' };
 
-    await app.inject({ method: 'POST', url: '/v1/dids', payload });
-    const res = await app.inject({ method: 'POST', url: '/v1/dids', payload: { ...payload, subjectType: 'user' } });
+    await app.inject({ method: 'POST', url: '/v1/dids', headers: ADMIN, payload });
+    const res = await app.inject({ method: 'POST', url: '/v1/dids', headers: ADMIN, payload: { ...payload, subjectType: 'user' } });
 
     expect(res.statusCode).toBe(409);
     const count = await prisma.did.count({ where: { publicKey } });
@@ -93,19 +97,50 @@ describe('DID API Security', () => {
     const createRes = await app.inject({
       method: 'POST',
       url: '/v1/dids',
+      headers: ADMIN,
       payload: { publicKeyHex: publicKey, subjectType: 'agent' },
     });
     const { id: did } = JSON.parse(createRes.body);
 
-    await app.inject({ method: 'POST', url: `/v1/dids/${did}/deactivate`, payload: { reason: 'test' } });
+    await app.inject({
+      method: 'POST',
+      url: `/v1/dids/${did}/deactivate`,
+      headers: { 'x-admin-api-key': ADMIN_KEY },
+      payload: { reason: 'test' },
+    });
 
     const updateRes = await app.inject({
       method: 'POST',
       url: `/v1/dids/${did}/services`,
+      headers: ADMIN,
       payload: { id: '#s1', type: 'LinkedDomains', serviceEndpoint: 'https://a.com' },
     });
 
     expect(updateRes.statusCode).toBe(410);
+  });
+
+  it('SECURITY: only the owner may deactivate a DID', async () => {
+    const { publicKey } = generateKeyPair();
+    const createRes = await app.inject({
+      method: 'POST',
+      url: '/v1/dids',
+      headers: ADMIN,
+      payload: { publicKeyHex: publicKey, subjectType: 'agent' },
+    });
+    const { id: did } = JSON.parse(createRes.body);
+
+    const anonymous = await app.inject({ method: 'POST', url: `/v1/dids/${did}/deactivate`, payload: {} });
+    expect(anonymous.statusCode).toBe(403);
+    const wrongKey = await app.inject({
+      method: 'POST',
+      url: `/v1/dids/${did}/deactivate`,
+      headers: { 'x-admin-api-key': 'not-the-key' },
+      payload: {},
+    });
+    expect(wrongKey.statusCode).toBe(403);
+
+    const resolved = await app.inject({ method: 'GET', url: `/v1/dids/${did}` });
+    expect(resolved.statusCode).toBe(200);
   });
 
   it('SECURITY: audit log contains no private key material', async () => {
@@ -113,6 +148,7 @@ describe('DID API Security', () => {
     await app.inject({
       method: 'POST',
       url: '/v1/dids',
+      headers: ADMIN,
       payload: { publicKeyHex: publicKey, subjectType: 'agent' },
     });
 
@@ -130,6 +166,7 @@ describe('DID API Security', () => {
     const createRes = await app.inject({
       method: 'POST',
       url: '/v1/dids',
+      headers: ADMIN,
       payload: { 
         publicKeyHex: publicKey, 
         subjectType: 'agent'
@@ -140,6 +177,7 @@ describe('DID API Security', () => {
     const res = await app.inject({
       method: 'POST',
       url: `/v1/dids/${did}/services`,
+      headers: ADMIN,
       payload: { id: '#s1', type: 'LinkedDomains', serviceEndpoint: 'http://unsecure.com' },
     });
 

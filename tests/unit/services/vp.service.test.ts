@@ -44,16 +44,16 @@ describe('VPService (thin wrapper)', () => {
     const holder = makeActor();
     const { service, auditLogger } = makeService(issuer);
     const vc = await makeAgentVC(issuer, holder.did);
-    const vp = await buildSignedVP([vc], holder, USER_DID);
+    const vp = await buildSignedVP([vc], holder);
 
     const result = await service.verifyVP(vp, 'req-1');
 
     expect(result).toMatchObject({
       valid: true,
       agentDid: holder.did,
-      userDid: USER_DID,
       targetService: 'orders',
     });
+    expect('userDid' in result).toBe(false);
     const eventTypes = auditLogger.events.map((entry) => entry.event.event);
     expect(eventTypes.filter((type) => type === AuditEvents.VP_VERIFIED)).toHaveLength(1);
     expect(eventTypes).not.toContain(AuditEvents.CHAIN_VERIFIED);
@@ -73,7 +73,7 @@ describe('VPService (thin wrapper)', () => {
     );
     const fetchSpy = stubFetch({});
     const vc = await makeAgentVC(issuer, holder.did);
-    const vp = await buildSignedVP([vc], holder, USER_DID);
+    const vp = await buildSignedVP([vc], holder);
 
     await expect(service.verifyVP(vp, 'req-1')).resolves.toMatchObject({ valid: true });
     expect(getStatusListSpy).toHaveBeenCalledWith(OWN_LIST_ID);
@@ -143,7 +143,7 @@ describe('VPService (thin wrapper)', () => {
     const holder = makeActor();
     const { service } = makeService(issuer);
     const vc = await makeAgentVC(issuer, holder.did, ['read:orders', 'book:flights']);
-    const vp = await buildSignedVP([vc], holder, USER_DID);
+    const vp = await buildSignedVP([vc], holder);
 
     const result = await service.verifyVP(vp, 'req-1', { issueSession: true });
     expect(decodeJwtPayload(result.session!.token)['scopes']).toEqual([
@@ -159,7 +159,7 @@ describe('VPService (thin wrapper)', () => {
     const vc = await makeAgentVC(issuer, holder.did, ['read:orders'], {
       validUntil: new Date(Date.now() - 1000).toISOString(),
     });
-    const vp = await buildSignedVP([vc], holder, USER_DID);
+    const vp = await buildSignedVP([vc], holder);
 
     // Same preserve-the-specific-failure behavior as above: an expired VC
     // surfaces as VC_EXPIRED, not the generic fallback code.
@@ -175,6 +175,20 @@ describe('VPService (thin wrapper)', () => {
       (entry) => entry.event.event === AuditEvents.VP_REJECTED,
     );
     expect(String(rejected?.event['internalReason'])).toContain('VC_EXPIRED');
+  });
+
+  it('rejects a VP that names a user without carrying their consent grant', async () => {
+    const issuer = makeActor();
+    const holder = makeActor();
+    const { service, auditLogger } = makeService(issuer);
+    const vc = await makeAgentVC(issuer, holder.did);
+    const vp = await buildSignedVP([vc], holder, USER_DID);
+
+    await expect(service.verifyVP(vp, 'req-1')).rejects.toMatchObject({ code: 'CONSENT_GRANT_REQUIRED' });
+
+    const eventTypes = auditLogger.events.map((entry) => entry.event.event);
+    expect(eventTypes).toContain(AuditEvents.VP_REJECTED);
+    expect(eventTypes).not.toContain(AuditEvents.VP_VERIFIED);
   });
 
   it('rejects a payload that fails signedVPSchema parsing', async () => {
@@ -197,7 +211,7 @@ describe('VPService (thin wrapper)', () => {
     });
     (vc.credentialSubject as Record<string, unknown>)['parentVcId'] = 'vc:helix:parent-1';
     (vc.credentialSubject as Record<string, unknown>)['delegatedFrom'] = 'did:key:zParent';
-    const vp = await buildSignedVP([vc], holder, USER_DID);
+    const vp = await buildSignedVP([vc], holder);
 
     // A parentVcId/delegatedFrom on the credentialSubject with no matching
     // parent VC in the presentation is what actually fails here —
@@ -239,7 +253,7 @@ describe('VPService (thin wrapper)', () => {
       API_BASE_URL,
     );
     const vc = await makeAgentVC(issuer, holder.did);
-    const vp = await buildSignedVP([vc], holder, USER_DID);
+    const vp = await buildSignedVP([vc], holder);
 
     await expect(service.verifyVP(vp, 'req-1', { issueSession: true })).rejects.toMatchObject({
       code: 'VP_VERIFICATION_FAILED',

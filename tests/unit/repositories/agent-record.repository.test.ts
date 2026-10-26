@@ -145,7 +145,12 @@ describe.each([
       await repository.create(published('did:key:a-active', 50, { name: 'Travel Concierge' }));
       await repository.create(published('did:key:b-revoked', 40, { name: 'Booking Bot', revokedAt: EARLIER }));
       await repository.create(published('did:key:c-expired', 30, { name: 'Old travel agent', credentialExpiresAt: EARLIER }));
-      await repository.create(published('did:key:d-nocred', 20, { name: '100% sure_agent', credentialExpiresAt: null }));
+      // No credential linked at all.
+      await repository.create(
+        published('did:key:d-nocred', 20, { name: '100% sure_agent', credentialVcId: null, credentialExpiresAt: null }),
+      );
+      // A credential that never expires (no expiry at enrolment, the default): active.
+      await repository.create(published('did:key:f-forever', 10, { name: 'Standing order bot', credentialExpiresAt: null }));
       await repository.create(agent({ did: 'did:key:e-private', name: 'Travel secret' }));
       return repository;
     }
@@ -160,6 +165,7 @@ describe.each([
         ['did:key:b-revoked', 'revoked'],
         ['did:key:c-expired', 'revoked'],
         ['did:key:d-nocred', 'revoked'],
+        ['did:key:f-forever', 'active'],
       ]);
       expect(rows[0]).toEqual({
         did: 'did:key:a-active',
@@ -175,16 +181,16 @@ describe.each([
       const active = await repository.listPublic({ status: 'active', limit: 10, now: NOW });
       const revoked = await repository.listPublic({ status: 'revoked', limit: 10, now: NOW });
 
-      expect(active.map((row) => row.did)).toEqual(['did:key:a-active']);
+      expect(active.map((row) => row.did)).toEqual(['did:key:a-active', 'did:key:f-forever']);
       expect(revoked.map((row) => row.did)).toEqual(['did:key:b-revoked', 'did:key:c-expired', 'did:key:d-nocred']);
     });
 
-    it('treats expiry as of the given instant', async () => {
+    it('treats expiry as of the given instant; a credential with no expiry never lapses', async () => {
       const repository = await seeded();
 
       const rows = await repository.listPublic({ status: 'active', limit: 10, now: new Date('2028-01-01T00:00:00Z') });
 
-      expect(rows).toEqual([]);
+      expect(rows.map((row) => row.did)).toEqual(['did:key:f-forever']);
     });
 
     it('searches names case-insensitively, or one exact DID, and never a private agent', async () => {
