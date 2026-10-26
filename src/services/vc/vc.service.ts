@@ -113,6 +113,8 @@ export interface VCDetails {
 
 export interface ListVCFilters {
   subjectDid?: string | undefined;
+  /** Credentials this DID signed: an agent's delegations, a service's grants. */
+  issuerDid?: string | undefined;
   status?: string | undefined;
   limit?: number | undefined;
 }
@@ -354,32 +356,40 @@ export class VCService implements IVCService {
   }
 
   private pointsAtDefaultList(vcJson: unknown): boolean {
-    const status = asRecord(asRecord(vcJson).credentialStatus);
+    // Stored JSON may come back as a string (the sqlite driver) or an object.
+    let vc: unknown = vcJson;
+    if (typeof vc === 'string') {
+      try {
+        vc = JSON.parse(vc);
+      } catch {
+        return false;
+      }
+    }
+    const status = asRecord(asRecord(vc).credentialStatus);
     return status.statusListCredential === `${this.apiBaseUrl}/v1/status-list/${this.DEFAULT_STATUS_LIST_ID}`;
   }
 
   /**
    * Persists an already-signed VC without issuing or re-signing it — see
-   * IVCService.registerSignedVC()'s doc comment. Assigns statusListIndex: 0
-   * as a placeholder rather than claiming a real one: this VC's own JSON
-   * carries no credentialStatus entry (delegation VCs aren't individually
-   * revocable via status list yet — a separate gap from this one), so there
-   * is no real index for a claimed one to correspond to. 0 is never
-   * interpreted as "revoked" by anything here; revocation for this record
-   * is tracked the same way as everywhere else in this repository, via the
-   * row's own revokedAt column.
+   * IVCService.registerSignedVC()'s doc comment. A delegation carrying its
+   * own entry on this platform's status list (delegateAuthority claims one)
+   * is stored with that index, so revoking it flips its bit. One without
+   * (delegations made before that) keeps the placeholder 0, which nothing
+   * reads as a bit of its own: such a record is revoked by its row's
+   * revokedAt alone (see revokeVC / retire).
    */
   async registerSignedVC(vc: SignedVC, options: ReconcileOptions = {}): Promise<ReconcileResult> {
     const subject = (vc as unknown as { credentialSubject: CredentialSubject & { id: string; privilegeScopes?: string[] } })
       .credentialSubject;
     const validUntil = (vc as unknown as { validUntil?: string }).validUntil;
+    const ownIndex = this.pointsAtDefaultList(vc) ? Number(vc.credentialStatus?.statusListIndex) : NaN;
     await this.vcRepo.createVc({
       vcId: vc.id,
       subjectDid: subject.id,
       subjectType: 'agent',
       vcJson: vc,
       privilegeScopes: subject.privilegeScopes,
-      statusListIndex: 0,
+      statusListIndex: Number.isInteger(ownIndex) ? ownIndex : 0,
       expiresAt: validUntil ? new Date(validUntil) : null,
       delegatedFrom: subject.delegatedFrom,
       delegationDepth: subject.delegationDepth,
@@ -680,6 +690,7 @@ export class VCService implements IVCService {
   async listVCs(filters: ListVCFilters = {}): Promise<VCSummary[]> {
     const records = await this.vcRepo.findMany({
       subjectDid: filters.subjectDid,
+      issuerDid: filters.issuerDid,
     });
     const limit = filters.limit ?? 50;
     const now = Date.now();
@@ -784,10 +795,17 @@ export class VCService implements IVCService {
     const list = await this.vcRepo.findStatusListById(this.DEFAULT_STATUS_LIST_ID);
     if (!list) throw new Error('Status list missing during revocation');
 
-    const newEncoded = setBit(list.encodedList, record.statusListIndex, 1);
+    // Same rule as retire(): only a credential whose status entry is on this
+    // platform's own list has a bit to flip. A delegation without its own
+    // entry (placeholder index 0) or an externally-signed credential (another
+    // issuer's list) is revoked by its row alone -- flipping
+    // record.statusListIndex for those would revoke whichever credential
+    // really owns that bit.
+    const ownsBit = this.pointsAtDefaultList(record.vcJson);
+    const newEncoded = ownsBit ? setBit(list.encodedList, record.statusListIndex, 1) : list.encodedList;
 
     const updatedRecord = await this.vcRepo.revokeVc(vcId, this.DEFAULT_STATUS_LIST_ID, newEncoded);
-    await this.statusListCache.delete(this.DEFAULT_STATUS_LIST_ID);
+    if (ownsBit) await this.statusListCache.delete(this.DEFAULT_STATUS_LIST_ID);
 
     await this.audit.log({
       event: 'VC_REVOKED',
