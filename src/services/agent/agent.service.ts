@@ -10,6 +10,7 @@ import {
   ChallengeNotFoundError,
   ChallengeSignatureInvalidError,
   ConsentGrantNotFoundError,
+  DelegateeNotAnAgentError,
   ErrorCode,
   HelixError,
   EnrollmentTokenAlreadyUsedError,
@@ -35,6 +36,7 @@ import type {
   IAgentService,
   ChallengeResult,
   DelegateAuthorityResult,
+  DelegateAuthorityOptions,
 } from './IAgentService.js';
 
 type DIDVerificationMethodLike = {
@@ -251,7 +253,9 @@ export class AgentService implements IAgentService {
       throw new AgentActiveCredentialNotFoundError(input.did);
     }
 
+    let agentCredentials = agentVCs;
     let grants: SignedVC[] = [];
+    let grantHolderDids: string[] = [];
     if (input.userDid) {
       grants = await this.vcService.listActiveGrants({
         agentDid: input.did,
@@ -259,11 +263,17 @@ export class AgentService implements IAgentService {
         userDid: input.userDid,
       });
       if (grants.length === 0) {
+        const inherited = await this.findDelegatorGrants(agentVCs, input.targetService, input.userDid);
+        if (inherited) {
+          ({ agentCredentials, grants, grantHolderDids } = inherited);
+        }
+      }
+      if (grants.length === 0) {
         throw new ConsentGrantNotFoundError(input.did, input.targetService, input.userDid);
       }
     }
 
-    const credentials = [...agentVCs, ...grants];
+    const credentials = [...agentCredentials, ...grants];
     const signedVP = await this.keyCustody.signWith(keyRecord, (privateKeyHex) =>
       new VPBuilder({
         credentials,
@@ -278,11 +288,59 @@ export class AgentService implements IAgentService {
       agentDid: input.did,
       targetService: input.targetService,
       ...(input.userDid ? { userDid: input.userDid } : {}),
-      vcIds: agentVCs.map((vc) => vc.id),
+      vcIds: agentCredentials.map((vc) => vc.id),
       grantVcIds: grants.map((grant) => grant.id),
+      ...(grantHolderDids.length > 0 ? { grantHolderDids } : {}),
     });
 
     return { signedVP };
+  }
+
+  /**
+   * Consent passes down a delegation: when the user consented to an agent
+   * that delegated to this one (directly or further up the chain), that
+   * consent covers this agent too, unless the grant says
+   * `allowDelegation: false` -- the verifier accepts a grant issued to any
+   * agent in the VP's delegation chain on the same terms.
+   *
+   * Only the delegated credentials whose chain reaches a consenting
+   * delegator are presented with its grants, never this agent's other
+   * credentials: the verifier intersects the grant with the union of every
+   * agent credential in the VP, so presenting e.g. this agent's own
+   * onboarding credential alongside would let it act for the user with
+   * scopes the delegator never delegated to it.
+   *
+   * Nearest delegator first; returns null if no delegator in any chain holds
+   * an active grant for (service, user).
+   */
+  private async findDelegatorGrants(
+    agentVCs: SignedVC[],
+    serviceDid: string,
+    userDid: string,
+  ): Promise<{ agentCredentials: SignedVC[]; grants: SignedVC[]; grantHolderDids: string[] } | null> {
+    const chainDidsOf = (vc: SignedVC): string[] => {
+      const chain = (vc as SignedVC & { delegationChain?: SignedVC[] }).delegationChain ?? [];
+      return chain
+        .map((link) => (link.credentialSubject as { id?: unknown } | undefined)?.id)
+        .filter((id): id is string => typeof id === 'string')
+        .reverse();
+    };
+
+    const grantsByHolder = new Map<string, SignedVC[]>();
+    for (const did of new Set(agentVCs.flatMap(chainDidsOf))) {
+      // A grant whose user did not let it pass to delegates stays with the
+      // agent it names.
+      const found = (await this.vcService.listActiveGrants({ agentDid: did, serviceDid, userDid })).filter(
+        (grant) => (grant.credentialSubject as { allowDelegation?: unknown }).allowDelegation !== false,
+      );
+      if (found.length > 0) grantsByHolder.set(did, found);
+    }
+    if (grantsByHolder.size === 0) return null;
+
+    const agentCredentials = agentVCs.filter((vc) => chainDidsOf(vc).some((did) => grantsByHolder.has(did)));
+    const grants = new Map<string, SignedVC>();
+    for (const found of grantsByHolder.values()) for (const grant of found) grants.set(grant.id, grant);
+    return { agentCredentials, grants: [...grants.values()], grantHolderDids: [...grantsByHolder.keys()] };
   }
 
   /**
@@ -301,6 +359,7 @@ export class AgentService implements IAgentService {
   async delegateAuthority(
     input: { did: string; to: string; scopes: string[]; expiresIn: number; vcId?: string; revokeExisting?: boolean },
     requestId: string,
+    options: DelegateAuthorityOptions = {},
   ): Promise<DelegateAuthorityResult> {
     const keyRecord = await this.agentKeyRepository.findByDid(input.did);
     if (!keyRecord) {
@@ -314,12 +373,39 @@ export class AgentService implements IAgentService {
       throw new AgentActiveCredentialNotFoundError(input.did);
     }
 
+    // The delegatee must be an agent this server onboarded and that is still
+    // active -- the same rule a consent grant's delegatee follows. Checked
+    // before anything is signed, so delegating to an unknown DID is refused
+    // here rather than tripping the Vc -> Did foreign key on store.
+    const delegateeKey = await this.agentKeyRepository.findByDid(input.to);
+    const delegateeActive =
+      delegateeKey?.subjectType === 'agent' &&
+      (await this.vcService.listActiveBySubjectDid(input.to, 'HelixAgentCredential')).length > 0;
+    if (!delegateeActive) {
+      throw new DelegateeNotAnAgentError(input.to);
+    }
+    // The deployment's own rule on who may receive this authority (e.g. an
+    // account's private agent), now that the source credential is known.
+    await options.authorizeDelegatee?.({ to: input.to, fromVC: fromVC as SignedVC });
+
+    // Its own entry on this platform's status list, as a consent grant gets:
+    // revoking the delegation then reaches every verifier through the chain
+    // walk, including VPs signed before the revocation.
+    const entry = await this.vcService.claimStatusListEntry();
+    const credentialStatus = {
+      id: `${entry.statusListCredentialUrl}#${entry.statusListIndex}`,
+      type: 'BitstringStatusListEntry' as const,
+      statusPurpose: 'revocation' as const,
+      statusListIndex: entry.statusListIndex.toString(),
+      statusListCredential: entry.statusListCredentialUrl,
+    };
+
     // buildDelegationVC() does the scope-subset and max-depth checks and
     // signs with the custody-held key, all in-process -- there is no
     // prepare/finalize round trip because nobody outside holds a key.
     const delegatedVC = await this.keyCustody.signWith(keyRecord, (privateKeyHex) =>
       buildDelegationVC(
-        { to: input.to, scopes: input.scopes, expiresIn: input.expiresIn, fromVC: fromVC as SignedVC },
+        { to: input.to, scopes: input.scopes, expiresIn: input.expiresIn, fromVC: fromVC as SignedVC, credentialStatus },
         { did: input.did, privateKeyHex },
       ),
     );

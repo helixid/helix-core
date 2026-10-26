@@ -5,6 +5,9 @@ import { verifyEd25519Proof } from './proof.js';
 import {
   ConsentGrantInvalidError,
   ConsentGrantSubjectMismatchError,
+  ConsentGrantRequiredError,
+  ConsentGrantNotDelegableError,
+  ConsentGrantWrongServiceError,
   DelegationChainInvalidError,
   SelfSignedVCNotAllowedError,
   VCExpiredError,
@@ -41,9 +44,11 @@ export interface VerifyVPResult {
   privilegeScopes: string[];
   /**
    * Enforcement scopes: equals privilegeScopes when no consent grant is
-   * present; otherwise the intersection of privilegeScopes with the union
-   * of every valid grant's scopes. checkScope()/requireScope() read this
-   * field.
+   * present; otherwise the union, over every valid grant, of the grant's
+   * scopes intersected with the authority it covers (the holder's whole
+   * authority for a grant to the holder; only the credentials delegated
+   * from that agent for a grant to an ancestor). checkScope()/requireScope()
+   * read this field.
    */
   effectiveScopes: string[];
   vpId: string;
@@ -307,6 +312,11 @@ export async function verifyVP(
       'VP credential array must contain at least one agent-authority credential, and otherwise only consent grants',
     );
   }
+  // Naming a user is a claim only that user's consent can back. A verified
+  // result's userDid therefore always means a user who consented.
+  if (typeof vp.delegatedBy === 'string' && vp.delegatedBy && grantEntries.length === 0) {
+    throw new ConsentGrantRequiredError(vp.delegatedBy);
+  }
 
   // The agent's authority is the union of every agent credential that still
   // stands. Each is verified on its own -- a delegated one once as a
@@ -315,6 +325,10 @@ export async function verifyVP(
   // expired credential contributes nothing but does not sink the others;
   // any other failure rejects the VP, as does a VP with none left.
   const privilegeScopeSet = new Set<string>();
+  // Per valid agent credential: its scopes and every DID on its chain, so a
+  // grant given to an ancestor is weighed only against the credentials that
+  // agent actually delegated.
+  const validAgentAuthorities: { scopes: string[]; chainSubjects: string[] }[] = [];
   const delegationChain: DelegationLink[] = [];
   const seenLinks = new Set<string>();
   let warning: string | undefined;
@@ -350,6 +364,10 @@ export async function verifyVP(
 
     validAgentVCs += 1;
     for (const scope of vc.credentialSubject.privilegeScopes) privilegeScopeSet.add(scope);
+    validAgentAuthorities.push({
+      scopes: vc.credentialSubject.privilegeScopes,
+      chainSubjects: chain.map((link) => link.subject),
+    });
     for (const link of chain) {
       if (!seenLinks.has(link.vcId)) {
         seenLinks.add(link.vcId);
@@ -364,7 +382,7 @@ export async function verifyVP(
 
   if (grantEntries.length > 0) {
     const chainDids = delegationChain.map((link) => link.subject);
-    const granted = new Set<string>();
+    const allowed = new Set<string>();
     let valid = 0;
     let lastDropped: Error | undefined;
 
@@ -373,13 +391,21 @@ export async function verifyVP(
 
       // A grant for another agent or another user is never merely dropped:
       // it has no business in this VP at all, whatever its status.
-      const agentMatches =
-        grant.credentialSubject.id === vp.holder || chainDids.includes(grant.credentialSubject.id);
+      const direct = grant.credentialSubject.id === vp.holder;
+      const agentMatches = direct || chainDids.includes(grant.credentialSubject.id);
       // Plain string equality — DID or email, either form (§2.6). A VP with no
       // delegatedBy at all can never satisfy the user-match rule (§9.3 G6).
       const userMatches = grant.credentialSubject.userDid === vp.delegatedBy;
       if (!agentMatches || !userMatches) {
         throw new ConsentGrantSubjectMismatchError();
+      }
+      // Consent holds only at the service it was given at, which is the
+      // service that issued the grant.
+      if (grant.issuer !== vp.targetService) {
+        throw new ConsentGrantWrongServiceError(grant.issuer, vp.targetService);
+      }
+      if (!direct && grant.credentialSubject.allowDelegation === false) {
+        throw new ConsentGrantNotDelegableError();
       }
 
       // A grant that has been revoked or has expired contributes nothing;
@@ -395,13 +421,23 @@ export async function verifyVP(
         throw error;
       }
       valid += 1;
-      for (const scope of grant.credentialSubject.scopes) granted.add(scope);
+
+      // A grant to the holder meets the holder's whole authority. A grant to
+      // an ancestor meets only the credentials delegated down from that
+      // ancestor: the holder's own onboarding credential, presented
+      // alongside, must not widen what the ancestor's consent covers.
+      const authority = direct
+        ? privilegeScopes
+        : validAgentAuthorities
+            .filter((entry) => entry.chainSubjects.includes(grant.credentialSubject.id))
+            .flatMap((entry) => entry.scopes);
+      for (const scope of intersect(grant.credentialSubject.scopes, authority)) allowed.add(scope);
     }
 
     // Grants were presented and none of them still stands: no consent.
     if (valid === 0) throw lastDropped;
 
-    effectiveScopes = intersect(effectiveScopes, [...granted]);
+    effectiveScopes = privilegeScopes.filter((scope) => allowed.has(scope));
   }
 
   const result: VerifyVPResult = {

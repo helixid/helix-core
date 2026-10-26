@@ -5,7 +5,7 @@ interface DidWebRouteOptions {
   issuerDid: string;
   didDomain: string;
   didRepository: {
-    findDidById(did: string): Promise<{ didDocument: unknown } | null>;
+    findDidById(did: string): Promise<{ didDocument: unknown; deactivatedAt?: Date | null } | null>;
   };
 }
 
@@ -41,6 +41,14 @@ const didWebRoutes: FastifyPluginAsync<DidWebRouteOptions> = async (fastify, opt
         },
       });
     }
+    if (record.deactivatedAt) {
+      return reply.code(410).send({
+        error: {
+          code: 'DID_DEACTIVATED',
+          message: 'DID is deactivated.',
+        },
+      });
+    }
 
     return reply
       .type('application/json')
@@ -58,6 +66,14 @@ const didWebRoutes: FastifyPluginAsync<DidWebRouteOptions> = async (fastify, opt
         error: {
           code: 'DID_NOT_FOUND',
           message: 'DID document is not available.',
+        },
+      });
+    }
+    if (record.deactivatedAt) {
+      return reply.code(410).send({
+        error: {
+          code: 'DID_DEACTIVATED',
+          message: 'DID is deactivated.',
         },
       });
     }

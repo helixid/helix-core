@@ -21,7 +21,8 @@ import type {
 
 export type ServiceProviderAction =
   | { action: 'enroll' }
-  | { action: 'grant'; serviceDid: string; agentDid: string };
+  | { action: 'grant'; serviceDid: string; agentDid: string }
+  | { action: 'agentScopes'; serviceDid: string; agentDid: string };
 
 export interface ServiceProviderRouteOptions {
   serviceProviderService: IServiceProviderService;
@@ -71,6 +72,25 @@ const serviceProviderRoutes: FastifyPluginAsync<ServiceProviderRouteOptions> = a
       await authorize(request, { action: 'grant', serviceDid: body.serviceDid, agentDid: body.agentDid });
       const result = await options.serviceProviderService.issueDelegationGrant(body, request.id);
       return reply.code(201).send(result);
+    } catch (error) {
+      const mapped = mapAgentError(error);
+      return reply
+        .code(mapped.statusCode)
+        .send({ error: { code: mapped.code, message: mapped.message, requestId: request.id } });
+    }
+  });
+
+  // GET /v1/service-delegation-grants/agent-scopes?serviceDid=&agentDid= —
+  // the scopes a consent to this agent may grant, for the service's consent
+  // screen. Same caller as grant issuance, which enforces the same bound.
+  fastify.get('/service-delegation-grants/agent-scopes', async (request, reply) => {
+    try {
+      const query = (request.query ?? {}) as { serviceDid?: string; agentDid?: string };
+      const serviceDid = query.serviceDid ?? '';
+      const agentDid = query.agentDid ?? '';
+      await authorize(request, { action: 'agentScopes', serviceDid, agentDid });
+      const result = await options.serviceProviderService.getAgentScopes(agentDid);
+      return reply.code(200).send(result);
     } catch (error) {
       const mapped = mapAgentError(error);
       return reply

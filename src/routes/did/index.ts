@@ -10,12 +10,27 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-import { FastifyInstance, FastifyPluginAsync } from 'fastify';
-import { ErrorCode, HelixError, type ServiceEndpoint } from '../../core/index.js';
+import { FastifyInstance, FastifyPluginAsync, FastifyRequest } from 'fastify';
+import { AdminAuthRequiredError, ErrorCode, HelixError, type ServiceEndpoint } from '../../core/index.js';
 import type { IDIDService } from '../../services/did/did.service.js';
 
-interface DIDRouteOptions {
+/** A write this plugin is about to perform, for the deployment's authorization rule. */
+export type DIDRouteAction =
+  | { action: 'create'; subjectType: 'agent' | 'user' }
+  /** Adding or removing a service endpoint. */
+  | { action: 'update'; did: string }
+  | { action: 'deactivate'; did: string };
+
+export interface DIDRouteOptions {
   didService: IDIDService;
+  /**
+   * Throws when the caller may not perform `action`. Reads stay open; every
+   * write goes through this. Defaults to requiring `x-admin-api-key` to
+   * equal `adminApiKey` (the self-hosted rule: the operator owns every DID
+   * its instance mints). With neither set, every write is refused.
+   */
+  authorize?: (request: FastifyRequest, action: DIDRouteAction) => Promise<void> | void;
+  adminApiKey?: string | undefined;
 }
 
 interface CreateDIDBody {
@@ -41,6 +56,15 @@ interface DIDServiceEndpointParams extends DIDParams {
  */
 const didRoutes: FastifyPluginAsync<DIDRouteOptions> = async (fastify: FastifyInstance, options) => {
   const { didService } = options;
+  const authorize =
+    options.authorize ??
+    ((request: FastifyRequest, action: DIDRouteAction) => {
+      const submitted = request.headers['x-admin-api-key'];
+      const submittedKey = Array.isArray(submitted) ? submitted[0] : submitted;
+      if (!options.adminApiKey || submittedKey !== options.adminApiKey) {
+        throw new AdminAuthRequiredError(`DID ${action.action} requires the operator (x-admin-api-key)`);
+      }
+    });
 
   // Matches whichever DID method this instance is configured to mint
   // (DID_METHOD — see DIDService.createDID): did:hedera for anchored DIDs,
@@ -98,6 +122,7 @@ const didRoutes: FastifyPluginAsync<DIDRouteOptions> = async (fastify: FastifyIn
     },
     handler: async (request, reply) => {
       const { publicKeyHex, subjectType, domains = [] } = request.body as CreateDIDBody;
+      await authorize(request, { action: 'create', subjectType });
       const result = await didService.createDID(publicKeyHex, subjectType, domains, request.id);
       return reply.status(201).send({
         id: result.did,
@@ -191,6 +216,7 @@ const didRoutes: FastifyPluginAsync<DIDRouteOptions> = async (fastify: FastifyIn
           type: 'object',
           additionalProperties: true
         },
+        403: { $ref: 'Error#' },
         404: { $ref: 'NotFound#' },
         410: { description: 'DID Deactivated', content: { 'application/json': { schema: { $ref: 'Error#' } } } }
       }
@@ -198,6 +224,7 @@ const didRoutes: FastifyPluginAsync<DIDRouteOptions> = async (fastify: FastifyIn
     handler: async (request) => {
       const { did } = request.params as DIDParams;
       const endpoint = request.body as ServiceEndpoint;
+      await authorize(request, { action: 'update', did });
       const result = await didService.addServiceEndpoint(did, endpoint, request.id);
       return result;
     },
@@ -222,18 +249,22 @@ const didRoutes: FastifyPluginAsync<DIDRouteOptions> = async (fastify: FastifyIn
           type: 'object',
           additionalProperties: true
         },
+        403: { $ref: 'Error#' },
         404: { $ref: 'NotFound#' },
         410: { description: 'DID Deactivated', content: { 'application/json': { schema: { $ref: 'Error#' } } } }
       }
     },
     handler: async (request) => {
       const { did, endpointId } = request.params as DIDServiceEndpointParams;
+      await authorize(request, { action: 'update', did });
       const result = await didService.removeServiceEndpoint(did, endpointId, request.id);
       return result;
     },
   });
 
-  // POST /v1/dids/:did/deactivate - Deactivate a DID
+  // POST /v1/dids/:did/deactivate - Deactivate a DID. Owner only (see
+  // DIDRouteOptions.authorize): deactivation is permanent, and on did:web it
+  // stops every verifier from resolving the DID.
   fastify.post('/v1/dids/:did/deactivate', {
     schema: {
       description: 'Permanently deactivate a Helix DID',
@@ -252,11 +283,13 @@ const didRoutes: FastifyPluginAsync<DIDRouteOptions> = async (fastify: FastifyIn
             deactivated: { type: 'boolean' },
           },
         },
+        403: { $ref: 'Error#' },
         404: { $ref: 'NotFound#' }
       }
     },
     handler: async (request, reply) => {
       const { did } = request.params as DIDParams;
+      await authorize(request, { action: 'deactivate', did });
       await didService.deactivateDID(did, request.id);
       return reply.status(200).send({ did, deactivated: true });
     },

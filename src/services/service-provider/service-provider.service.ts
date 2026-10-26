@@ -18,10 +18,13 @@ import {
   ErrorCode,
   HelixError,
   AgentActiveCredentialNotFoundError,
+  ConsentGrantScopeNotAllowedError,
+  ConsentNoGrantableScopesError,
   DelegateeNotAnAgentError,
   ServiceKeyNotFoundError,
   ServiceRevokedError,
   issueGrant,
+  ACCEPT_TERMS_SCOPE,
   findScopeProblem,
   normalizeScopes,
   parseScopes,
@@ -65,6 +68,11 @@ export interface IssueDelegationGrantInput {
    * a consent with a different scope set is added beside the existing ones.
    */
   revokeExisting?: boolean;
+  /**
+   * Whether the consent also covers agents this agent delegates to. Omitted,
+   * the grant carries no flag and verifiers treat it as allowed.
+   */
+  allowDelegation?: boolean;
 }
 
 /** The grant, plus what storing it did to the grants active before it (see IVCService.ReconcileResult). */
@@ -78,6 +86,13 @@ export interface IServiceProviderService {
     input: IssueDelegationGrantInput,
     requestId: string,
   ): Promise<IssueDelegationGrantResult>;
+  getAgentScopes(agentDid: string): Promise<AgentScopesResult>;
+}
+
+/** The scopes an agent holds as itself, which bound what any consent to it may grant. */
+export interface AgentScopesResult {
+  agentDid: string;
+  scopes: string[];
 }
 
 /** What this needs from the VC service; a Pick so either IVCService shape fits. */
@@ -165,6 +180,9 @@ export class ServiceProviderService implements IServiceProviderService {
     if (typeof input.agentDid !== 'string' || !input.agentDid.startsWith('did:')) {
       throw new HelixError(ErrorCode.VALIDATION_ERROR, 'agentDid must be a DID', 400);
     }
+    if (input.allowDelegation !== undefined && typeof input.allowDelegation !== 'boolean') {
+      throw new HelixError(ErrorCode.VALIDATION_ERROR, 'allowDelegation must be a boolean', 400);
+    }
     if (input.agentDid === input.serviceDid) {
       throw new HelixError(ErrorCode.VALIDATION_ERROR, 'A service cannot grant to itself', 400);
     }
@@ -184,21 +202,20 @@ export class ServiceProviderService implements IServiceProviderService {
       throw new ServiceKeyNotFoundError(input.serviceDid);
     }
 
-    // The delegatee: an agent this server onboarded (so holds a key for).
-    // Only such an agent can ever present the grant, since presenting means
-    // the server signing a VP with that key.
-    const agentKey = await this.didKeyRepository.findByDid(input.agentDid);
-    if (!agentKey || agentKey.subjectType !== 'agent') {
-      throw new DelegateeNotAnAgentError(input.agentDid);
+    // The delegatee must be an onboarded agent with an active credential of
+    // its own, and the grant may only carry scopes that credential holds:
+    // consent cannot hand an agent authority it was never onboarded with.
+    const { scopes: agentScopes } = await this.getAgentScopes(input.agentDid);
+    const scopes = normalizeScopes(input.scopes);
+    const held = new Set(agentScopes);
+    const notHeld = scopes.filter((scope) => scope !== ACCEPT_TERMS_SCOPE && !held.has(scope));
+    if (notHeld.length > 0) {
+      throw new ConsentGrantScopeNotAllowedError(notHeld);
     }
-    // ...and that still holds an active HelixAgentCredential per the DB: a
-    // grant to a revoked or expired agent could never be presented anyway.
-    const agentVCs = await this.vcService.listActiveBySubjectDid(input.agentDid, 'HelixAgentCredential');
-    if (agentVCs.length === 0) {
-      throw new AgentActiveCredentialNotFoundError(input.agentDid);
+    if (scopes.every((scope) => scope === ACCEPT_TERMS_SCOPE)) {
+      throw new ConsentNoGrantableScopesError();
     }
 
-    const scopes = normalizeScopes(input.scopes);
     const entry = await this.vcService.claimStatusListEntry();
     const { grantVC } = await this.keyCustody.signWith(keyRecord, (privateKeyHex) =>
       issueGrant(
@@ -208,6 +225,7 @@ export class ServiceProviderService implements IServiceProviderService {
           scopes,
           durability,
           serviceDid: input.serviceDid,
+          ...(input.allowDelegation !== undefined ? { allowDelegation: input.allowDelegation } : {}),
           statusList: entry.statusList as Parameters<typeof issueGrant>[0]['statusList'],
           statusListCredentialUrl: entry.statusListCredentialUrl,
           statusListIndex: entry.statusListIndex,
@@ -221,5 +239,39 @@ export class ServiceProviderService implements IServiceProviderService {
     });
 
     return { grantVC, ...reconciled };
+  }
+
+  /**
+   * The agent's own scopes: the union over its active, non-delegated
+   * HelixAgentCredentials. Credentials delegated to it are left out, since
+   * those are authority held on another agent's behalf, which that agent can
+   * withdraw; consent given to this agent directly must not rest on them.
+   */
+  async getAgentScopes(agentDid: string): Promise<AgentScopesResult> {
+    if (typeof agentDid !== 'string' || !agentDid.startsWith('did:')) {
+      throw new HelixError(ErrorCode.VALIDATION_ERROR, 'agentDid must be a DID', 400);
+    }
+    // An agent this server onboarded (so holds a key for). Only such an
+    // agent can ever present a grant, since presenting means the server
+    // signing a VP with that key.
+    const agentKey = await this.didKeyRepository.findByDid(agentDid);
+    if (!agentKey || agentKey.subjectType !== 'agent') {
+      throw new DelegateeNotAnAgentError(agentDid);
+    }
+    // ...and that still holds an active credential of its own per the DB: a
+    // grant to a revoked or expired agent could never be presented anyway.
+    const agentVCs = await this.vcService.listActiveBySubjectDid(agentDid, 'HelixAgentCredential');
+    const ownVCs = agentVCs.filter(
+      (vc) => !(vc.credentialSubject as { delegatedFrom?: unknown }).delegatedFrom,
+    );
+    if (ownVCs.length === 0) {
+      throw new AgentActiveCredentialNotFoundError(agentDid);
+    }
+    const scopes = new Set<string>();
+    for (const vc of ownVCs) {
+      const held = (vc.credentialSubject as { privilegeScopes?: unknown }).privilegeScopes;
+      if (Array.isArray(held)) for (const scope of held) if (typeof scope === 'string') scopes.add(scope);
+    }
+    return { agentDid, scopes: [...scopes] };
   }
 }

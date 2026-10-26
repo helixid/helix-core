@@ -71,6 +71,7 @@ export interface IAgentService {
   delegateAuthority(
     input: { did: string; to: string; scopes: string[]; expiresIn: number; vcId?: string; revokeExisting?: boolean },
     requestId: string,
+    options?: DelegateAuthorityOptions,
   ): Promise<DelegateAuthorityResult>;
   issueUserChallenge(
     input: { did: string; purpose: 'user_verification' },
@@ -81,4 +82,15 @@ export interface IAgentService {
     input: { signature: string },
     requestId: string,
   ): Promise<UserChallengeVerifyResult>;
+}
+
+export interface DelegateAuthorityOptions {
+  /**
+   * A deployment's own say over who may receive a delegation, given the
+   * delegatee and the credential being delegated from (its chain shows where
+   * the authority started). Called once both are known and the delegatee is
+   * confirmed registered, before anything is reserved or signed; throwing
+   * refuses the delegation.
+   */
+  authorizeDelegatee?: (context: { to: string; fromVC: SignedVC }) => Promise<void>;
 }
