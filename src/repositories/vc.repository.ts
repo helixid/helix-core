@@ -134,7 +134,7 @@ export class VcRepository {
   }
 
   async findMany(
-    filters: { subjectDid?: string | undefined } = {},
+    filters: { subjectDid?: string | undefined; issuerDid?: string | undefined } = {},
   ): Promise<VCRecord[]> {
     return this.driver.findMany(filters);
   }

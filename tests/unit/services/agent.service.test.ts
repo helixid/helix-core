@@ -327,6 +327,17 @@ describe('AgentService Unit Tests', () => {
           expect(signedVP.verifiableCredential.map((vc) => vc['id'])).toEqual(['vc:delegated:1', 'vc:g-grandparent']);
         });
 
+        it('skips a delegator grant whose user did not allow delegation', async () => {
+          vcService.listActiveBySubjectDid.mockResolvedValue([agentVC, delegatedVC([link('vc:parent', parentDid)])]);
+          const closed = grantTo('vc:g-closed', parentDid);
+          closed.credentialSubject = { ...closed.credentialSubject, allowDelegation: false } as typeof closed.credentialSubject;
+          grantsByHolder({ [parentDid]: [closed] });
+
+          await expect(
+            agentService.signVP({ did: agentDid, targetService: serviceDid, userDid }, 'req-1'),
+          ).rejects.toMatchObject({ code: 'CONSENT_GRANT_NOT_FOUND' });
+        });
+
         it('still throws ConsentGrantNotFoundError when no agent in the chain holds a grant', async () => {
           vcService.listActiveBySubjectDid.mockResolvedValue([agentVC, delegatedVC([link('vc:parent', parentDid)])]);
           grantsByHolder({});

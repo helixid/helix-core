@@ -100,6 +100,7 @@ export type {
   OnboardWithCustodyResult,
   SignVPResult,
   UserChallengeVerifyResult,
+  DelegateAuthorityOptions,
 } from './services/agent/IAgentService.js';
 export { AesGcmKeyCustody } from './services/key-custody/key-custody.js';
 export type { IKeyCustody, EncryptedKeyMaterial } from './services/key-custody/key-custody.js';
@@ -114,6 +115,7 @@ export type {
 } from './services/service-provider/service-provider.service.js';
 
 export { default as didRoutes } from './routes/did/index.js';
+export type { DIDRouteAction, DIDRouteOptions } from './routes/did/index.js';
 export { default as didWebRoutes } from './routes/did-web/index.js';
 export { default as vcRoutes, type VcRouteOptions } from './routes/vc/index.js';
 export { default as statusListRoutes } from './routes/status-list/index.js';

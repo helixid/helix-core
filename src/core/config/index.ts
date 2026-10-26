@@ -77,7 +77,7 @@ export const ConfigSchema = z.object({
   AUDIT_LOG_DESTINATION: z.enum(['stdout', 'file', 'both']).default('stdout'),
   AUDIT_LOG_PATH: z.string().optional(),
 
-  // Hosted accounts & auth (Item #1, see docs/proposal-hosted-instance.md).
+  // Hosted accounts & auth (Item #1, see the hosted-instance design).
   // All optional/defaulted so self-hosted deployments (which don't use
   // accounts at all — HELIX_ADMIN_API_KEY covers the single operator) never
   // need to set these. On the hosted instance itself these should be set

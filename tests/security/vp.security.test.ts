@@ -363,6 +363,71 @@ describe('POST /v1/vp/verify — grant matrix (§9.4 A1)', () => {
     expectRejection(await post(await buildSignedVP([readVC, strangersVC], holder)), 'VP_INVALID_STRUCTURE');
   });
 
+  it('G15: a grant issued by another service is rejected, however the VP is addressed', async () => {
+    const holder = makeActor();
+    const stay = makeActor();
+    const air = makeActor();
+    const spList = makeSpStatusList(stay);
+    stubFetch({ [SP_LIST_URL]: spList });
+    const vc = await makeAgentVC(issuer, holder.did, ['write:orders']);
+    const stayGrant = await makeGrant(stay, holder.did, USER_DID, ['write:orders'], spList);
+
+    // Consent given at Stay, carried in a VP addressed to Air.
+    expectRejection(
+      await post(await buildSignedVP([vc, stayGrant], holder, USER_DID, air.did)),
+      'CONSENT_GRANT_WRONG_SERVICE',
+    );
+    // The same VP addressed to Stay passes.
+    expect((await post(await buildSignedVP([vc, stayGrant], holder, USER_DID, stay.did))).statusCode).toBe(200);
+  });
+
+  it('G16: a grant to an ancestor with allowDelegation false does not cover its delegate', async () => {
+    const parent = makeActor();
+    const sub = makeActor();
+    const sp = makeActor();
+    const spList = makeSpStatusList(sp);
+    stubFetch({ [SP_LIST_URL]: spList });
+    const parentVC = await makeAgentVC(issuer, parent.did, ['book:flights']);
+    const childVC = await buildDelegationVC(
+      { to: sub.did, scopes: ['book:flights'], expiresIn: 3600, fromVC: parentVC },
+      parent,
+    );
+    const closed = await makeGrant(sp, parent.did, USER_DID, ['book:flights'], spList, { allowDelegation: false });
+    expectRejection(await post(await buildSignedVP([childVC, closed], sub, USER_DID)), 'CONSENT_GRANT_NOT_DELEGABLE');
+
+    // The flag binds only delegates: the agent it names still uses it.
+    expect((await post(await buildSignedVP([parentVC, closed], parent, USER_DID))).statusCode).toBe(200);
+
+    const open = await makeGrant(sp, parent.did, USER_DID, ['book:flights'], spList, { allowDelegation: true });
+    expect((await post(await buildSignedVP([childVC, open], sub, USER_DID))).statusCode).toBe(200);
+  });
+
+  it("G17: an ancestor's grant meets only what the ancestor delegated, not the delegate's own credential", async () => {
+    const parent = makeActor();
+    const sub = makeActor();
+    const sp = makeActor();
+    const spList = makeSpStatusList(sp);
+    stubFetch({ [SP_LIST_URL]: spList });
+    const parentVC = await makeAgentVC(issuer, parent.did, ['book:flights', 'cancel:flights']);
+    const childVC = await buildDelegationVC(
+      { to: sub.did, scopes: ['book:flights'], expiresIn: 3600, fromVC: parentVC },
+      parent,
+    );
+    // The delegate also holds cancel:flights as itself.
+    const subOwnVC = await makeAgentVC(issuer, sub.did, ['cancel:flights']);
+    const grant = await makeGrant(sp, parent.did, USER_DID, ['book:flights', 'cancel:flights'], spList);
+
+    const response = await post(await buildSignedVP([childVC, subOwnVC, grant], sub, USER_DID));
+    expect(response.statusCode).toBe(200);
+    // Without the per-chain bound this would be [book, cancel].
+    expect(response.json()).toMatchObject({ effectiveScopes: ['book:flights'] });
+
+    // A grant the user gave the delegate directly still meets its own credential.
+    const direct = await makeGrant(sp, sub.did, USER_DID, ['cancel:flights'], spList);
+    const both = await post(await buildSignedVP([childVC, subOwnVC, grant, direct], sub, USER_DID));
+    expect([...both.json().effectiveScopes].sort()).toEqual(['book:flights', 'cancel:flights']);
+  });
+
   it('non-grant failures are rejected with their own specific code too (expired VP)', async () => {
     const holder = makeActor();
     const vc = await makeAgentVC(issuer, holder.did);

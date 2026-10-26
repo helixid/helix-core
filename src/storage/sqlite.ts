@@ -237,7 +237,7 @@ CREATE TABLE IF NOT EXISTS audit_log (
    * unreliable — two calls issued within the same millisecond produce
    * identical Date.now() values, so a timestamp-equality check can't tell
    * "I just set this" apart from "someone else already set this to the same
-   * value" (see docs/proposal-sdk-api-only.md's prepare-endpoint idempotency
+   * value" (see the SDK-API-only design's prepare-endpoint idempotency
    * requirement — this is exactly the race it's meant to close).
    */
   run(sql: string): { changes: number } {

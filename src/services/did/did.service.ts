@@ -29,6 +29,7 @@ import type { IHederaClient } from '../../hedera/IHederaClient.js';
 import type { ICache } from '../../cache/ICache.js';
 import { NoopCache } from '../../cache/NoopCache.js';
 import { extractEd25519PublicKeyHexFromDIDDocument } from './publicKey.js';
+import { evictDIDCache } from '../../core/did-resolver.js';
 
 /**
  * A short, stable, non-secret identifier derived from an agent's public key
@@ -113,7 +114,7 @@ export class DIDService implements IDIDService {
     // what method the hosted issuer itself uses. Only 'hedera' touches the
     // Hedera client at all — 'web' and 'key' never anchor anywhere, so
     // onboarding works with zero Hedera/network dependency when configured
-    // that way (see docs/proposal-sdk-api-only.md's DID_METHOD setting).
+    // that way (see the SDK-API-only design's DID_METHOD setting).
     private didMethod: DidMethod = 'hedera',
     private didDomain = '',
   ) {}
@@ -470,6 +471,9 @@ export class DIDService implements IDIDService {
 
     await this.repository.deactivateDid(did, deactivatedAt);
     await this.cache.delete(did);
+    // This process verifies VPs too: without this, a deactivated did:web
+    // would keep resolving from the verifier's cache for up to its TTL.
+    evictDIDCache(did);
 
     await this.audit.log({
       timestamp: new Date().toISOString(),

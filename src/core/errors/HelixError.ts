@@ -378,6 +378,66 @@ export class ConsentGrantSubjectMismatchError extends HelixError {
   }
 }
 
+/**
+ * A VP that names a user (`delegatedBy`) must carry that user's consent: an
+ * agent saying "I act for Ada" proves nothing about Ada. Without this, the
+ * VP would verify on the agent's own authority while the verified result
+ * still named Ada -- and a relying party reading `userDid` would treat the
+ * call as Ada's.
+ */
+export class ConsentGrantRequiredError extends HelixError {
+  constructor(userDid: string) {
+    super('CONSENT_GRANT_REQUIRED', `VP acts on behalf of ${userDid} but carries no consent grant from them`, 400);
+  }
+}
+
+/**
+ * A consent grant is issued by the service the user consented at, and holds
+ * only there. Without this, consent given at one service would verify at
+ * every other service using the same scope names.
+ */
+export class ConsentGrantWrongServiceError extends HelixError {
+  constructor(grantIssuer: string, targetService: string) {
+    super(
+      'CONSENT_GRANT_WRONG_SERVICE',
+      `Consent grant was issued by ${grantIssuer}, not by the VP's target service ${targetService}`,
+      400,
+    );
+  }
+}
+
+/**
+ * The grant names an agent further up the holder's delegation chain, but the
+ * user did not allow that consent to pass to agents it delegates to.
+ */
+export class ConsentGrantNotDelegableError extends HelixError {
+  constructor() {
+    super(
+      'CONSENT_GRANT_NOT_DELEGABLE',
+      'Consent grant was given to a delegating agent and does not allow use by its delegates',
+      400,
+    );
+  }
+}
+
+/** Issuance: a grant may only carry scopes the agent itself was onboarded with. */
+export class ConsentGrantScopeNotAllowedError extends HelixError {
+  constructor(scopes: string[]) {
+    super(
+      'CONSENT_GRANT_SCOPE_NOT_ALLOWED',
+      `Consent grant scopes are not held by the agent's own credential: ${scopes.join(', ')}`,
+      400,
+    );
+  }
+}
+
+/** Issuance: a grant with nothing but the terms scope authorizes nothing. */
+export class ConsentNoGrantableScopesError extends HelixError {
+  constructor(message = 'Consent grant carries no scope the agent can use at this service') {
+    super('CONSENT_NO_GRANTABLE_SCOPES', message, 400);
+  }
+}
+
 export class ConsentGrantInvalidError extends HelixError {
   constructor(message = 'Consent grant credential is structurally invalid') {
     super('CONSENT_GRANT_INVALID', message, 400);
@@ -528,7 +588,7 @@ export class ServiceAlreadyExistsError extends HelixError {
 }
 
 // ── Hosted accounts & auth (Item #1) ────────────────────────────────────────
-// See docs/proposal-hosted-instance.md ("Decided: accounts, login, and
+// See the hosted-instance design ("Decided: accounts, login, and
 // DID/key custody"). Account-facing auth errors only — key custody
 // implementation errors stay as generic InternalError, since their detail
 // should never reach a client response.

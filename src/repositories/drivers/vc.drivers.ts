@@ -59,7 +59,7 @@ export interface VcStorageDriver {
   findActiveBySubjectDid(subjectDid: string, vcType?: string): Promise<VCRecord[]>;
   findActiveByIdentity(identity: VcIdentity): Promise<VCRecord[]>;
   findActiveChildren(parentVcId: string): Promise<VCRecord[]>;
-  findMany(filters: { subjectDid?: string | undefined }): Promise<VCRecord[]>;
+  findMany(filters: { subjectDid?: string | undefined; issuerDid?: string | undefined }): Promise<VCRecord[]>;
   findStatusListById(listId: string): Promise<StatusListEntryRecord | null>;
   createStatusList(listId: string, encodedList: string): Promise<StatusListEntryRecord>;
   claimNextIndex(listId: string): Promise<{ list: StatusListEntryRecord; claimedIndex: number }>;
@@ -272,17 +272,28 @@ export class PrismaVcStorageDriver implements VcStorageDriver {
     );
   }
 
-  async findMany(filters: { subjectDid?: string | undefined }): Promise<VCRecord[]> {
+  async findMany(filters: { subjectDid?: string | undefined; issuerDid?: string | undefined }): Promise<VCRecord[]> {
     if (!hasRealRaw(this.prisma)) {
       const where: Record<string, unknown> = {};
       if (filters.subjectDid) where.subjectDid = filters.subjectDid;
+      if (filters.issuerDid) where.issuerDid = filters.issuerDid;
       return this.db.vc.findMany({ where, orderBy: { createdAt: 'desc' } });
     }
 
+    const conditions: string[] = [];
+    const params: string[] = [];
     if (filters.subjectDid) {
+      params.push(filters.subjectDid);
+      conditions.push(`"subjectDid" = $${params.length}`);
+    }
+    if (filters.issuerDid) {
+      params.push(filters.issuerDid);
+      conditions.push(`"issuerDid" = $${params.length}`);
+    }
+    if (conditions.length > 0) {
       return (this.prisma as PrismaRaw).$queryRawUnsafe<VCRecord[]>(
-        `SELECT * FROM "vcs" WHERE "subjectDid" = $1 ORDER BY "createdAt" DESC`,
-        filters.subjectDid,
+        `SELECT * FROM "vcs" WHERE ${conditions.join(' AND ')} ORDER BY "createdAt" DESC`,
+        ...params,
       );
     }
     return (this.prisma as PrismaRaw).$queryRawUnsafe<VCRecord[]>(
@@ -512,9 +523,10 @@ export class SqliteVcStorageDriver implements VcStorageDriver {
     return rows.map((row) => fromSqliteVcRow(row)).filter((v): v is VCRecord => Boolean(v));
   }
 
-  async findMany(filters: { subjectDid?: string | undefined }): Promise<VCRecord[]> {
+  async findMany(filters: { subjectDid?: string | undefined; issuerDid?: string | undefined }): Promise<VCRecord[]> {
     const conditions: string[] = [];
     if (filters.subjectDid) conditions.push(`subject_did = ${sqliteLiteral(filters.subjectDid)}`);
+    if (filters.issuerDid) conditions.push(`issuer_did = ${sqliteLiteral(filters.issuerDid)}`);
     const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
     const rows = this.sqlite.query<SqliteVcRow>(`
       SELECT * FROM vcs ${where} ORDER BY created_at DESC
@@ -676,9 +688,10 @@ export class InMemoryVcStorageDriver implements VcStorageDriver {
     return this.activeSorted((r) => r.parentVcId === parentVcId);
   }
 
-  async findMany(filters: { subjectDid?: string | undefined }): Promise<VCRecord[]> {
+  async findMany(filters: { subjectDid?: string | undefined; issuerDid?: string | undefined }): Promise<VCRecord[]> {
     return [...this.vcs.values()]
       .filter((r) => !filters.subjectDid || r.subjectDid === filters.subjectDid)
+      .filter((r) => !filters.issuerDid || r.issuerDid === filters.issuerDid)
       .sort((a, b) => (b.createdAt?.getTime() ?? 0) - (a.createdAt?.getTime() ?? 0));
   }
 

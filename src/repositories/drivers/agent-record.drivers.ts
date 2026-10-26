@@ -55,11 +55,21 @@ export function escapeLikePattern(term: string): string {
   return term.replace(/[\\%_]/g, (character) => `\\${character}`);
 }
 
-function isActive(record: { revokedAt: Date | null; credentialExpiresAt: Date | null }, now: Date): boolean {
+/**
+ * An agent is active when its own credential is live: it has one
+ * (credentialVcId), it isn't revoked, and it either never expires
+ * (credentialExpiresAt null) or hasn't yet. "No credential" is read from
+ * credentialVcId, never from a null expiry: a credential enrolled with no
+ * expiry, the default, stores null there and is active.
+ */
+function isActive(
+  record: { revokedAt: Date | null; credentialVcId: string | null; credentialExpiresAt: Date | null },
+  now: Date,
+): boolean {
   return (
     record.revokedAt === null &&
-    record.credentialExpiresAt !== null &&
-    record.credentialExpiresAt.getTime() > now.getTime()
+    record.credentialVcId !== null &&
+    (record.credentialExpiresAt === null || record.credentialExpiresAt.getTime() > now.getTime())
   );
 }
 
@@ -86,9 +96,9 @@ function fromPgRow(row: PgAgentRow): AgentRecord {
   return { ...row, visibility: asVisibility(row.visibility) };
 }
 
-/** Postgres: true when the agent's own credential is live. NULL-safe, so it is always TRUE or FALSE. */
+/** Postgres: isActive() as SQL. NULL-safe, so it is always TRUE or FALSE. */
 const PG_ACTIVE = (nowParam: string): string =>
-  `("revokedAt" IS NULL AND "credentialExpiresAt" IS NOT NULL AND "credentialExpiresAt" > ${nowParam})`;
+  `("revokedAt" IS NULL AND "credentialVcId" IS NOT NULL AND ("credentialExpiresAt" IS NULL OR "credentialExpiresAt" > ${nowParam}))`;
 
 export class PrismaAgentRecordStorageDriver implements AgentRecordStorageDriver {
   constructor(private readonly prisma: PrismaClient) {}
@@ -237,7 +247,7 @@ function fromSqliteRow(row: SqliteAgentRow): AgentRecord {
  * strings.
  */
 const SQLITE_ACTIVE = (now: Date): string =>
-  `(revoked_at IS NULL AND credential_expires_at IS NOT NULL AND credential_expires_at > ${sqliteLiteral(now)})`;
+  `(revoked_at IS NULL AND credential_vc_id IS NOT NULL AND (credential_expires_at IS NULL OR credential_expires_at > ${sqliteLiteral(now)}))`;
 
 export class SqliteAgentRecordStorageDriver implements AgentRecordStorageDriver {
   constructor(private readonly sqlite: SqliteStore) {}

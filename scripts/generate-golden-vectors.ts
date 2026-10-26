@@ -11,7 +11,7 @@
 // limitations under the License.
 
 /**
- * Golden vector generator — see docs/proposal-sdk-api-only.md
+ * Golden vector generator — see the SDK-API-only design
  * ("Decided: how payload/encoding parity is guaranteed for what stays local").
  *
  * Generates deterministic fixtures straight from helix-core's own

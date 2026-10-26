@@ -12,6 +12,13 @@ export interface DelegateOptions {
   scopes: string[];
   expiresIn: number;
   fromVC: SignedVC;
+  /**
+   * The delegation's own revocation entry. With it, revoking this one
+   * delegation reaches every verifier through the status list, VPs signed
+   * before the revocation included; without it, the delegation only
+   * inherits revocation from its ancestors.
+   */
+  credentialStatus?: SignedVC['credentialStatus'];
 }
 
 export interface DelegationLink {
@@ -86,6 +93,7 @@ export async function buildDelegationVC(
       maxDelegationDepth: maxDepth,
       parentVcId: options.fromVC.id,
     },
+    ...(options.credentialStatus ? { credentialStatus: options.credentialStatus } : {}),
     delegationChain: [...parentChain, options.fromVC],
   };
 

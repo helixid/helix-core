@@ -45,7 +45,17 @@ describe('ServiceProviderService', () => {
     };
     audit = { log: vi.fn() };
     service = new ServiceProviderService(didService, vcService, services, didKeys, keyCustody, audit);
+    // The agent's own onboarding credential: what any consent to it may grant.
+    vcService.setActiveVC(agentVC(['read:calendar', 'a', 'b', 'x']));
   });
+
+  function agentVC(privilegeScopes: string[], extra: Record<string, unknown> = {}): Record<string, unknown> {
+    return {
+      id: 'vc:test:agent',
+      type: ['VerifiableCredential', 'HelixAgentCredential'],
+      credentialSubject: { privilegeScopes, ...extra },
+    };
+  }
 
   async function onboardedAgent(): Promise<string> {
     const { publicKey, encrypted } = keyCustody.generateAndEncrypt();
@@ -172,6 +182,80 @@ describe('ServiceProviderService', () => {
     ]) {
       await expect(service.issueDelegationGrant(bad, 'r')).rejects.toBeInstanceOf(HelixError);
     }
+  });
+
+  describe('grant scopes are bounded by the agent\'s own credential', () => {
+    const userDid = 'did:web:mock.local:users:alice';
+
+    it('refuses a scope the agent was not onboarded with, naming it', async () => {
+      const { did: serviceDid } = await service.enroll(ENROLL, 'r');
+      const agentDid = await onboardedAgent();
+      await expect(
+        service.issueDelegationGrant({ serviceDid, agentDid, userDid, scopes: ['a', 'write:payments'] }, 'r'),
+      ).rejects.toMatchObject({ code: 'CONSENT_GRANT_SCOPE_NOT_ALLOWED', message: expect.stringContaining('write:payments') });
+      expect(vcService.registeredGrants).toEqual([]);
+    });
+
+    it('lets accept-terms through without the agent holding it', async () => {
+      const { did: serviceDid } = await service.enroll(ENROLL, 'r');
+      const agentDid = await onboardedAgent();
+      const { grantVC } = await service.issueDelegationGrant(
+        { serviceDid, agentDid, userDid, scopes: ['a', 'accept-terms'] },
+        'r',
+      );
+      expect(grantVC.credentialSubject).toMatchObject({ scopes: ['a', 'accept-terms'] });
+    });
+
+    it('refuses a grant of nothing but accept-terms', async () => {
+      const { did: serviceDid } = await service.enroll(ENROLL, 'r');
+      const agentDid = await onboardedAgent();
+      await expect(
+        service.issueDelegationGrant({ serviceDid, agentDid, userDid, scopes: ['accept-terms'] }, 'r'),
+      ).rejects.toMatchObject({ code: 'CONSENT_NO_GRANTABLE_SCOPES' });
+    });
+
+    it('ignores credentials delegated to the agent: only its own scopes count', async () => {
+      const { did: serviceDid } = await service.enroll(ENROLL, 'r');
+      const agentDid = await onboardedAgent();
+      vcService.setActiveVC(agentVC(['delegated:scope'], { delegatedFrom: 'did:key:zParent' }));
+      // Its only active credential is delegated, so it has no scopes of its own.
+      await expect(
+        service.issueDelegationGrant({ serviceDid, agentDid, userDid, scopes: ['delegated:scope'] }, 'r'),
+      ).rejects.toBeInstanceOf(AgentActiveCredentialNotFoundError);
+    });
+
+    it('records allowDelegation on the grant when given, and leaves it out otherwise', async () => {
+      const { did: serviceDid } = await service.enroll(ENROLL, 'r');
+      const agentDid = await onboardedAgent();
+      const withFlag = await service.issueDelegationGrant(
+        { serviceDid, agentDid, userDid, scopes: ['a'], allowDelegation: false },
+        'r1',
+      );
+      expect(withFlag.grantVC.credentialSubject).toMatchObject({ allowDelegation: false });
+      const without = await service.issueDelegationGrant({ serviceDid, agentDid, userDid, scopes: ['b'] }, 'r2');
+      expect(without.grantVC.credentialSubject).not.toHaveProperty('allowDelegation');
+      await expect(
+        service.issueDelegationGrant({ serviceDid, agentDid, userDid, scopes: ['a'], allowDelegation: 'yes' as never }, 'r3'),
+      ).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+    });
+  });
+
+  describe('getAgentScopes', () => {
+    it('returns the union of the agent\'s own active credentials\' scopes', async () => {
+      const agentDid = await onboardedAgent();
+      expect(await service.getAgentScopes(agentDid)).toEqual({ agentDid, scopes: ['read:calendar', 'a', 'b', 'x'] });
+    });
+
+    it('refuses a DID this server did not onboard as an agent, and a non-DID', async () => {
+      await expect(service.getAgentScopes('did:key:zStranger')).rejects.toBeInstanceOf(DelegateeNotAnAgentError);
+      await expect(service.getAgentScopes('alice')).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+    });
+
+    it('refuses an agent with no active credential of its own', async () => {
+      const agentDid = await onboardedAgent();
+      vcService.setActiveVC(null);
+      await expect(service.getAgentScopes(agentDid)).rejects.toBeInstanceOf(AgentActiveCredentialNotFoundError);
+    });
   });
 
   describe('one grant per (user, agent, service, scope set)', () => {

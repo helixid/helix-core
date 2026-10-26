@@ -23,6 +23,13 @@ import { getStatusListLength, type StatusListCredential } from './status-list/in
  * generates and holds the key and signs on the service's behalf (see
  * ServiceProviderService.issueDelegationGrant()).
  */
+/**
+ * The terms-and-conditions scope a consent screen always adds. It authorizes
+ * nothing by itself, so it is never checked against the agent's scopes and
+ * never makes a grant worth issuing on its own.
+ */
+export const ACCEPT_TERMS_SCOPE = 'accept-terms';
+
 export interface IssuerKeyMaterial {
   did: string;
   privateKeyHex: string;
@@ -34,6 +41,12 @@ export interface IssueGrantOptions {
   scopes: string[];
   durability: 'standing' | 'session';
   serviceDid?: string;
+  /**
+   * Whether the consent also covers agents the consented agent delegates
+   * to. Omitted leaves the field out of the grant, which verifiers read as
+   * allowed.
+   */
+  allowDelegation?: boolean;
   statusList: StatusListCredential; // current list, unmodified
   statusListCredentialUrl: string; // public URL of the list above
   /**
@@ -83,6 +96,7 @@ export async function issueGrant(
       scopes: options.scopes,
       durability: options.durability,
       ...(options.serviceDid !== undefined ? { serviceDid: options.serviceDid } : {}),
+      ...(options.allowDelegation !== undefined ? { allowDelegation: options.allowDelegation } : {}),
     },
   };
 
