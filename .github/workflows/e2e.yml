@@ -1,0 +1,27 @@
+name: E2E
+
+# Runs the Playwright e2e suite (helixid/e2e-playwright) with this repo at the
+# PR's commit and the other Helix repos on main. Needs the HELIX_E2E_TOKEN
+# secret (read access to the helixid repos) and e2e-playwright's Actions
+# access set to allow repositories in the organization.
+
+on:
+  push:
+    branches: [main]
+    paths-ignore: ['**.md', 'docs/**']
+  pull_request:
+    branches: [main]
+    paths-ignore: ['**.md', 'docs/**']
+  workflow_dispatch:
+
+concurrency:
+  group: e2e-caller-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  e2e:
+    uses: helixid/e2e-playwright/.github/workflows/e2e.yml@main
+    with:
+      core_ref: ${{ github.event.pull_request.head.sha || github.sha }}
+    secrets:
+      HELIX_E2E_TOKEN: ${{ secrets.HELIX_E2E_TOKEN }}
