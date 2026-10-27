@@ -1,7 +1,7 @@
 // Copyright 2026 DgVerse LLP
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { VCService } from '../../../src/services/vc/vc.service.js';
-import { ErrorCode, buildDIDDocument, createStatusList, derivePublicKey } from '../../../src/core/index.js';
+import { ErrorCode, buildDIDDocument, createStatusList, derivePublicKey, getBit } from '../../../src/core/index.js';
 
 describe('VCService Branch Coverage', () => {
   let repository: any;
@@ -25,6 +25,8 @@ describe('VCService Branch Coverage', () => {
       revokeVc: vi.fn(),
       markAsRenewed: vi.fn(),
       findActiveStatusList: vi.fn(),
+      findActiveByIdentity: vi.fn().mockResolvedValue([]),
+      findActiveChildren: vi.fn().mockResolvedValue([]),
     };
     didService = {
       resolveDID: vi.fn().mockImplementation((did: string) => {
@@ -240,6 +242,78 @@ describe('VCService Branch Coverage', () => {
       await expect(service.revokeVC('v1', 'req-1')).rejects.toMatchObject({
         code: ErrorCode.VC_ALREADY_REVOKED,
       });
+    });
+
+    describe('which status bit it flips', () => {
+      const listUrl = 'http://localhost/v1/status-list/helix-status-list-1';
+      const ownStatus = (index: number) => ({ credentialStatus: { statusListIndex: String(index), statusListCredential: listUrl } });
+      const flippedList = () => repository.revokeVc.mock.calls[0][2] as string;
+
+      beforeEach(() => {
+        repository.findStatusListById.mockResolvedValue({ encodedList: validStatusList });
+        repository.revokeVc.mockResolvedValue({ revokedAt: new Date() });
+      });
+
+      it("flips the credential's own bit on this platform's list", async () => {
+        repository.findByVcId.mockResolvedValue({ vcId: 'v1', revokedAt: null, statusListIndex: 5, vcJson: ownStatus(5) });
+        await service.revokeVC('v1', 'req-1');
+        expect(getBit(flippedList(), 5)).toBe(1);
+        expect(getBit(flippedList(), 0)).toBe(0);
+      });
+
+      it('reads the status entry from JSON stored as a string (sqlite)', async () => {
+        repository.findByVcId.mockResolvedValue({
+          vcId: 'v1',
+          revokedAt: null,
+          statusListIndex: 5,
+          vcJson: JSON.stringify(ownStatus(5)),
+        });
+        await service.revokeVC('v1', 'req-1');
+        expect(getBit(flippedList(), 5)).toBe(1);
+      });
+
+      it("never flips bit 0 for a delegation without its own entry (placeholder index 0) -- that bit is another credential's", async () => {
+        repository.findByVcId.mockResolvedValue({ vcId: 'vc:helix:delegation:1', revokedAt: null, statusListIndex: 0, vcJson: {} });
+        await service.revokeVC('vc:helix:delegation:1', 'req-1');
+        expect(repository.revokeVc).toHaveBeenCalledWith(
+          'vc:helix:delegation:1',
+          'helix-status-list-1',
+          validStatusList,
+        );
+      });
+
+      it("never flips a bit for a credential whose entry is on another issuer's list", async () => {
+        repository.findByVcId.mockResolvedValue({
+          vcId: 'v1',
+          revokedAt: null,
+          statusListIndex: 5,
+          vcJson: { credentialStatus: { statusListIndex: '5', statusListCredential: 'https://sp.example/status/1' } },
+        });
+        await service.revokeVC('v1', 'req-1');
+        expect(flippedList()).toBe(validStatusList);
+      });
+    });
+  });
+
+  describe('registerSignedVC status index', () => {
+    const delegation = (credentialStatus?: Record<string, string>) => ({
+      id: 'vc:helix:delegation:1',
+      type: ['VerifiableCredential', 'HelixAgentCredential'],
+      issuer: 'did:key:z6Mkparent',
+      credentialSubject: { id: 'did:key:z6Mkchild', privilegeScopes: ['read'], delegatedFrom: 'did:key:z6Mkparent', delegationDepth: 1 },
+      ...(credentialStatus ? { credentialStatus } : {}),
+    });
+
+    it("stores a delegation's own index when its entry is on this platform's list", async () => {
+      await service.registerSignedVC(
+        delegation({ statusListIndex: '7', statusListCredential: 'http://localhost/v1/status-list/helix-status-list-1' }) as never,
+      );
+      expect(repository.createVc).toHaveBeenCalledWith(expect.objectContaining({ statusListIndex: 7 }));
+    });
+
+    it('keeps the placeholder 0 for a delegation without its own entry', async () => {
+      await service.registerSignedVC(delegation() as never);
+      expect(repository.createVc).toHaveBeenCalledWith(expect.objectContaining({ statusListIndex: 0 }));
     });
   });
 

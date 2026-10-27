@@ -25,6 +25,8 @@ describe('VCService status-list cache behavior', () => {
       claimNextIndex: vi.fn(),
       revokeVc: vi.fn(),
       markAsRenewed: vi.fn(),
+      findActiveByIdentity: vi.fn().mockResolvedValue([]),
+      findActiveChildren: vi.fn().mockResolvedValue([]),
     };
     didService = { resolveDID: vi.fn() };
     auditLogger = { log: vi.fn() };
@@ -63,11 +65,19 @@ describe('VCService status-list cache behavior', () => {
   it('invalidates status-list cache after VC revocation', async () => {
     const encodedList = createStatusList();
     await statusListCache.set('helix-status-list-1', encodedList, 60);
+    // An issued credential: its status entry is on this platform's list, so
+    // revoking it flips its bit and the cached list must be dropped.
     repository.findByVcId.mockResolvedValue({
       vcId: 'vc:1',
       subjectDid: 'did:subject',
       statusListIndex: 0,
       revokedAt: null,
+      vcJson: {
+        credentialStatus: {
+          statusListIndex: '0',
+          statusListCredential: 'http://localhost:3000/v1/status-list/helix-status-list-1',
+        },
+      },
     });
     repository.findStatusListById.mockResolvedValue({ listId: 'helix-status-list-1', encodedList, nextIndex: 1 });
     repository.revokeVc.mockResolvedValue({

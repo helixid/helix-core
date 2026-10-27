@@ -16,7 +16,9 @@ export const unsignedVPSchema = z.object({
   type: typeSchema,
   id: z.string().regex(/^vp:helix:/),
   holder: z.string().min(1),
-  verifiableCredential: z.array(z.record(z.unknown())).min(1).max(2),
+  // One agent credential plus any number of consent grants; the verifier
+  // checks the composition, this only rules out an empty array.
+  verifiableCredential: z.array(z.record(z.unknown())).min(1),
   nonce: z.string().regex(/^[0-9a-f]{64}$/),
   expirationDate: z.string().datetime(),
   // Optional per VP doc §3.1 — when the builder gets no userDid, the key is

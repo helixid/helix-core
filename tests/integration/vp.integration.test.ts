@@ -60,7 +60,7 @@ describe('VP integration API', () => {
   it('POST /v1/vp/verify without session verifies and returns the result envelope', async () => {
     const holder = makeActor();
     const vc = await makeAgentVC(issuer, holder.did);
-    const vp = await buildSignedVP([vc], holder, USER_DID);
+    const vp = await buildSignedVP([vc], holder);
 
     const response = await app.inject({
       method: 'POST',
@@ -72,7 +72,6 @@ describe('VP integration API', () => {
     expect(response.json()).toMatchObject({
       valid: true,
       agentDid: holder.did,
-      userDid: USER_DID,
       targetService: 'orders',
     });
     expect(response.json().session).toBeUndefined();
@@ -81,7 +80,7 @@ describe('VP integration API', () => {
   it('POST /v1/vp/verify with session true returns a JWT session', async () => {
     const holder = makeActor();
     const vc = await makeAgentVC(issuer, holder.did, ['read:orders']);
-    const vp = await buildSignedVP([vc], holder, USER_DID);
+    const vp = await buildSignedVP([vc], holder);
 
     const response = await app.inject({
       method: 'POST',
@@ -96,6 +95,17 @@ describe('VP integration API', () => {
     const payload = decodeJwtPayload(body.session.token as string);
     expect(payload['sub']).toBe(holder.did);
     expect(payload['scopes']).toEqual(['read:orders']);
+  });
+
+  it('rejects a VP that names a user but carries no consent grant from them', async () => {
+    const holder = makeActor();
+    const vc = await makeAgentVC(issuer, holder.did);
+    const vp = await buildSignedVP([vc], holder, USER_DID);
+
+    const response = await app.inject({ method: 'POST', url: '/v1/vp/verify', payload: { signedVP: vp } });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json().error.code).toBe('CONSENT_GRANT_REQUIRED');
   });
 
   it('a VP without delegatedBy verifies and omits userDid from the response', async () => {

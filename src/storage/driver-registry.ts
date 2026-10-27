@@ -5,8 +5,7 @@
 //    http://www.apache.org/licenses/LICENSE-2.0
 //
 // Shared infrastructure for the pluggable storage-driver pattern used by
-// every repository in src/repositories/. See docs/decision-storage-driver-
-// pattern.md for the full design writeup and migration plan.
+// every repository in src/repositories/.
 //
 // THE PROBLEM THIS SOLVES: repositories used to branch on `if (this.prisma)
 // ... else if (this.sqlite) ... else (in-memory)` inside every single

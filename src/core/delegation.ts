@@ -3,6 +3,7 @@ import { createEd25519Proof } from './proof.js';
 import {
   MaxDelegationDepthExceededError,
   ScopeEscalationDeniedError,
+  SelfDelegationNotAllowedError,
 } from './errors/HelixError.js';
 import type { SignedVC } from './schemas/vc.js';
 
@@ -11,6 +12,13 @@ export interface DelegateOptions {
   scopes: string[];
   expiresIn: number;
   fromVC: SignedVC;
+  /**
+   * The delegation's own revocation entry. With it, revoking this one
+   * delegation reaches every verifier through the status list, VPs signed
+   * before the revocation included; without it, the delegation only
+   * inherits revocation from its ancestors.
+   */
+  credentialStatus?: SignedVC['credentialStatus'];
 }
 
 export interface DelegationLink {
@@ -52,6 +60,9 @@ export async function buildDelegationVC(
   options: DelegateOptions,
   wallet: { did: string; privateKeyHex: string },
 ): Promise<SignedVC> {
+  if (options.to === wallet.did) {
+    throw new SelfDelegationNotAllowedError(wallet.did);
+  }
   assertAgentVC(options.fromVC);
   const parentSubject = options.fromVC.credentialSubject;
   const parentDepth = parentSubject.delegationDepth ?? 0;
@@ -82,6 +93,7 @@ export async function buildDelegationVC(
       maxDelegationDepth: maxDepth,
       parentVcId: options.fromVC.id,
     },
+    ...(options.credentialStatus ? { credentialStatus: options.credentialStatus } : {}),
     delegationChain: [...parentChain, options.fromVC],
   };
 

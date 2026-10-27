@@ -1,9 +1,5 @@
 # Golden vectors
 
-See [`docs/proposal-sdk-api-only.md`](../../docs/proposal-sdk-api-only.md)
-("Decided: how payload/encoding parity is guaranteed for what stays local")
-and [`docs/proposal-retire-core-package.md`](../../docs/proposal-retire-core-package.md).
-
 These fixtures are the cross-language contract for the small set of crypto
 primitives that every SDK must implement **locally** rather than call the API
 for: canonical JSON, hashing, Ed25519 signing, and `VPBuilder.sign()`. They

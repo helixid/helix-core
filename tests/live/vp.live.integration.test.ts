@@ -4,6 +4,8 @@ import {
   LIVE_HEDERA_TIMEOUT_MS,
   onboardLiveAgent,
   resetLiveTestDatabase,
+  enrollLiveService,
+  issueLiveGrant,
   signLiveVP,
   startLiveApi,
   type LiveApi,
@@ -11,10 +13,12 @@ import {
 
 describe('VP Live Integration', () => {
   let api: LiveApi;
+  let service: { did: string };
 
   beforeAll(async () => {
     await resetLiveTestDatabase();
     api = await startLiveApi();
+    service = await enrollLiveService(api);
   });
 
   afterAll(async () => {
@@ -28,9 +32,15 @@ describe('VP Live Integration', () => {
       requestedScopes: ['read:orders'],
       requestedDomains: ['https://live-vp.agent.example.com'],
     });
+    await issueLiveGrant(api, {
+      serviceDid: service.did,
+      agentDid: agent.did,
+      userDid: 'did:hedera:testnet:live-user-placeholder',
+      scopes: ['read:orders'],
+    });
 
     const signedVP = await signLiveVP(api, agent.did, {
-      targetService: 'amazon',
+      targetService: service.did,
       userDid: 'did:hedera:testnet:live-user-placeholder',
     });
 
@@ -39,7 +49,7 @@ describe('VP Live Integration', () => {
     expect(verifyRes.body).toMatchObject({
       valid: true,
       agentDid: agent.did,
-      targetService: 'amazon',
+      targetService: service.did,
     });
   }, LIVE_HEDERA_TIMEOUT_MS);
 
@@ -58,9 +68,15 @@ describe('VP Live Integration', () => {
       requestedScopes: ['read:orders'],
       requestedDomains: ['https://live-vp-replay.agent.example.com'],
     });
+    await issueLiveGrant(api, {
+      serviceDid: service.did,
+      agentDid: agent.did,
+      userDid: 'did:hedera:testnet:live-user-placeholder',
+      scopes: ['read:orders'],
+    });
 
     const signedVP = await signLiveVP(api, agent.did, {
-      targetService: 'amazon',
+      targetService: service.did,
       userDid: 'did:hedera:testnet:live-user-placeholder',
     });
 
@@ -80,8 +96,14 @@ describe('VP Live Integration', () => {
       requestedDomains: ['https://live-tamper.agent.example.com'],
     });
 
+    await issueLiveGrant(api, {
+      serviceDid: service.did,
+      agentDid: agent.did,
+      userDid: 'did:hedera:testnet:live-user-placeholder',
+      scopes: ['read:orders'],
+    });
     const vpTampered = await signLiveVP(api, agent.did, {
-      targetService: 'amazon',
+      targetService: service.did,
       userDid: 'did:hedera:testnet:live-user-placeholder',
     });
     (vpTampered as unknown as { targetService: string }).targetService = 'tampered-service';
@@ -102,8 +124,14 @@ describe('VP Live Integration', () => {
       requestedDomains: ['https://live-vc-tamper.agent.example.com'],
     });
 
+    await issueLiveGrant(api, {
+      serviceDid: service.did,
+      agentDid: agent.did,
+      userDid: 'did:hedera:testnet:live-user-placeholder',
+      scopes: ['read:orders'],
+    });
     const vcTampered = await signLiveVP(api, agent.did, {
-      targetService: 'amazon',
+      targetService: service.did,
       userDid: 'did:hedera:testnet:live-user-placeholder',
     });
     (vcTampered.verifiableCredential[0] as any).credentialSubject.agentName = 'Tampered Agent';

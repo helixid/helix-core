@@ -23,6 +23,7 @@ import type {
   CreateVcParams,
   ListVcFilters,
   StatusListEntryRecord,
+  VcIdentity,
   VCRecord,
 } from '../vc.repository.js';
 
@@ -56,7 +57,9 @@ export interface VcStorageDriver {
   findByVcId(vcId: string): Promise<VCRecord | null>;
   listVcs(filters: ListVcFilters): Promise<VCRecord[]>;
   findActiveBySubjectDid(subjectDid: string, vcType?: string): Promise<VCRecord[]>;
-  findMany(filters: { subjectDid?: string | undefined }): Promise<VCRecord[]>;
+  findActiveByIdentity(identity: VcIdentity): Promise<VCRecord[]>;
+  findActiveChildren(parentVcId: string): Promise<VCRecord[]>;
+  findMany(filters: { subjectDid?: string | undefined; issuerDid?: string | undefined }): Promise<VCRecord[]>;
   findStatusListById(listId: string): Promise<StatusListEntryRecord | null>;
   createStatusList(listId: string, encodedList: string): Promise<StatusListEntryRecord>;
   claimNextIndex(listId: string): Promise<{ list: StatusListEntryRecord; claimedIndex: number }>;
@@ -113,6 +116,10 @@ export class PrismaVcStorageDriver implements VcStorageDriver {
           privilegeScopes: params.privilegeScopes ?? null,
           statusListIndex: params.statusListIndex,
           expiresAt: params.expiresAt,
+          vcType: params.vcType ?? null,
+          issuerDid: params.issuerDid ?? null,
+          userDid: params.userDid ?? null,
+          scopeKey: params.scopeKey ?? null,
         },
       });
     }
@@ -130,8 +137,12 @@ export class PrismaVcStorageDriver implements VcStorageDriver {
         "delegatedFrom",
         "delegationDepth",
         "maxDelegationDepth",
-        "parentVcId"
-      ) VALUES ($1,$2,$3,$4,$5::jsonb,$6::jsonb,$7,$8,$9,$10,$11,$12)
+        "parentVcId",
+        "vcType",
+        "issuerDid",
+        "userDid",
+        "scopeKey"
+      ) VALUES ($1,$2,$3,$4,$5::jsonb,$6::jsonb,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
       RETURNING *`,
       makeId('vcdb'),
       params.vcId,
@@ -145,6 +156,10 @@ export class PrismaVcStorageDriver implements VcStorageDriver {
       params.delegationDepth ?? null,
       params.maxDelegationDepth ?? null,
       params.parentVcId ?? null,
+      params.vcType ?? null,
+      params.issuerDid ?? null,
+      params.userDid ?? null,
+      params.scopeKey ?? null,
     );
     return requireVcRow(rows[0]);
   }
@@ -171,7 +186,7 @@ export class PrismaVcStorageDriver implements VcStorageDriver {
       where.expiresAt = { lte: now };
     } else if (filters.status === 'active') {
       where.revokedAt = null;
-      where.expiresAt = { gt: now };
+      where.OR = [{ expiresAt: null }, { expiresAt: { gt: now } }];
     }
 
     return this.db.vc.findMany({
@@ -187,7 +202,7 @@ export class PrismaVcStorageDriver implements VcStorageDriver {
         where: {
           subjectDid,
           revokedAt: null,
-          expiresAt: { gt: new Date() },
+          OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
         },
         orderBy: { createdAt: 'asc' },
       });
@@ -196,7 +211,7 @@ export class PrismaVcStorageDriver implements VcStorageDriver {
 
     const records = await (this.prisma as PrismaRaw).$queryRawUnsafe<VCRecord[]>(
       `SELECT * FROM "vcs"
-       WHERE "subjectDid" = $1 AND "revokedAt" IS NULL AND "expiresAt" > $2
+       WHERE "subjectDid" = $1 AND "revokedAt" IS NULL AND ("expiresAt" IS NULL OR "expiresAt" > $2)
        ORDER BY "createdAt" ASC`,
       subjectDid,
       new Date(),
@@ -204,17 +219,81 @@ export class PrismaVcStorageDriver implements VcStorageDriver {
     return filterByType(records, vcType);
   }
 
-  async findMany(filters: { subjectDid?: string | undefined }): Promise<VCRecord[]> {
+  async findActiveByIdentity(identity: VcIdentity): Promise<VCRecord[]> {
+    if (!hasRealRaw(this.prisma)) {
+      return this.db.vc.findMany({
+        where: {
+          subjectDid: identity.subjectDid,
+          vcType: identity.vcType,
+          issuerDid: identity.issuerDid,
+          userDid: identity.userDid,
+          revokedAt: null,
+          OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
+        },
+        orderBy: { createdAt: 'asc' },
+      });
+    }
+
+    // IS NOT DISTINCT FROM: a null userDid (any credential but a consent
+    // grant) must match rows whose userDid is null.
+    return (this.prisma as PrismaRaw).$queryRawUnsafe<VCRecord[]>(
+      `SELECT * FROM "vcs"
+       WHERE "subjectDid" = $1 AND "vcType" = $2 AND "issuerDid" = $3
+         AND "userDid" IS NOT DISTINCT FROM $4::text
+         AND "revokedAt" IS NULL AND ("expiresAt" IS NULL OR "expiresAt" > $5)
+       ORDER BY "createdAt" ASC`,
+      identity.subjectDid,
+      identity.vcType,
+      identity.issuerDid,
+      identity.userDid,
+      new Date(),
+    );
+  }
+
+  async findActiveChildren(parentVcId: string): Promise<VCRecord[]> {
+    if (!hasRealRaw(this.prisma)) {
+      return this.db.vc.findMany({
+        where: {
+          parentVcId,
+          revokedAt: null,
+          OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
+        },
+        orderBy: { createdAt: 'asc' },
+      });
+    }
+
+    return (this.prisma as PrismaRaw).$queryRawUnsafe<VCRecord[]>(
+      `SELECT * FROM "vcs"
+       WHERE "parentVcId" = $1
+         AND "revokedAt" IS NULL AND ("expiresAt" IS NULL OR "expiresAt" > $2)
+       ORDER BY "createdAt" ASC`,
+      parentVcId,
+      new Date(),
+    );
+  }
+
+  async findMany(filters: { subjectDid?: string | undefined; issuerDid?: string | undefined }): Promise<VCRecord[]> {
     if (!hasRealRaw(this.prisma)) {
       const where: Record<string, unknown> = {};
       if (filters.subjectDid) where.subjectDid = filters.subjectDid;
+      if (filters.issuerDid) where.issuerDid = filters.issuerDid;
       return this.db.vc.findMany({ where, orderBy: { createdAt: 'desc' } });
     }
 
+    const conditions: string[] = [];
+    const params: string[] = [];
     if (filters.subjectDid) {
+      params.push(filters.subjectDid);
+      conditions.push(`"subjectDid" = $${params.length}`);
+    }
+    if (filters.issuerDid) {
+      params.push(filters.issuerDid);
+      conditions.push(`"issuerDid" = $${params.length}`);
+    }
+    if (conditions.length > 0) {
       return (this.prisma as PrismaRaw).$queryRawUnsafe<VCRecord[]>(
-        `SELECT * FROM "vcs" WHERE "subjectDid" = $1 ORDER BY "createdAt" DESC`,
-        filters.subjectDid,
+        `SELECT * FROM "vcs" WHERE ${conditions.join(' AND ')} ORDER BY "createdAt" DESC`,
+        ...params,
       );
     }
     return (this.prisma as PrismaRaw).$queryRawUnsafe<VCRecord[]>(
@@ -273,13 +352,17 @@ type SqliteVcRow = {
   vc_json: string;
   privilege_scopes: string | null;
   status_list_index: number;
-  expires_at: string;
+  expires_at: string | null;
   revoked_at: string | null;
   renewed_by_vc_id: string | null;
   delegated_from: string | null;
   delegation_depth: number | null;
   max_delegation_depth: number | null;
   parent_vc_id: string | null;
+  vc_type: string | null;
+  issuer_did: string | null;
+  user_did: string | null;
+  scope_key: string | null;
   created_at: string | null;
   updated_at: string | null;
 };
@@ -300,13 +383,17 @@ function fromSqliteVcRow(row: SqliteVcRow | undefined): VCRecord | null {
     vcJson: JSON.parse(row.vc_json),
     privilegeScopes: row.privilege_scopes ? JSON.parse(row.privilege_scopes) : null,
     statusListIndex: row.status_list_index,
-    expiresAt: new Date(row.expires_at),
+    expiresAt: row.expires_at ? new Date(row.expires_at) : null,
     revokedAt: row.revoked_at ? new Date(row.revoked_at) : null,
     renewedByVcId: row.renewed_by_vc_id,
     delegatedFrom: row.delegated_from,
     delegationDepth: row.delegation_depth,
     maxDelegationDepth: row.max_delegation_depth,
     parentVcId: row.parent_vc_id,
+    vcType: row.vc_type,
+    issuerDid: row.issuer_did,
+    userDid: row.user_did,
+    scopeKey: row.scope_key,
   };
   if (row.created_at) base.createdAt = new Date(row.created_at);
   if (row.updated_at) base.updatedAt = new Date(row.updated_at);
@@ -336,6 +423,7 @@ export class SqliteVcStorageDriver implements VcStorageDriver {
         vc_id, subject_did, subject_type, vc_json, privilege_scopes,
         status_list_index, expires_at, revoked_at, renewed_by_vc_id,
         delegated_from, delegation_depth, max_delegation_depth, parent_vc_id,
+        vc_type, issuer_did, user_did, scope_key,
         created_at, updated_at
       ) VALUES (
         ${sqliteLiteral(params.vcId)},
@@ -351,6 +439,10 @@ export class SqliteVcStorageDriver implements VcStorageDriver {
         ${sqliteLiteral(params.delegationDepth ?? null)},
         ${sqliteLiteral(params.maxDelegationDepth ?? null)},
         ${sqliteLiteral(params.parentVcId ?? null)},
+        ${sqliteLiteral(params.vcType ?? null)},
+        ${sqliteLiteral(params.issuerDid ?? null)},
+        ${sqliteLiteral(params.userDid ?? null)},
+        ${sqliteLiteral(params.scopeKey ?? null)},
         ${sqliteLiteral(now)},
         ${sqliteLiteral(now)}
       )
@@ -378,7 +470,7 @@ export class SqliteVcStorageDriver implements VcStorageDriver {
       conditions.push(`expires_at <= ${sqliteLiteral(now.toISOString())}`);
     } else if (filters.status === 'active') {
       conditions.push('revoked_at IS NULL');
-      conditions.push(`expires_at > ${sqliteLiteral(now.toISOString())}`);
+      conditions.push(`(expires_at IS NULL OR expires_at > ${sqliteLiteral(now.toISOString())})`);
     }
     const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
     const rows = this.sqlite.query<SqliteVcRow>(`
@@ -396,16 +488,45 @@ export class SqliteVcStorageDriver implements VcStorageDriver {
       SELECT * FROM vcs
       WHERE subject_did = ${sqliteLiteral(subjectDid)}
         AND revoked_at IS NULL
-        AND expires_at > ${sqliteLiteral(nowIso)}
+        AND (expires_at IS NULL OR expires_at > ${sqliteLiteral(nowIso)})
       ORDER BY created_at ASC
     `);
     const records = rows.map((row) => fromSqliteVcRow(row)).filter((v): v is VCRecord => Boolean(v));
     return filterByType(records, vcType);
   }
 
-  async findMany(filters: { subjectDid?: string | undefined }): Promise<VCRecord[]> {
+  async findActiveByIdentity(identity: VcIdentity): Promise<VCRecord[]> {
+    const nowIso = new Date().toISOString();
+    // `IS` is SQLite's null-safe equality, so a null userDid matches null rows.
+    const rows = this.sqlite.query<SqliteVcRow>(`
+      SELECT * FROM vcs
+      WHERE subject_did = ${sqliteLiteral(identity.subjectDid)}
+        AND vc_type = ${sqliteLiteral(identity.vcType)}
+        AND issuer_did = ${sqliteLiteral(identity.issuerDid)}
+        AND user_did IS ${sqliteLiteral(identity.userDid)}
+        AND revoked_at IS NULL
+        AND (expires_at IS NULL OR expires_at > ${sqliteLiteral(nowIso)})
+      ORDER BY created_at ASC
+    `);
+    return rows.map((row) => fromSqliteVcRow(row)).filter((v): v is VCRecord => Boolean(v));
+  }
+
+  async findActiveChildren(parentVcId: string): Promise<VCRecord[]> {
+    const nowIso = new Date().toISOString();
+    const rows = this.sqlite.query<SqliteVcRow>(`
+      SELECT * FROM vcs
+      WHERE parent_vc_id = ${sqliteLiteral(parentVcId)}
+        AND revoked_at IS NULL
+        AND (expires_at IS NULL OR expires_at > ${sqliteLiteral(nowIso)})
+      ORDER BY created_at ASC
+    `);
+    return rows.map((row) => fromSqliteVcRow(row)).filter((v): v is VCRecord => Boolean(v));
+  }
+
+  async findMany(filters: { subjectDid?: string | undefined; issuerDid?: string | undefined }): Promise<VCRecord[]> {
     const conditions: string[] = [];
     if (filters.subjectDid) conditions.push(`subject_did = ${sqliteLiteral(filters.subjectDid)}`);
+    if (filters.issuerDid) conditions.push(`issuer_did = ${sqliteLiteral(filters.issuerDid)}`);
     const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
     const rows = this.sqlite.query<SqliteVcRow>(`
       SELECT * FROM vcs ${where} ORDER BY created_at DESC
@@ -507,6 +628,10 @@ export class InMemoryVcStorageDriver implements VcStorageDriver {
       delegationDepth: params.delegationDepth ?? null,
       maxDelegationDepth: params.maxDelegationDepth ?? null,
       parentVcId: params.parentVcId ?? null,
+      vcType: params.vcType ?? null,
+      issuerDid: params.issuerDid ?? null,
+      userDid: params.userDid ?? null,
+      scopeKey: params.scopeKey ?? null,
       createdAt: now,
       updatedAt: now,
     };
@@ -521,8 +646,8 @@ export class InMemoryVcStorageDriver implements VcStorageDriver {
   private matchesStatus(record: VCRecord, status: ListVcFilters['status'], now = new Date()): boolean {
     if (!status) return true;
     if (status === 'revoked') return Boolean(record.revokedAt);
-    if (status === 'expired') return !record.revokedAt && record.expiresAt.getTime() <= now.getTime();
-    return !record.revokedAt && record.expiresAt.getTime() > now.getTime();
+    if (status === 'expired') return !record.revokedAt && record.expiresAt !== null && record.expiresAt.getTime() <= now.getTime();
+    return !record.revokedAt && (record.expiresAt === null || record.expiresAt.getTime() > now.getTime());
   }
 
   async listVcs(filters: ListVcFilters): Promise<VCRecord[]> {
@@ -537,14 +662,36 @@ export class InMemoryVcStorageDriver implements VcStorageDriver {
   async findActiveBySubjectDid(subjectDid: string, vcType?: string): Promise<VCRecord[]> {
     const now = Date.now();
     const records = [...this.vcs.values()]
-      .filter((r) => r.subjectDid === subjectDid && !r.revokedAt && r.expiresAt.getTime() > now)
+      .filter((r) => r.subjectDid === subjectDid && !r.revokedAt && (r.expiresAt === null || r.expiresAt.getTime() > now))
       .sort((a, b) => (a.createdAt?.getTime() ?? 0) - (b.createdAt?.getTime() ?? 0));
     return filterByType(records, vcType);
   }
 
-  async findMany(filters: { subjectDid?: string | undefined }): Promise<VCRecord[]> {
+  private activeSorted(predicate: (record: VCRecord) => boolean): VCRecord[] {
+    const now = Date.now();
+    return [...this.vcs.values()]
+      .filter((r) => predicate(r) && !r.revokedAt && (r.expiresAt === null || r.expiresAt.getTime() > now))
+      .sort((a, b) => (a.createdAt?.getTime() ?? 0) - (b.createdAt?.getTime() ?? 0));
+  }
+
+  async findActiveByIdentity(identity: VcIdentity): Promise<VCRecord[]> {
+    return this.activeSorted(
+      (r) =>
+        r.subjectDid === identity.subjectDid &&
+        r.vcType === identity.vcType &&
+        r.issuerDid === identity.issuerDid &&
+        (r.userDid ?? null) === identity.userDid,
+    );
+  }
+
+  async findActiveChildren(parentVcId: string): Promise<VCRecord[]> {
+    return this.activeSorted((r) => r.parentVcId === parentVcId);
+  }
+
+  async findMany(filters: { subjectDid?: string | undefined; issuerDid?: string | undefined }): Promise<VCRecord[]> {
     return [...this.vcs.values()]
       .filter((r) => !filters.subjectDid || r.subjectDid === filters.subjectDid)
+      .filter((r) => !filters.issuerDid || r.issuerDid === filters.issuerDid)
       .sort((a, b) => (b.createdAt?.getTime() ?? 0) - (a.createdAt?.getTime() ?? 0));
   }
 

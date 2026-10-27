@@ -11,17 +11,25 @@
 // limitations under the License.
 
 import { randomUUID } from 'node:crypto';
-import { createEd25519Proof, type LinkedDataProof } from './proof.js';
+import { createEd25519Proof } from './proof.js';
 import { ValidationError } from './errors/HelixError.js';
 import { DelegationGrantVCSchema } from './schemas/delegation-grant.js';
 import { VC_CONTEXTS, type SignedVC } from './schemas/vc.js';
-import {
-  getStatusListLength,
-  setBit,
-  type StatusListCredential,
-} from './status-list/index.js';
+import { getStatusListLength, type StatusListCredential } from './status-list/index.js';
 
-/** SP-held issuer key material. The SP signs grants with its own key. */
+/**
+ * The service's signing key, as handed to the signing callback by key
+ * custody. Service Providers no longer hold their own keys: the platform
+ * generates and holds the key and signs on the service's behalf (see
+ * ServiceProviderService.issueDelegationGrant()).
+ */
+/**
+ * The terms-and-conditions scope a consent screen always adds. It authorizes
+ * nothing by itself, so it is never checked against the agent's scopes and
+ * never makes a grant worth issuing on its own.
+ */
+export const ACCEPT_TERMS_SCOPE = 'accept-terms';
+
 export interface IssuerKeyMaterial {
   did: string;
   privateKeyHex: string;
@@ -33,8 +41,21 @@ export interface IssueGrantOptions {
   scopes: string[];
   durability: 'standing' | 'session';
   serviceDid?: string;
+  /**
+   * Whether the consent also covers agents the consented agent delegates
+   * to. Omitted leaves the field out of the grant, which verifiers read as
+   * allowed.
+   */
+  allowDelegation?: boolean;
   statusList: StatusListCredential; // current list, unmodified
   statusListCredentialUrl: string; // public URL of the list above
+  /**
+   * Index already claimed on `statusList` for this grant. When the list is
+   * the platform's own (the custodial path), the caller claims the next free
+   * index so revocation via POST /v1/vcs/:id/revoke flips the right bit;
+   * omitted, a random index is picked (accepted collision risk, D9).
+   */
+  statusListIndex?: number;
 }
 
 // VCBaseSchema requires a concrete validUntil — there is no "no expiry" value.
@@ -48,7 +69,7 @@ export async function issueGrant(
 ): Promise<{ grantVC: SignedVC; updatedStatusList: StatusListCredential }> {
   const listLength = getStatusListLength(options.statusList.credentialSubject.encodedList);
   // Random assignment, accepted collision risk — see epic Part E / register D9.
-  const index = Math.floor(Math.random() * listLength);
+  const index = options.statusListIndex ?? Math.floor(Math.random() * listLength);
 
   const now = new Date();
   const validMs =
@@ -75,6 +96,7 @@ export async function issueGrant(
       scopes: options.scopes,
       durability: options.durability,
       ...(options.serviceDid !== undefined ? { serviceDid: options.serviceDid } : {}),
+      ...(options.allowDelegation !== undefined ? { allowDelegation: options.allowDelegation } : {}),
     },
   };
 
@@ -92,45 +114,4 @@ export async function issueGrant(
   // agent-VC issuance pattern. The list is returned unchanged for the caller
   // (the SP's own backend) to persist alongside the grant VC.
   return { grantVC, updatedStatusList: options.statusList };
-}
-
-export type RevokeGrantTarget = { vc: SignedVC } | { statusListIndex: string };
-
-export type SignedStatusListCredential = StatusListCredential & { proof: LinkedDataProof };
-
-export async function revokeGrant(
-  currentStatusList: StatusListCredential,
-  issuerWallet: IssuerKeyMaterial,
-  target: RevokeGrantTarget,
-): Promise<SignedStatusListCredential> {
-  const index =
-    'vc' in target ? target.vc.credentialStatus?.statusListIndex : target.statusListIndex;
-
-  if (!index) {
-    throw new ValidationError(
-      'No statusListIndex available to revoke — VC has no credentialStatus, or no index was provided',
-    );
-  }
-  const numericIndex = Number(index);
-  if (!Number.isInteger(numericIndex) || numericIndex < 0) {
-    throw new ValidationError(`statusListIndex is not a valid list index: ${index}`);
-  }
-
-  // Object-in/object-out: the caller persists the updated list however it
-  // already stores it (DB row, object storage, file) — no file I/O here.
-  const { proof: _staleProof, ...unsigned } = currentStatusList as StatusListCredential & {
-    proof?: unknown;
-  };
-  const payload = {
-    ...unsigned,
-    credentialSubject: {
-      ...unsigned.credentialSubject,
-      encodedList: setBit(unsigned.credentialSubject.encodedList, numericIndex, 1),
-    },
-  };
-
-  return {
-    ...payload,
-    proof: await createEd25519Proof(payload, issuerWallet.privateKeyHex, `${issuerWallet.did}#key-1`),
-  };
 }

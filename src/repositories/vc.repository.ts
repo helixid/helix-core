@@ -10,15 +10,32 @@ export interface VCRecord {
   vcJson: unknown;
   privilegeScopes: unknown;
   statusListIndex: number;
-  expiresAt: Date;
+  expiresAt: Date | null;
   revokedAt: Date | null;
   renewedByVcId: string | null;
   delegatedFrom?: string | null;
   delegationDepth?: number | null;
   maxDelegationDepth?: number | null;
   parentVcId?: string | null;
+  vcType?: string | null;
+  issuerDid?: string | null;
+  userDid?: string | null;
+  scopeKey?: string | null;
   createdAt?: Date;
   updatedAt?: Date;
+}
+
+/**
+ * What makes two credentials "the same one": kind, who signed it, whom it is
+ * about, and (for a consent grant) on whose behalf. Together with the scope
+ * set this is a credential's identity across re-issuance; see
+ * VCService.reconcileActive().
+ */
+export interface VcIdentity {
+  vcType: string;
+  issuerDid: string;
+  subjectDid: string;
+  userDid: string | null;
 }
 
 export interface ListVcFilters {
@@ -41,11 +58,15 @@ export interface CreateVcParams {
   vcJson: unknown;
   privilegeScopes?: string[] | undefined;
   statusListIndex: number;
-  expiresAt: Date;
+  expiresAt: Date | null;
   delegatedFrom?: string | undefined;
   delegationDepth?: number | undefined;
   maxDelegationDepth?: number | undefined;
   parentVcId?: string | undefined;
+  vcType?: string | null | undefined;
+  issuerDid?: string | null | undefined;
+  userDid?: string | null | undefined;
+  scopeKey?: string | null | undefined;
 }
 
 interface LegacyCreateVCParams {
@@ -102,8 +123,18 @@ export class VcRepository {
     return this.driver.findActiveBySubjectDid(subjectDid, vcType);
   }
 
+  /** Every unrevoked, unexpired credential with this identity, oldest first. */
+  async findActiveByIdentity(identity: VcIdentity): Promise<VCRecord[]> {
+    return this.driver.findActiveByIdentity(identity);
+  }
+
+  /** Every unrevoked, unexpired credential delegated from `parentVcId`. */
+  async findActiveChildren(parentVcId: string): Promise<VCRecord[]> {
+    return this.driver.findActiveChildren(parentVcId);
+  }
+
   async findMany(
-    filters: { subjectDid?: string | undefined } = {},
+    filters: { subjectDid?: string | undefined; issuerDid?: string | undefined } = {},
   ): Promise<VCRecord[]> {
     return this.driver.findMany(filters);
   }

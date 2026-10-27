@@ -5,7 +5,7 @@
 //    http://www.apache.org/licenses/LICENSE-2.0
 
 import type { FastifyPluginAsync } from 'fastify';
-import { AdminAuthRequiredError, type SignedVC } from '../../core/index.js';
+import { AdminAuthRequiredError } from '../../core/index.js';
 import type { IAgentService } from '../../services/agent/IAgentService.js';
 import { mapAgentError } from '../../services/agent/agent.service.js';
 
@@ -31,6 +31,7 @@ const agentRoutes: FastifyPluginAsync<AgentRouteOptions> = async (fastify, optio
         requestedScopes: string[];
         requestedDomains?: string[];
         maxDelegationDepth?: number;
+        expiry?: number;
       };
       const result = await options.agentService.generateEnrollmentToken(body, request.id);
       return reply.code(201).send(result);
@@ -74,19 +75,12 @@ const agentRoutes: FastifyPluginAsync<AgentRouteOptions> = async (fastify, optio
     try {
       requireAdmin(request);
       const params = request.params as { did: string };
-      const body = request.body as {
-        targetService: string;
-        userDid?: string;
-        grantVC?: SignedVC;
-        vcId?: string;
-      };
+      const body = request.body as { targetService: string; userDid?: string };
       const result = await options.agentService.signVP(
         {
           did: params.did,
           targetService: body.targetService,
           ...(body.userDid ? { userDid: body.userDid } : {}),
-          ...(body.grantVC ? { grantVC: body.grantVC } : {}),
-          ...(body.vcId ? { vcId: body.vcId } : {}),
         },
         request.id,
       );
@@ -113,6 +107,7 @@ const agentRoutes: FastifyPluginAsync<AgentRouteOptions> = async (fastify, optio
         scopes: string[];
         expiresIn: number;
         vcId?: string;
+        revokeExisting?: boolean;
       };
       const result = await options.agentService.delegateAuthority(
         {
@@ -121,6 +116,7 @@ const agentRoutes: FastifyPluginAsync<AgentRouteOptions> = async (fastify, optio
           scopes: body.scopes,
           expiresIn: body.expiresIn,
           ...(body.vcId ? { vcId: body.vcId } : {}),
+          ...(body.revokeExisting !== undefined ? { revokeExisting: body.revokeExisting } : {}),
         },
         request.id,
       );

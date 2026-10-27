@@ -19,7 +19,6 @@ import {
 import type {
   ChallengeRecord,
   EnrollmentTokenRecord,
-  ServiceRegistryRecord,
 } from '../agent.repository.js';
 
 type PrismaRaw = PrismaClient & {
@@ -38,15 +37,6 @@ export interface AgentStorageDriver {
   createChallenge(data: Omit<ChallengeRecord, 'id' | 'verifiedAt' | 'createdAt'>): Promise<ChallengeRecord>;
   findChallengeById(challengeId: string): Promise<ChallengeRecord | null>;
   markChallengeVerified(challengeId: string): Promise<ChallengeRecord>;
-  createService(
-    data: Omit<ServiceRegistryRecord, 'id' | 'active' | 'createdAt' | 'updatedAt'>,
-  ): Promise<ServiceRegistryRecord>;
-  upsertService(
-    data: Omit<ServiceRegistryRecord, 'id' | 'active' | 'createdAt' | 'updatedAt'>,
-  ): Promise<ServiceRegistryRecord>;
-  getServiceByName(serviceName: string): Promise<ServiceRegistryRecord | null>;
-  findServiceByName(serviceName: string): Promise<ServiceRegistryRecord | null>;
-  listActiveServices(): Promise<ServiceRegistryRecord[]>;
 }
 
 function makeId(prefix: string): string {
@@ -205,33 +195,6 @@ export class PrismaAgentStorageDriver implements AgentStorageDriver {
     return toChallengeRecord(requireChallengeRow(rows[0]));
   }
 
-  async createService(
-    data: Omit<ServiceRegistryRecord, 'id' | 'active' | 'createdAt' | 'updatedAt'>,
-  ): Promise<ServiceRegistryRecord> {
-    return this.prisma.serviceRegistry.create({ data });
-  }
-
-  async upsertService(
-    data: Omit<ServiceRegistryRecord, 'id' | 'active' | 'createdAt' | 'updatedAt'>,
-  ): Promise<ServiceRegistryRecord> {
-    return this.prisma.serviceRegistry.upsert({
-      where: { serviceName: data.serviceName },
-      update: { ...data, active: true },
-      create: { ...data, active: true },
-    });
-  }
-
-  async getServiceByName(serviceName: string): Promise<ServiceRegistryRecord | null> {
-    return this.prisma.serviceRegistry.findFirst({ where: { serviceName, active: true } });
-  }
-
-  async findServiceByName(serviceName: string): Promise<ServiceRegistryRecord | null> {
-    return this.prisma.serviceRegistry.findUnique({ where: { serviceName } });
-  }
-
-  async listActiveServices(): Promise<ServiceRegistryRecord[]> {
-    return this.prisma.serviceRegistry.findMany({ where: { active: true } });
-  }
 }
 
 type SqliteEnrollmentTokenRow = {
@@ -241,7 +204,7 @@ type SqliteEnrollmentTokenRow = {
   requested_scopes: string;
   requested_domains: string;
   max_delegation_depth: number;
-  expires_at: string;
+  expires_at: string | undefined;
   used_at: string | null;
   created_at: string;
 };
@@ -262,19 +225,6 @@ type SqliteChallengeRow = {
   enrollment_token_id: string | null;
 };
 
-type SqliteServiceRow = {
-  id: string;
-  service_name: string;
-  display_name: string;
-  verified_domain: string;
-  public_key_multibase: string;
-  api_endpoint: string;
-  metadata: string;
-  active: number;
-  created_at: string;
-  updated_at: string;
-};
-
 function fromEnrollmentTokenRow(
   row: SqliteEnrollmentTokenRow | undefined,
 ): EnrollmentTokenRecord | null {
@@ -286,7 +236,7 @@ function fromEnrollmentTokenRow(
     requestedScopes: row.requested_scopes,
     requestedDomains: row.requested_domains,
     maxDelegationDepth: row.max_delegation_depth,
-    expiresAt: new Date(row.expires_at),
+    expiresAt: row.expires_at ? new Date(row.expires_at) : null,
     usedAt: row.used_at ? new Date(row.used_at) : null,
     createdAt: new Date(row.created_at),
   };
@@ -308,22 +258,6 @@ function fromChallengeRow(row: SqliteChallengeRow | undefined): ChallengeRecord 
     verifiedAt: row.verified_at ? new Date(row.verified_at) : null,
     createdAt: new Date(row.created_at),
     enrollmentTokenId: row.enrollment_token_id,
-  };
-}
-
-function fromServiceRow(row: SqliteServiceRow | undefined): ServiceRegistryRecord | null {
-  if (!row) return null;
-  return {
-    id: row.id,
-    serviceName: row.service_name,
-    displayName: row.display_name,
-    verifiedDomain: row.verified_domain,
-    publicKeyMultibase: row.public_key_multibase,
-    apiEndpoint: row.api_endpoint,
-    metadata: row.metadata,
-    active: row.active === 1,
-    createdAt: new Date(row.created_at),
-    updatedAt: new Date(row.updated_at),
   };
 }
 
@@ -442,103 +376,11 @@ export class SqliteAgentStorageDriver implements AgentStorageDriver {
     return challenge;
   }
 
-  async createService(
-    data: Omit<ServiceRegistryRecord, 'id' | 'active' | 'createdAt' | 'updatedAt'>,
-  ): Promise<ServiceRegistryRecord> {
-    const id = makeId('svc');
-    const now = new Date();
-    this.sqlite.execute(`
-      INSERT INTO service_registry (
-        id, service_name, display_name, verified_domain,
-        public_key_multibase, api_endpoint, metadata, active, created_at, updated_at
-      ) VALUES (
-        ${sqliteLiteral(id)},
-        ${sqliteLiteral(data.serviceName)},
-        ${sqliteLiteral(data.displayName)},
-        ${sqliteLiteral(data.verifiedDomain)},
-        ${sqliteLiteral(data.publicKeyMultibase)},
-        ${sqliteLiteral(data.apiEndpoint)},
-        ${sqliteLiteral(data.metadata)},
-        1,
-        ${sqliteLiteral(now)},
-        ${sqliteLiteral(now)}
-      )
-    `);
-    return {
-      id,
-      ...data,
-      active: true,
-      createdAt: now,
-      updatedAt: now,
-    };
-  }
-
-  async upsertService(
-    data: Omit<ServiceRegistryRecord, 'id' | 'active' | 'createdAt' | 'updatedAt'>,
-  ): Promise<ServiceRegistryRecord> {
-    const id = makeId('svc');
-    const now = new Date();
-    this.sqlite.execute(`
-      INSERT INTO service_registry (
-        id, service_name, display_name, verified_domain,
-        public_key_multibase, api_endpoint, metadata, active, created_at, updated_at
-      ) VALUES (
-        ${sqliteLiteral(id)},
-        ${sqliteLiteral(data.serviceName)},
-        ${sqliteLiteral(data.displayName)},
-        ${sqliteLiteral(data.verifiedDomain)},
-        ${sqliteLiteral(data.publicKeyMultibase)},
-        ${sqliteLiteral(data.apiEndpoint)},
-        ${sqliteLiteral(data.metadata)},
-        1,
-        ${sqliteLiteral(now)},
-        ${sqliteLiteral(now)}
-      )
-      ON CONFLICT(service_name) DO UPDATE SET
-        display_name = excluded.display_name,
-        verified_domain = excluded.verified_domain,
-        public_key_multibase = excluded.public_key_multibase,
-        api_endpoint = excluded.api_endpoint,
-        metadata = excluded.metadata,
-        active = 1,
-        updated_at = excluded.updated_at
-    `);
-    const record = await this.findServiceByName(data.serviceName);
-    if (!record) throw new Error('Service upsert returned no row');
-    return record;
-  }
-
-  async getServiceByName(serviceName: string): Promise<ServiceRegistryRecord | null> {
-    const rows = this.sqlite.query<SqliteServiceRow>(`
-      SELECT * FROM service_registry
-      WHERE service_name = ${sqliteLiteral(serviceName)}
-        AND active = 1
-      LIMIT 1
-    `);
-    return fromServiceRow(rows[0]);
-  }
-
-  async findServiceByName(serviceName: string): Promise<ServiceRegistryRecord | null> {
-    const rows = this.sqlite.query<SqliteServiceRow>(`
-      SELECT * FROM service_registry
-      WHERE service_name = ${sqliteLiteral(serviceName)}
-      LIMIT 1
-    `);
-    return fromServiceRow(rows[0]);
-  }
-
-  async listActiveServices(): Promise<ServiceRegistryRecord[]> {
-    const rows = this.sqlite.query<SqliteServiceRow>(`
-      SELECT * FROM service_registry WHERE active = 1
-    `);
-    return rows.map((row) => fromServiceRow(row)).filter((v): v is ServiceRegistryRecord => Boolean(v));
-  }
 }
 
 export class InMemoryAgentStorageDriver implements AgentStorageDriver {
   private readonly enrollmentTokens = new Map<string, EnrollmentTokenRecord>();
   private readonly challenges = new Map<string, ChallengeRecord>();
-  private readonly services = new Map<string, ServiceRegistryRecord>();
 
   async createEnrollmentToken(
     data: Omit<EnrollmentTokenRecord, 'id' | 'usedAt' | 'createdAt' | 'maxDelegationDepth'> & {
@@ -602,50 +444,6 @@ export class InMemoryAgentStorageDriver implements AgentStorageDriver {
     return challenge;
   }
 
-  async createService(
-    data: Omit<ServiceRegistryRecord, 'id' | 'active' | 'createdAt' | 'updatedAt'>,
-  ): Promise<ServiceRegistryRecord> {
-    const now = new Date();
-    const record: ServiceRegistryRecord = {
-      id: makeId('svc'),
-      ...data,
-      active: true,
-      createdAt: now,
-      updatedAt: now,
-    };
-    this.services.set(record.serviceName, record);
-    return record;
-  }
-
-  async upsertService(
-    data: Omit<ServiceRegistryRecord, 'id' | 'active' | 'createdAt' | 'updatedAt'>,
-  ): Promise<ServiceRegistryRecord> {
-    const existing = this.services.get(data.serviceName);
-    const now = new Date();
-    const record: ServiceRegistryRecord = {
-      id: existing?.id ?? makeId('svc'),
-      ...data,
-      active: true,
-      createdAt: existing?.createdAt ?? now,
-      updatedAt: now,
-    };
-    this.services.set(record.serviceName, record);
-    return record;
-  }
-
-  async getServiceByName(serviceName: string): Promise<ServiceRegistryRecord | null> {
-    const service = this.services.get(serviceName);
-    if (!service || !service.active) return null;
-    return service;
-  }
-
-  async findServiceByName(serviceName: string): Promise<ServiceRegistryRecord | null> {
-    return this.services.get(serviceName) ?? null;
-  }
-
-  async listActiveServices(): Promise<ServiceRegistryRecord[]> {
-    return [...this.services.values()].filter((service) => service.active);
-  }
 }
 
 export function createAgentStorageDriver(

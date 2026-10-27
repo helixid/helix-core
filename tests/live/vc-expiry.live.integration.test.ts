@@ -5,6 +5,7 @@ import {
   LIVE_HEDERA_TIMEOUT_MS,
   onboardLiveAgent,
   resetLiveTestDatabase,
+  enrollLiveService,
   signLiveVP,
   startLiveApi,
   type LiveApi,
@@ -40,13 +41,10 @@ describe('VC Expiry Live Integration', () => {
     });
 
     // The agent now has two active HelixAgentCredentials (its onboarding VC
-    // and this short-lived one) — signVP's default "the one active VC"
-    // lookup would be ambiguous, so vcId pins the specific one to sign.
-    const signedVP = await signLiveVP(api, agent.did, {
-      targetService: 'amazon',
-      userDid: 'did:hedera:testnet:live-user-placeholder',
-      vcId: shortVc.vcId,
-    });
+    // and this short-lived one); the VP carries both, so the short-lived
+    // one expiring is enough to reject it.
+    const service = await enrollLiveService(api);
+    const signedVP = await signLiveVP(api, agent.did, { targetService: service.did });
 
     await new Promise((resolve) => setTimeout(resolve, 2_000));
     const details = await client.getVC(shortVc.vcId);

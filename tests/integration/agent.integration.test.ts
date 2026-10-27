@@ -2,10 +2,8 @@ import Fastify from 'fastify';
 import { describe, expect, it } from 'vitest';
 import agentRoutes from '../../src/routes/agent/index.js';
 import { AgentRepository } from '../../src/repositories/agent.repository.js';
-import { AgentKeyRepository } from '../../src/repositories/agent-key.repository.js';
-import { PreparedPayloadRepository } from '../../src/repositories/prepared-payload.repository.js';
+import { DidKeyRepository } from '../../src/repositories/did-key.repository.js';
 import { AgentService } from '../../src/services/agent/agent.service.js';
-import { PreparedPayloadService } from '../../src/services/prepared-payload/prepared-payload.service.js';
 import { AesGcmKeyCustody } from '../../src/services/key-custody/key-custody.js';
 import { MockDIDService } from '../mocks/MockDIDService.js';
 import { MockVCService } from '../mocks/MockVCService.js';
@@ -29,7 +27,7 @@ function makeApp() {
     }),
     new MockVCService(),
     new TestAuditLogger(),
-    new AgentKeyRepository(),
+    new DidKeyRepository(),
     new AesGcmKeyCustody('11'.repeat(32)),
   );
   app.register(agentRoutes, { prefix: '/v1', agentService: service, adminApiKey: TEST_ADMIN_KEY });
@@ -108,7 +106,7 @@ describe('agent integration', () => {
       method: 'POST',
       url: `/v1/agents/${encodeURIComponent(agentDid)}/vp`,
       headers: { 'x-admin-api-key': TEST_ADMIN_KEY },
-      payload: { targetService: 'https://service.example.com' }
+      payload: { targetService: 'did:web:service.example.com' }
     });
     expect(vp.statusCode).toBe(200);
     expect(vp.json().signedVP.holder).toBe(agentDid);
@@ -120,7 +118,7 @@ describe('agent integration', () => {
     const vp = await app.inject({
       method: 'POST',
       url: '/v1/agents/did:hedera:testnet:testid/vp',
-      payload: { targetService: 'https://service.example.com' }
+      payload: { targetService: 'did:web:service.example.com' }
     });
     expect(vp.statusCode).toBe(403);
   });
@@ -143,9 +141,8 @@ describe('agent integration', () => {
         ],
       });
 
-      const agentKeyRepository = new AgentKeyRepository();
+      const agentKeyRepository = new DidKeyRepository();
       const vcService = new MockVCService();
-      const preparedPayloadService = new PreparedPayloadService(new PreparedPayloadRepository(), didService);
       const service = new AgentService(
         new AgentRepository(),
         didService,
@@ -153,7 +150,6 @@ describe('agent integration', () => {
         new TestAuditLogger(),
         agentKeyRepository,
         keyCustody,
-        preparedPayloadService,
       );
 
       const app = Fastify();
@@ -161,11 +157,13 @@ describe('agent integration', () => {
       return { app, agentKeyRepository, vcService, encrypted };
     }
 
-    it('delegates a scope from an onboarded agent to another DID, admin-key gated', async () => {
+    it('delegates a scope from an onboarded agent to another registered agent, admin-key gated', async () => {
       const delegatorDid = 'did:hedera:testnet:delegator-1';
       const subAgentDid = 'did:key:z6MkSubAgentPlaceholder';
       const { app, agentKeyRepository, vcService, encrypted } = makeDelegationApp(delegatorDid);
-      await agentKeyRepository.create({ did: delegatorDid, ...encrypted });
+      await agentKeyRepository.create({ did: delegatorDid, subjectType: 'agent', ...encrypted });
+      // The delegatee must be registered too.
+      await agentKeyRepository.create({ did: subAgentDid, subjectType: 'agent', ...encrypted });
       vcService.setActiveVC({
         id: 'vc:test:delegator',
         type: ['VerifiableCredential', 'HelixAgentCredential'],
@@ -185,12 +183,35 @@ describe('agent integration', () => {
       expect(body.delegatedVC.credentialSubject.privilegeScopes).toEqual(['read:orders']);
       expect(body.delegatedVC.credentialSubject.delegationDepth).toBe(1);
       expect(body.delegatedVC.proof).toBeTruthy();
+      // Its own revocation entry, so revoking this delegation reaches verifiers.
+      expect(body.delegatedVC.credentialStatus).toMatchObject({ statusPurpose: 'revocation' });
+    });
+
+    it('refuses to delegate to a DID that is not a registered agent', async () => {
+      const delegatorDid = 'did:hedera:testnet:delegator-5';
+      const { app, agentKeyRepository, vcService, encrypted } = makeDelegationApp(delegatorDid);
+      await agentKeyRepository.create({ did: delegatorDid, subjectType: 'agent', ...encrypted });
+      vcService.setActiveVC({
+        id: 'vc:test:delegator',
+        type: ['VerifiableCredential', 'HelixAgentCredential'],
+        credentialSubject: { id: delegatorDid, privilegeScopes: ['read:orders'], maxDelegationDepth: 1 },
+      });
+
+      const res = await app.inject({
+        method: 'POST',
+        url: `/v1/agents/${encodeURIComponent(delegatorDid)}/delegate`,
+        headers: { 'x-admin-api-key': TEST_ADMIN_KEY },
+        payload: { to: 'did:key:z6MkNeverRegistered', scopes: ['read:orders'], expiresIn: 3600 },
+      });
+
+      expect(res.statusCode).toBe(404);
+      expect(res.json().error.code).toBe('DELEGATEE_NOT_AN_AGENT');
     });
 
     it('rejects delegating without the admin key', async () => {
       const delegatorDid = 'did:hedera:testnet:delegator-2';
       const { app, agentKeyRepository, vcService, encrypted } = makeDelegationApp(delegatorDid);
-      await agentKeyRepository.create({ did: delegatorDid, ...encrypted });
+      await agentKeyRepository.create({ did: delegatorDid, subjectType: 'agent', ...encrypted });
       vcService.setActiveVC({
         id: 'vc:test:delegator',
         type: ['VerifiableCredential', 'HelixAgentCredential'],
@@ -209,7 +230,7 @@ describe('agent integration', () => {
     it('blocks delegation when the delegator\'s only credential has no remaining depth budget', async () => {
       const delegatorDid = 'did:hedera:testnet:delegator-3';
       const { app, agentKeyRepository, vcService, encrypted } = makeDelegationApp(delegatorDid);
-      await agentKeyRepository.create({ did: delegatorDid, ...encrypted });
+      await agentKeyRepository.create({ did: delegatorDid, subjectType: 'agent', ...encrypted });
       // maxDelegationDepth: 0 -- this agent has no delegation authority, so
       // the default (no-vcId) auto-resolution filters this credential out
       // of the candidate list entirely rather than reaching
@@ -235,7 +256,8 @@ describe('agent integration', () => {
     it('surfaces MAX_DELEGATION_DEPTH_EXCEEDED when a depth-exhausted credential is pinned explicitly by vcId', async () => {
       const delegatorDid = 'did:hedera:testnet:delegator-4';
       const { app, agentKeyRepository, vcService, encrypted } = makeDelegationApp(delegatorDid);
-      await agentKeyRepository.create({ did: delegatorDid, ...encrypted });
+      await agentKeyRepository.create({ did: delegatorDid, subjectType: 'agent', ...encrypted });
+      await agentKeyRepository.create({ did: 'did:key:z6MkSubAgentPlaceholder', subjectType: 'agent', ...encrypted });
       vcService.setActiveVC({
         id: 'vc:test:delegator-4',
         type: ['VerifiableCredential', 'HelixAgentCredential'],

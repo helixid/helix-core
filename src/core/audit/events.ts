@@ -39,7 +39,8 @@ export const AuditEvents = {
   AGENT_VP_SIGNED: 'AGENT_VP_SIGNED',
   USER_DID_VERIFIED: 'USER_DID_VERIFIED',
 
-  // B5 — Consent (SP-issued delegation grants)
+  // B5 — Consent (service-issued delegation grants)
+  SERVICE_ENROLLED: 'SERVICE_ENROLLED',
   CONSENT_GRANTED: 'CONSENT_GRANTED',
   CONSENT_REVOKED: 'CONSENT_REVOKED',
 

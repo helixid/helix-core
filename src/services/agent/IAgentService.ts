@@ -1,8 +1,10 @@
 import type { SignedVC, SignedVP } from '../../core/index.js';
+import type { ReconcileResult } from '../vc/IVCService.js';
 
 export interface EnrollmentTokenResult {
   token: string;
-  expiresAt: string;
+  /** Absent when the token has no expiry. */
+  expiresAt?: string;
 }
 
 export interface ChallengeResult {
@@ -28,7 +30,8 @@ export interface SignVPResult {
   signedVP: SignedVP;
 }
 
-export interface DelegateAuthorityResult {
+/** The delegated VC, plus what storing it did to earlier delegations from the same delegator to the same DID. */
+export interface DelegateAuthorityResult extends Partial<ReconcileResult> {
   delegatedVC: SignedVC;
 }
 
@@ -45,10 +48,11 @@ export interface IAgentService {
       requestedScopes: string[];
       requestedDomains?: string[];
       maxDelegationDepth?: number;
+      expiry?: number | null;
     },
     requestId: string,
   ): Promise<EnrollmentTokenResult>;
-  processOnboardStep1(
+  processOnboardCreateChallenge(
     input: { enrollmentToken: string; publicKeyHex: string; domains?: string[] },
     requestId: string,
   ): Promise<ChallengeResult>;
@@ -57,16 +61,17 @@ export interface IAgentService {
     requestId: string,
   ): Promise<OnboardVerifyResult>;
   onboardWithCustody(
-    input: { enrollmentToken: string; domains?: string[] },
+    input: { enrollmentToken: string; domains?: string[]; expiry?: number },
     requestId: string,
   ): Promise<OnboardWithCustodyResult>;
   signVP(
-    input: { did: string; targetService: string; userDid?: string; grantVC?: SignedVC; vcId?: string },
+    input: { did: string; targetService: string; userDid?: string },
     requestId: string,
   ): Promise<SignVPResult>;
   delegateAuthority(
-    input: { did: string; to: string; scopes: string[]; expiresIn: number; vcId?: string },
+    input: { did: string; to: string; scopes: string[]; expiresIn: number; vcId?: string; revokeExisting?: boolean },
     requestId: string,
+    options?: DelegateAuthorityOptions,
   ): Promise<DelegateAuthorityResult>;
   issueUserChallenge(
     input: { did: string; purpose: 'user_verification' },
@@ -77,4 +82,15 @@ export interface IAgentService {
     input: { signature: string },
     requestId: string,
   ): Promise<UserChallengeVerifyResult>;
+}
+
+export interface DelegateAuthorityOptions {
+  /**
+   * A deployment's own say over who may receive a delegation, given the
+   * delegatee and the credential being delegated from (its chain shows where
+   * the authority started). Called once both are known and the delegatee is
+   * confirmed registered, before anything is reserved or signed; throwing
+   * refuses the delegation.
+   */
+  authorizeDelegatee?: (context: { to: string; fromVC: SignedVC }) => Promise<void>;
 }

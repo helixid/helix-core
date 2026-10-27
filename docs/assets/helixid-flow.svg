@@ -72,7 +72,7 @@
   <line x1="490" y1="318" x2="174" y2="318" stroke="#E8823C" stroke-width="2.5" marker-end="url(#arrowOrange)"/>
 
   <!-- Step 3: Agent -> MCP Server -->
-  <text x="490" y="368" font-size="14" font-weight="700" fill="#1C1917" text-anchor="middle">3. Tool call, with _helixVP attached</text>
+  <text x="490" y="368" font-size="14" font-weight="700" fill="#1C1917" text-anchor="middle">3. Tool call, VP in X-Helix-VP / _meta</text>
   <line x1="170" y1="380" x2="806" y2="380" stroke="#1C1917" stroke-width="2" marker-end="url(#arrowDark)"/>
 
   <!-- Step 4: self-loop on MCP Server -->

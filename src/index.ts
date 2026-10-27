@@ -43,22 +43,36 @@ export type {
   CreateVcParams,
   StatusListEntryRecord,
 } from './repositories/vc.repository.js';
-export { VPRepository } from './repositories/vp.repository.js';
 export { AuditLogRepository } from './repositories/audit-log.repository.js';
 export type { AuditLogRecord, ListAuditLogFilters } from './repositories/audit-log.repository.js';
 export { AgentRepository } from './repositories/agent.repository.js';
 export type {
   EnrollmentTokenRecord,
   ChallengeRecord,
-  ServiceRegistryRecord,
 } from './repositories/agent.repository.js';
-export { AgentKeyRepository } from './repositories/agent-key.repository.js';
+export { DidKeyRepository } from './repositories/did-key.repository.js';
 export type {
-  AgentKeyRecord,
-  CreateAgentKeyRecordParams,
-} from './repositories/agent-key.repository.js';
-export { ServiceRegistryRepository } from './repositories/service-registry.repository.js';
-export { PreparedPayloadRepository } from './repositories/prepared-payload.repository.js';
+  DidKeyRecord,
+  DidKeySubjectType,
+  CreateDidKeyRecordParams,
+} from './repositories/did-key.repository.js';
+export { ServiceRepository } from './repositories/service.repository.js';
+export type { ServiceRecord, ServiceCreateData } from './repositories/service.repository.js';
+export {
+  AgentRecordRepository,
+  AGENT_VISIBILITIES,
+  AGENT_STATUS_FILTERS,
+} from './repositories/agent-record.repository.js';
+export type {
+  AgentRecord,
+  AgentCreateData,
+  AgentCredentialState,
+  AgentVisibility,
+  AgentStatus,
+  AgentStatusFilter,
+  PublicAgentQuery,
+  PublicAgentRow,
+} from './repositories/agent-record.repository.js';
 
 export { DIDService } from './services/did/did.service.js';
 export type { IDIDService } from './services/did/did.service.js';
@@ -72,6 +86,8 @@ export type {
   ListVCFilters,
   VCSummary,
   RenewVCOptions,
+  ReconcileOptions,
+  ReconcileResult,
 } from './services/vc/vc.service.js';
 export { VPService } from './services/vp/vp.service.js';
 export type { IVPService } from './services/vp/IVPService.js';
@@ -84,13 +100,22 @@ export type {
   OnboardWithCustodyResult,
   SignVPResult,
   UserChallengeVerifyResult,
+  DelegateAuthorityOptions,
 } from './services/agent/IAgentService.js';
 export { AesGcmKeyCustody } from './services/key-custody/key-custody.js';
 export type { IKeyCustody, EncryptedKeyMaterial } from './services/key-custody/key-custody.js';
-export { PreparedPayloadService } from './services/prepared-payload/index.js';
-export type { IPreparedPayloadService } from './services/prepared-payload/IPreparedPayloadService.js';
+export {
+  ServiceProviderService,
+  generateServiceId,
+} from './services/service-provider/service-provider.service.js';
+export type {
+  IServiceProviderService,
+  EnrollServiceInput,
+  IssueDelegationGrantInput,
+} from './services/service-provider/service-provider.service.js';
 
 export { default as didRoutes } from './routes/did/index.js';
+export type { DIDRouteAction, DIDRouteOptions } from './routes/did/index.js';
 export { default as didWebRoutes } from './routes/did-web/index.js';
 export { default as vcRoutes, type VcRouteOptions } from './routes/vc/index.js';
 export { default as statusListRoutes } from './routes/status-list/index.js';
@@ -98,4 +123,5 @@ export { default as vpRoutes } from './routes/vp/index.js';
 export { default as agentRoutes } from './routes/agent/index.js';
 export { default as auditLogRoutes } from './routes/audit-log/index.js';
 export { default as sessionRoutes } from './routes/sessions/index.js';
-export { default as preparedPayloadRoutes } from './routes/prepared-payload/index.js';
+export { default as serviceProviderRoutes } from './routes/service-provider/index.js';
+export type { ServiceProviderAction, ServiceProviderRouteOptions } from './routes/service-provider/index.js';

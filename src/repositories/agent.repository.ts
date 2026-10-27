@@ -10,7 +10,7 @@ export interface EnrollmentTokenRecord {
   requestedScopes: string;
   requestedDomains: string;
   maxDelegationDepth?: number;
-  expiresAt: Date;
+  expiresAt: Date | null;
   usedAt: Date | null;
   createdAt: Date;
 }
@@ -29,19 +29,6 @@ export interface ChallengeRecord {
   verifiedAt: Date | null;
   createdAt: Date;
   enrollmentTokenId: string | null;
-}
-
-export interface ServiceRegistryRecord {
-  id: string;
-  serviceName: string;
-  displayName: string;
-  verifiedDomain: string;
-  publicKeyMultibase: string;
-  apiEndpoint: string;
-  metadata: string;
-  active: boolean;
-  createdAt: Date;
-  updatedAt: Date;
 }
 
 /**
@@ -105,27 +92,4 @@ export class AgentRepository {
     return this.driver.markChallengeVerified(challengeId);
   }
 
-  async createService(
-    data: Omit<ServiceRegistryRecord, 'id' | 'active' | 'createdAt' | 'updatedAt'>,
-  ): Promise<ServiceRegistryRecord> {
-    return this.driver.createService(data);
-  }
-
-  async upsertService(
-    data: Omit<ServiceRegistryRecord, 'id' | 'active' | 'createdAt' | 'updatedAt'>,
-  ): Promise<ServiceRegistryRecord> {
-    return this.driver.upsertService(data);
-  }
-
-  async getServiceByName(serviceName: string): Promise<ServiceRegistryRecord | null> {
-    return this.driver.getServiceByName(serviceName);
-  }
-
-  async findServiceByName(serviceName: string): Promise<ServiceRegistryRecord | null> {
-    return this.driver.findServiceByName(serviceName);
-  }
-
-  async listActiveServices(): Promise<ServiceRegistryRecord[]> {
-    return this.driver.listActiveServices();
-  }
 }

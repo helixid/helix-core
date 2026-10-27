@@ -2,7 +2,7 @@ import Fastify from 'fastify';
 import { describe, expect, it } from 'vitest';
 import agentRoutes from '../../src/routes/agent/index.js';
 import { AgentRepository } from '../../src/repositories/agent.repository.js';
-import { AgentKeyRepository } from '../../src/repositories/agent-key.repository.js';
+import { DidKeyRepository } from '../../src/repositories/did-key.repository.js';
 import { AgentService } from '../../src/services/agent/agent.service.js';
 import { AesGcmKeyCustody } from '../../src/services/key-custody/key-custody.js';
 import { MockDIDService } from '../mocks/MockDIDService.js';
@@ -25,7 +25,7 @@ function makeApp(auditLogger = new TestAuditLogger()) {
     }),
     new MockVCService(),
     auditLogger,
-    new AgentKeyRepository(),
+    new DidKeyRepository(),
     new AesGcmKeyCustody('11'.repeat(32)),
   );
   app.register(agentRoutes, { prefix: '/v1', agentService: service, adminApiKey: 'test-admin-key' });
@@ -79,7 +79,7 @@ describe('agent security', () => {
       method: 'POST',
       url: '/v1/agents/did:hedera:testnet:unknown/vp',
       headers: { 'x-admin-api-key': 'test-admin-key' },
-      payload: { targetService: 'https://svc.example.com' }
+      payload: { targetService: 'did:web:svc.example.com' }
     });
     expect(vp.statusCode).toBe(404);
     expect(vp.json().error.code).toBe('AGENT_KEY_NOT_FOUND');

@@ -57,15 +57,17 @@ export async function resetLiveTestDatabase(): Promise<void> {
   assertTestDatabaseUrl(process.env['DATABASE_URL']);
   const prisma = createTestPrisma();
   await prisma.auditLog.deleteMany();
+  // services and agents came with the service-provider revamp; a service name
+  // is unique per server, so a stale 'amazon' would 409 the next file.
+  await prisma.service.deleteMany();
+  await prisma.agent.deleteMany();
   await prisma.vc.deleteMany();
   await prisma.statusListEntry.deleteMany();
-  await prisma.vpId.deleteMany();
   await prisma.challenge.deleteMany();
   await prisma.enrollmentToken.deleteMany();
-  await prisma.serviceRegistry.deleteMany();
   await prisma.didUpdate.deleteMany();
   await prisma.did.deleteMany();
-  await prisma.agentKey.deleteMany();
+  await prisma.didKey.deleteMany();
   await prisma.$disconnect();
 }
 
@@ -229,7 +231,7 @@ export async function onboardLiveAgent(
 export async function signLiveVP(
   api: LiveApi,
   holderDid: string,
-  options: { targetService: string; userDid?: string; grantVC?: SignedVC; vcId?: string },
+  options: { targetService: string; userDid?: string },
 ): Promise<SignedVP> {
   const res = await fetch(`${api.baseUrl}/v1/agents/${encodeURIComponent(holderDid)}/vp`, {
     method: 'POST',
@@ -237,13 +239,51 @@ export async function signLiveVP(
     body: JSON.stringify({
       targetService: options.targetService,
       ...(options.userDid !== undefined ? { userDid: options.userDid } : {}),
-      ...(options.grantVC !== undefined ? { grantVC: options.grantVC } : {}),
-      ...(options.vcId !== undefined ? { vcId: options.vcId } : {}),
     }),
   });
   expect(res.status).toBe(200);
   const { signedVP } = (await res.json()) as { signedVP: SignedVP };
   return signedVP;
+}
+
+/**
+ * Enrolls a service (POST /v1/services) and returns its DID. A VP names its
+ * targetService by DID, and the platform mints and holds the service's key,
+ * so a live test registers a real service rather than naming one. Names are
+ * unique per server, so a file with several tests enrolls once in beforeAll.
+ */
+export async function enrollLiveService(api: LiveApi, name = 'amazon'): Promise<{ did: string; name: string }> {
+  const res = await fetch(`${api.baseUrl}/v1/services`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'x-admin-api-key': api.adminApiKey },
+    body: JSON.stringify({
+      name,
+      domain: `${name}.example.com`,
+      requiredScopes: ['read:orders', 'write:orders'],
+    }),
+  });
+  expect(res.status).toBe(201);
+  const record = (await res.json()) as { did: string; name: string };
+  return { did: record.did, name: record.name };
+}
+
+/**
+ * A user's consent for an agent, issued by the service through
+ * POST /v1/service-delegation-grants. signVP with a userDid refuses without
+ * one, so any test that signs on a user's behalf issues it first.
+ */
+export async function issueLiveGrant(
+  api: LiveApi,
+  input: { serviceDid: string; agentDid: string; userDid: string; scopes: string[] },
+): Promise<SignedVC> {
+  const res = await fetch(`${api.baseUrl}/v1/service-delegation-grants`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'x-admin-api-key': api.adminApiKey },
+    body: JSON.stringify({ ...input, durability: 'standing' }),
+  });
+  expect(res.status).toBe(201);
+  const { grantVC } = (await res.json()) as { grantVC: SignedVC };
+  return grantVC;
 }
 
 async function getAvailablePort(): Promise<number> {

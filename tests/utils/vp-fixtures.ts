@@ -92,6 +92,7 @@ export async function makeGrant(
   userDid: string,
   scopes: string[],
   statusList: StatusListCredential,
+  extra: { allowDelegation?: boolean } = {},
 ): Promise<SignedVC> {
   const { grantVC } = await issueGrant(
     {
@@ -101,6 +102,7 @@ export async function makeGrant(
       durability: 'standing',
       statusList,
       statusListCredentialUrl: SP_LIST_URL,
+      ...extra,
     },
     sp,
   );
@@ -111,12 +113,15 @@ export async function buildSignedVP(
   credentials: SignedVC[],
   holder: Actor,
   userDid?: string,
-  targetService = 'orders',
+  // Defaults to the service that issued the first grant, since a grant holds
+  // only at its own service; 'orders' when there is no grant.
+  targetService?: string,
 ): Promise<SignedVP> {
+  const firstGrant = credentials.find((vc) => (vc.type as string[]).includes('DelegationGrantCredential'));
   return new VPBuilder({
     credentials,
     holderDid: holder.did,
-    targetService,
+    targetService: targetService ?? firstGrant?.issuer ?? 'orders',
     ...(userDid !== undefined ? { userDid } : {}),
   }).sign(holder.privateKeyHex, `${holder.did}#key-1`);
 }

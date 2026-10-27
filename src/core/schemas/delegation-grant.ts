@@ -24,6 +24,10 @@ export const DelegationGrantSubjectSchema = z.object({
   scopes: z.array(z.string()),
   durability: z.enum(['standing', 'session']),
   serviceDid: z.string().optional(),
+  // Whether this consent also covers agents the consented agent delegates
+  // to. Absent means allowed, so grants issued before the flag existed keep
+  // working.
+  allowDelegation: z.boolean().optional(),
 });
 
 export const DelegationGrantVCSchema = VCBaseSchema.extend({
