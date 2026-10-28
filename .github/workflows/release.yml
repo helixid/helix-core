@@ -30,14 +30,13 @@ jobs:
           cache: 'pnpm'
           registry-url: 'https://registry.npmjs.org'
 
-      # Deliberately NOT upgrading npm here (previously `npm install -g
-      # npm@latest`, needed for OIDC's npm>=11.5.1 requirement — no longer
-      # relevant now that this workflow uses a classic NPM_TOKEN). Keep
-      # Node 24.15.0's bundled npm (11.12.1): a newer one broke `pnpm
-      # publish --no-git-checks`, which forwards that pnpm-only flag
-      # through to npm's own config parser on some npm versions, which
-      # then rejects it as an unknown flag (EUNKNOWNCONFIG). Confirmed
-      # locally with the bundled 11.12.1 — publish gets past that fine.
+      # Deliberately NOT upgrading npm here. Node 24.15.0's bundled npm
+      # (11.12.1) already satisfies trusted publishing's npm>=11.5.1
+      # requirement, and a newer one broke `pnpm publish --no-git-checks`,
+      # which forwards that pnpm-only flag through to npm's own config
+      # parser on some npm versions, which then rejects it as an unknown
+      # flag (EUNKNOWNCONFIG). Confirmed locally with the bundled 11.12.1
+      # — publish gets past that fine.
       - name: Install dependencies
         run: corepack enable && pnpm install --frozen-lockfile
 
@@ -51,22 +50,24 @@ jobs:
       # main with no changesets left, which is what actually triggers the
       # publish step below.
       #
-      # Uses a classic NPM_TOKEN — kept even though npm's OIDC Trusted
-      # Publisher is configured for this package, since @changesets/cli's
-      # pnpm publish tool has a real bug independent of auth method: its
-      # `pnpm info <pkg> --json` pre-check (checking what's already
+      # Publishes through npm's Trusted Publisher (OIDC): `id-token: write`
+      # above plus the publisher configured on npmjs.com for this package
+      # (GitHub Actions, helixid/helix-core, release.yml). No npm token is
+      # involved — with NPM_TOKEN unset, changesets/action leaves auth to
+      # npm, which exchanges the Actions OIDC token and attaches a
+      # provenance attestation to the published version. This is the path
+      # that has actually published since the last token expired (every
+      # version from 3.0.0 on carries provenance); the token the workflow
+      # used to pass was dead weight, so it is gone.
+      #
+      # The pnpm publish tool in @changesets/cli has a bug independent of
+      # auth: its `pnpm info <pkg> --json` pre-check (what's already
       # published) assumes a plain object response, but pnpm sometimes
-      # returns it array-wrapped (confirmed via a debug run against this
-      # exact repo/token — reproducible in CI, not locally). The npm-tool
-      # equivalent in the same file already defensively unwraps that
-      # array; the pnpm one didn't, crashing getUnpublishedPackages
-      # (TypeError: Cannot read properties of undefined (reading
-      # 'includes')). Patched in patches/@changesets__cli@3.0.2.patch to
-      # add the same unwrapping. NPM_TOKEN itself is unrelated to that bug
-      # — it's here because changesets/action's own OIDC path is a
-      # separate, less-travelled code path (see open npm/cli#8976,
-      # changesets/action#515) not worth debugging on top of the pnpm
-      # bug; a classic token sidesteps it.
+      # returns it array-wrapped (reproducible in CI, not locally). The
+      # npm-tool equivalent in the same file already unwraps that array;
+      # the pnpm one didn't, crashing getUnpublishedPackages (TypeError:
+      # Cannot read properties of undefined (reading 'includes')). Patched
+      # in patches/@changesets__cli@3.0.2.patch to add the same unwrapping.
       - name: Create Release PR or publish
         uses: changesets/action@v1
         with:
@@ -74,4 +75,3 @@ jobs:
           publish: pnpm run release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
