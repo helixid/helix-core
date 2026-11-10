@@ -1,9 +1,17 @@
 name: E2E
 
 # Runs the Playwright e2e suite (helixid/e2e-playwright) with this repo at the
-# PR's commit and the other Helix repos on main. Needs the HELIX_E2E_TOKEN
-# secret (read access to the helixid repos) and e2e-playwright's Actions
-# access set to allow repositories in the organization.
+# PR's commit and the other Helix repos on main.
+#
+# This repository is public and e2e-playwright is private, and GitHub does not
+# let a public repository call a reusable workflow from a private one. So this
+# job checks the repos out itself and runs e2e-playwright's scripts/ci-run.sh,
+# the same script e2e-playwright's own workflow runs: the steps live there,
+# in one place.
+#
+# Needs the HELIX_E2E_TOKEN secret on this repository: a token with read
+# access to the private helixid repos. Secrets are not given to pull requests
+# from forks, so those are skipped.
 
 on:
   push:
@@ -13,15 +21,120 @@ on:
     branches: [main]
     paths-ignore: ['**.md', 'docs/**']
   workflow_dispatch:
+    inputs:
+      e2e_ref:
+        description: e2e-playwright branch/ref
+        default: main
+      grep:
+        description: Only run tests matching this pattern (e.g. @smoke)
+        default: ''
 
 concurrency:
-  group: e2e-caller-${{ github.ref }}
+  group: e2e-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   e2e:
-    uses: helixid/e2e-playwright/.github/workflows/e2e.yml@main
-    with:
-      core_ref: ${{ github.event.pull_request.head.sha || github.sha }}
-    secrets:
-      HELIX_E2E_TOKEN: ${{ secrets.HELIX_E2E_TOKEN }}
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    # Pinned: ubuntu-latest is Ubuntu 26.04, for which actions/python-versions has no
+    # Python 3.11.11 build (the version helix-sdk-py/.python-version pins).
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+
+    env:
+      HELIX_EDITION: enterprise
+
+    steps:
+      - name: Check HELIX_E2E_TOKEN
+        env:
+          HELIX_E2E_TOKEN: ${{ secrets.HELIX_E2E_TOKEN }}
+        run: |
+          if [ -z "$HELIX_E2E_TOKEN" ]; then
+            echo "::error::HELIX_E2E_TOKEN is not set on this repository. Add it as a repo or org secret: a token with read access to the private helixid repos (e2e-playwright, helix-sdk-py, helix-server-enterprise, helix-console-enterprise)."
+            exit 1
+          fi
+
+      # This repo, at the commit under test.
+      - name: Checkout helix-core
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          path: helix-core
+
+      - name: Checkout e2e-playwright
+        uses: actions/checkout@v4
+        with:
+          repository: helixid/e2e-playwright
+          ref: ${{ inputs.e2e_ref || 'main' }}
+          token: ${{ secrets.HELIX_E2E_TOKEN }}
+          path: e2e-playwright
+
+      - name: Checkout helix-sdk-js
+        uses: actions/checkout@v4
+        with:
+          repository: helixid/helix-sdk-js
+          token: ${{ secrets.HELIX_E2E_TOKEN }}
+          path: helix-sdk-js
+
+      - name: Checkout helix-sdk-py
+        uses: actions/checkout@v4
+        with:
+          repository: helixid/helix-sdk-py
+          token: ${{ secrets.HELIX_E2E_TOKEN }}
+          path: helix-sdk-py
+
+      - name: Checkout helix-server-enterprise
+        uses: actions/checkout@v4
+        with:
+          repository: helixid/helix-server-enterprise
+          token: ${{ secrets.HELIX_E2E_TOKEN }}
+          path: helix-server-enterprise
+
+      - name: Checkout helix-console-enterprise
+        uses: actions/checkout@v4
+        with:
+          repository: helixid/helix-console-enterprise
+          token: ${{ secrets.HELIX_E2E_TOKEN }}
+          path: helix-console-enterprise
+
+      # pnpm 11, as e2e-playwright uses; the sibling repos pin pnpm@9.15.2 in
+      # packageManager, and pnpm 11 switches to it there.
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.25.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: e2e-playwright/.nvmrc
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version-file: helix-sdk-py/.python-version
+
+      - name: Run the E2E suite
+        env:
+          GREP: ${{ inputs.grep }}
+        run: |
+          if [ ! -x e2e-playwright/scripts/ci-run.sh ]; then
+            echo "::error::e2e-playwright at '${{ inputs.e2e_ref || 'main' }}' has no scripts/ci-run.sh (it arrives with helixid/e2e-playwright#3)."
+            exit 1
+          fi
+          e2e-playwright/scripts/ci-run.sh
+
+      - name: Upload Playwright report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: e2e-playwright/playwright-report/
+          retention-days: 14
+          if-no-files-found: ignore
+
+      - name: Upload test results
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: e2e-playwright/test-results/
+          retention-days: 14
+          if-no-files-found: ignore
