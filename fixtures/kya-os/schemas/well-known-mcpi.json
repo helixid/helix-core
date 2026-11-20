@@ -1,0 +1,199 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schema.kya-os.org/v1/protocol/well-known/v1.0.0",
+  "title": "KYA-OS Discovery Document",
+  "description": "Well-known discovery document served at /.well-known/mcp for KYA-OS service discovery.",
+  "type": "object",
+  "required": ["version", "serverDid", "endpoints"],
+  "properties": {
+    "version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+(\\.\\d+)?$",
+      "description": "KYA-OS protocol version supported by this server (the reference implementation advertises \"1.0.0\")."
+    },
+    "serverDid": {
+      "type": "string",
+      "pattern": "^did:(key|web):.+$",
+      "description": "Server's DID for identity verification and proof validation."
+    },
+    "endpoints": {
+      "type": "object",
+      "properties": {
+        "handshake": {
+          "type": "string",
+          "format": "uri-reference",
+          "description": "Relative or absolute URL for the handshake endpoint. Legacy 1.x session profile only (SPEC-MCP-EXTENSION.md §4); servers on the stateless card-proof profile omit it."
+        },
+        "tools": {
+          "type": "string",
+          "format": "uri-reference",
+          "description": "Relative or absolute URL for the MCP tools endpoint."
+        },
+        "delegation": {
+          "type": "string",
+          "format": "uri-reference",
+          "description": "Relative or absolute URL for delegation management."
+        },
+        "authorization": {
+          "type": "string",
+          "format": "uri-reference",
+          "description": "URL for user authorization flow initiation."
+        }
+      },
+      "additionalProperties": {
+        "type": "string",
+        "format": "uri-reference"
+      }
+    },
+    "clockSkewSeconds": {
+      "type": "number",
+      "minimum": 30,
+      "maximum": 600,
+      "default": 120,
+      "description": "Server-advertised timestamp skew tolerance in seconds. Clients SHOULD use this for their own clock-skew validation."
+    },
+    "capabilities": {
+      "type": "object",
+      "description": "Server capabilities for feature discovery.",
+      "properties": {
+        "proofs": {
+          "type": "boolean",
+          "description": "Server generates detached proofs for tool responses."
+        },
+        "delegation": {
+          "type": "boolean",
+          "description": "Server supports W3C delegation credentials."
+        },
+        "statusList": {
+          "type": "boolean",
+          "description": "Server supports StatusList2021 revocation checking."
+        },
+        "crisp": {
+          "type": "boolean",
+          "description": "Server supports CRISP constraint evaluation."
+        },
+        "audit": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["profile", "recorderTopology", "delivery", "journalDurability", "atomicAppend", "sourceHighWater", "merkleCheckpoints", "independentObservation", "supportingAnchors", "evidenceRetention"],
+          "properties": {
+            "profile": { "enum": ["AAP-0", "AAP-1", "AAP-2", "AAP-3", "AAP-4"] },
+            "recorderTopology": { "enum": ["none", "self-hosted", "managed", "verified-mirror"] },
+            "delivery": { "enum": ["best-effort", "buffered", "required"] },
+            "journalDurability": { "enum": ["none", "ephemeral", "durable"] },
+            "atomicAppend": { "type": "boolean" },
+            "sourceHighWater": { "type": "boolean" },
+            "merkleCheckpoints": { "type": "boolean" },
+            "independentObservation": { "type": "boolean" },
+            "supportingAnchors": { "type": "array", "items": { "enum": ["worm", "rfc3161", "scitt"] }, "uniqueItems": true },
+            "evidenceRetention": { "enum": ["none", "inline", "separate"] }
+          }
+        }
+      },
+      "additionalProperties": true
+    },
+    "publicKeys": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "type", "publicKeyJwk"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Key identifier (matches kid in JWS headers)."
+          },
+          "type": {
+            "type": "string",
+            "description": "Key type (e.g., 'JsonWebKey2020', 'Ed25519VerificationKey2020')."
+          },
+          "controller": {
+            "type": "string",
+            "pattern": "^did:.+$",
+            "description": "DID that controls this key."
+          },
+          "publicKeyJwk": {
+            "type": "object",
+            "required": ["kty", "crv", "x"],
+            "properties": {
+              "kty": {
+                "type": "string",
+                "const": "OKP"
+              },
+              "crv": {
+                "type": "string",
+                "const": "Ed25519"
+              },
+              "x": {
+                "type": "string",
+                "description": "Base64url-encoded public key."
+              },
+              "kid": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      },
+      "description": "Public keys for signature verification (alternative to DID resolution)."
+    },
+    "statusListCredential": {
+      "type": "string",
+      "format": "uri",
+      "description": "URL of the StatusList2021 credential for revocation checking."
+    },
+    "contact": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "email": {
+          "type": "string",
+          "format": "email"
+        },
+        "url": {
+          "type": "string",
+          "format": "uri"
+        }
+      },
+      "description": "Contact information for the service operator."
+    }
+  },
+  "additionalProperties": true,
+  "examples": [
+    {
+      "version": "1.0",
+      "serverDid": "did:web:api.example.com",
+      "endpoints": {
+        "handshake": "/kyaos-os/handshake",
+        "tools": "/kyaos-os/tools",
+        "delegation": "/kyaos-os/delegations",
+        "authorization": "https://auth.example.com/authorize"
+      },
+      "capabilities": {
+        "proofs": true,
+        "delegation": true,
+        "statusList": true,
+        "crisp": true
+      },
+      "publicKeys": [
+        {
+          "id": "did:web:api.example.com#key-1",
+          "type": "JsonWebKey2020",
+          "controller": "did:web:api.example.com",
+          "publicKeyJwk": {
+            "kty": "OKP",
+            "crv": "Ed25519",
+            "x": "11qYAYKxCrfVS_7TyWQHOg7hcvPapiMlrwIaaPcHURo"
+          }
+        }
+      ],
+      "statusListCredential": "https://api.example.com/credentials/status/1",
+      "contact": {
+        "name": "Example API Support",
+        "email": "support@example.com",
+        "url": "https://example.com/support"
+      }
+    }
+  ]
+}
