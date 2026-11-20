@@ -1,6 +1,8 @@
 import { randomBytes } from 'node:crypto';
 import {
   AuditEvents,
+  DEFAULT_SIGNING_KEY_ENV_VAR,
+  EnvSigner,
   HelixError,
   VPInvalidStructureError,
   VPVerificationFailedError,
@@ -11,6 +13,7 @@ import {
   type HelixJWTPayload,
   type IAuditLogger,
   type SignedVP,
+  type Signer,
   type StatusListCredential,
   type StatusListResolver,
   type VerifyVPResult,
@@ -25,6 +28,7 @@ type HelixHttpErrorLike = {
 };
 
 interface JWTSessionOptions {
+  /** Ed25519 private key hex, as HELIX_SIGNING_KEY holds it. Used only through an EnvSigner. */
   signingKey: string;
   issuerDid: string;
   ttlSeconds: number;
@@ -93,6 +97,21 @@ export class VPService implements IVPService {
       }
       return fetchStatusList(statusListUrl);
     };
+  }
+
+  /**
+   * The session JWT is signed through the Signer interface (KYA-OS L1-C), so
+   * issueJWT never reads a key itself. The API's key is the HELIX_SIGNING_KEY
+   * secret the config loaded; the EnvSigner reads it from that one-entry
+   * environment at each signature and holds nothing in between.
+   */
+  private sessionSigner(): Signer {
+    const options = this.jwtSessionOptions!;
+    return new EnvSigner({
+      did: options.issuerDid,
+      envVar: DEFAULT_SIGNING_KEY_ENV_VAR,
+      env: { [DEFAULT_SIGNING_KEY_ENV_VAR]: options.signingKey },
+    });
   }
 
   async verifyVP(
@@ -183,7 +202,7 @@ export class VPService implements IVPService {
           scopes: result.effectiveScopes,
           vpId,
         };
-        const token = issueJWT(payload, this.jwtSessionOptions.signingKey);
+        const token = await issueJWT(payload, this.sessionSigner());
         const sessionExpiresAt = new Date(expiresAtSeconds * 1000).toISOString();
         this.auditLogger.log(AuditEvents.JWT_ISSUED, {
           requestId,

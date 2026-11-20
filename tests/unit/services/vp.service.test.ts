@@ -4,7 +4,14 @@
 // step, single audit event per outcome, JWT scopes from effectiveScopes.
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { AuditEvents } from '../../../src/core/index.js';
+import {
+  AuditEvents,
+  buildDIDDocument,
+  derivePublicKey,
+  readJwsHeader,
+  verifyJWT,
+  verifyJwsByKid,
+} from '../../../src/core/index.js';
 import { VPService } from '../../../src/services/vp/vp.service.js';
 import { TestAuditLogger } from '../../utils/TestAuditLogger.js';
 import {
@@ -136,6 +143,23 @@ describe('VPService (thin wrapper)', () => {
     const payload = decodeJwtPayload(result.session!.token);
     expect(payload['scopes']).toEqual(['book:flights']);
     expect(payload['userDid']).toBe(USER_DID);
+  });
+
+  it('session JWT is a KYA-OS EdDSA JWS: header carries kid and it verifies through verifyJwsByKid (L1-C)', async () => {
+    const issuer = makeActor();
+    const holder = makeActor();
+    const { service } = makeService(issuer);
+    const vc = await makeAgentVC(issuer, holder.did);
+    const vp = await buildSignedVP([vc], holder);
+
+    const result = await service.verifyVP(vp, 'req-1', { issueSession: true });
+
+    const token = result.session!.token;
+    expect(readJwsHeader(token)).toEqual({ alg: 'EdDSA', kid: `${issuer.did}#key-1`, typ: 'JWT', crv: 'Ed25519' });
+    const issuerDocument = buildDIDDocument(issuer.did, derivePublicKey(issuer.privateKeyHex));
+    const verified = await verifyJwsByKid(token, async (did) => (did === issuer.did ? issuerDocument : null));
+    expect(verified.payload).toMatchObject({ iss: issuer.did, sub: holder.did, vpId: expect.any(String) });
+    expect(verifyJWT(token, derivePublicKey(issuer.privateKeyHex)).sub).toBe(holder.did);
   });
 
   it('session without a grant carries the full VC scopes (effectiveScopes === privilegeScopes)', async () => {

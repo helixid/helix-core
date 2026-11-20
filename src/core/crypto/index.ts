@@ -1,4 +1,6 @@
 export * from './did.js';
+export * from './signer.js';
+export * from './jws.js';
 export {
   generateKeyPair,
   derivePublicKey,
