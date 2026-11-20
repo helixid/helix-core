@@ -19,3 +19,4 @@ export {
   verifySignature,
 } from './vp.js';
 export * from './jwt.js';
+export { CanonicalJsonError, canonicalize, hashJson } from './jcs.js';

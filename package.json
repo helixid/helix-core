@@ -53,6 +53,7 @@
     "workspace:test:non-live": "pnpm run test:non-live && pnpm -r --if-present run test:non-live",
     "format": "prettier --write \"**/*.{ts,json,md}\" --ignore-path .gitignore",
     "generate:golden-vectors": "tsx scripts/generate-golden-vectors.ts",
+    "generate:kya-os-helix": "tsx scripts/generate-kya-os-helix-fixtures.ts",
     "generate:jws-fixtures": "tsx scripts/generate-jws-fixtures.ts",
     "setup": "tsx scripts/setup.ts",
     "setup:hedera": "tsx scripts/setup-hedera.ts",
