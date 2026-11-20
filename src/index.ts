@@ -100,8 +100,20 @@ export type {
   OnboardWithCustodyResult,
   SignVPResult,
   UserChallengeVerifyResult,
-  DelegateAuthorityOptions,
 } from './services/agent/IAgentService.js';
+export { CredentialService } from './services/credentials/credential.service.js';
+export type {
+  AgentCredentials,
+  CredentialStatus,
+  CredentialStatusStore,
+  CredentialVcRepository,
+  IssueAttestationsInput,
+  IssueHopInput,
+  IssueIdentityInput,
+  IssueRootHopInput,
+  StoredCredential,
+} from './services/credentials/credential.service.js';
+export { CustodySigner } from './services/credentials/custody-signer.js';
 export { AesGcmKeyCustody } from './services/key-custody/key-custody.js';
 export type { IKeyCustody, EncryptedKeyMaterial } from './services/key-custody/key-custody.js';
 export {

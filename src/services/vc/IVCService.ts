@@ -10,10 +10,6 @@ export interface IssueVCInput {
   userId?: string;
   expiresInSeconds?: number;
   expiresAt?: Date | null;
-  delegatedFrom?: string;
-  delegationDepth?: number;
-  maxDelegationDepth?: number;
-  parentVcId?: string;
   revokeExisting?: boolean;
 }
 
