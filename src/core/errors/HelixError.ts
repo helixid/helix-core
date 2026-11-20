@@ -490,6 +490,19 @@ export class JWTExpiredError extends HelixError {
   }
 }
 
+/**
+ * A compact JWS that does not verify (KYA-OS L1.3 to L1.5). `reason` is one of
+ * `JwsReasons` in crypto/jws.ts, mirrored by helix-sdk-py.
+ */
+export class InvalidJWSError extends HelixError {
+  public readonly reason: string;
+  constructor(reason: string, message = 'JWS is invalid') {
+    super('JWS_INVALID', message, 400, { reason });
+    this.name = 'InvalidJWSError';
+    this.reason = reason;
+  }
+}
+
 export class JWTPublicKeyNotFoundError extends HelixError {
   constructor(message = 'JWT public key is not configured') {
     super('JWT_PUBLIC_KEY_NOT_FOUND', message, 500);
