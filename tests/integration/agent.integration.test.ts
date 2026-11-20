@@ -7,7 +7,7 @@ import { AgentService } from '../../src/services/agent/agent.service.js';
 import { AesGcmKeyCustody } from '../../src/services/key-custody/key-custody.js';
 import { MockDIDService } from '../mocks/MockDIDService.js';
 import { MockVCService } from '../mocks/MockVCService.js';
-import { TestAuditLogger } from '../utils/TestAuditLogger.js';
+import { TestAuditTrail } from '../utils/TestAuditTrail.js';
 
 const TEST_ADMIN_KEY = 'test-admin-key';
 
@@ -26,7 +26,7 @@ function makeApp() {
       ]
     }),
     new MockVCService(),
-    new TestAuditLogger(),
+    new TestAuditTrail(),
     new DidKeyRepository(),
     new AesGcmKeyCustody('11'.repeat(32)),
   );
@@ -147,7 +147,7 @@ describe('agent integration', () => {
         new AgentRepository(),
         didService,
         vcService,
-        new TestAuditLogger(),
+        new TestAuditTrail(),
         agentKeyRepository,
         keyCustody,
       );

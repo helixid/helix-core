@@ -65,17 +65,19 @@ describe('Onboarding Live Integration', () => {
     expect(signedVP.holder).toBe(agent.did);
     expect(signedVP.proof).toBeTruthy();
 
-    const auditLog = await client.getAuditLog({ limit: 100 });
-    const auditTypes = auditLog.map((entry) => entry.eventType);
+    // GET /v1/audit-log returns `{id, recordedAt, eventDigest, event}` rows,
+    // each `event` a typed producer event (story A-1).
+    const auditLog = (await client.getAuditLog({ limit: 100 })) as unknown as Array<{
+      event?: { eventType?: string };
+      eventType?: string;
+    }>;
+    const auditTypes = auditLog.map((entry) => entry.event?.eventType ?? entry.eventType);
     expect(auditTypes).toEqual(expect.arrayContaining([
-      'ENROLLMENT_TOKEN_GENERATED',
-      'ENROLLMENT_TOKEN_CONSUMED',
-      'CHALLENGE_ISSUED',
-      'CHALLENGE_VERIFIED',
-      'DID_CREATED',
-      'VC_ISSUED',
-      'AGENT_ONBOARDED',
-      'AGENT_VP_SIGNED',
+      'credential.required',   // enrollment token generated, onboarding challenge issued
+      'credential.verified',   // token consumed, challenge verified, agent onboarded
+      'configuration.changed', // DID created, service enrolled
+      'delegation.issued',     // agent credential issued
+      'proof.generated',       // VP signed
     ]));
   }, LIVE_HEDERA_TIMEOUT_MS);
 });

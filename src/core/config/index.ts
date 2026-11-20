@@ -73,9 +73,20 @@ export const ConfigSchema = z.object({
   STATUS_LIST_CACHE_L1_TTL_SECONDS: z.coerce.number().int().min(1).max(3600).default(60),
   STATUS_LIST_CACHE_L2_TTL_SECONDS: z.coerce.number().int().min(1).max(86400).default(300),
 
-  // Audit
-  AUDIT_LOG_DESTINATION: z.enum(['stdout', 'file', 'both']).default('stdout'),
+  // Audit (KYA-OS A-1). Events are stored in the database; AUDIT_LOG_DESTINATION
+  // additionally echoes each canonical event as one JSON line to stdout and/or a file.
+  AUDIT_LOG_DESTINATION: z.enum(['stdout', 'file', 'both', 'none']).default('stdout'),
   AUDIT_LOG_PATH: z.string().optional(),
+  // Names this API as a producer source; sequences and predecessor digests are per source.
+  AUDIT_SOURCE_ID: z.string().min(1).max(256).default('helix-api'),
+  // Record tool names in tool events. Off by default: an explicit policy decision.
+  AUDIT_INCLUDE_TOOL_NAMES: BooleanEnvSchema.default(false),
+  // The evidence vault key (AES-256-GCM). Unset: exact payloads are never kept and events carry no evidence.
+  AUDIT_EVIDENCE_KEY: z
+    .string()
+    .regex(/^[0-9a-fA-F]{64}$/, 'must be 64 hex chars (32 bytes) for AES-256-GCM')
+    .optional(),
+  AUDIT_EVIDENCE_KEY_ID: z.string().min(1).max(256).default('evidence-key-v1'),
 
   // Hosted accounts & auth (Item #1, see the hosted-instance design).
   // All optional/defaulted so self-hosted deployments (which don't use

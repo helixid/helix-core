@@ -21,7 +21,7 @@ import Fastify, { type FastifyInstance } from 'fastify';
 import { buildDelegationVC, type SignedVP } from '../../src/core/index.js';
 import { VPService } from '../../src/services/vp/vp.service.js';
 import vpRoutes from '../../src/routes/vp/index.js';
-import { TestAuditLogger } from '../utils/TestAuditLogger.js';
+import { TestAuditTrail } from '../utils/TestAuditTrail.js';
 import {
   API_BASE_URL,
   OWN_LIST_ID,
@@ -50,7 +50,7 @@ describe('POST /v1/vp/verify — grant matrix (§9.4 A1)', () => {
     app = Fastify({ logger: false });
     const service = new VPService(
       makeVcServiceStub({ [OWN_LIST_ID]: makeOwnStatusList(issuer) }),
-      new TestAuditLogger(),
+      new TestAuditTrail(),
       API_BASE_URL,
       { signingKey: issuer.privateKeyHex, issuerDid: issuer.did, ttlSeconds: 600 },
     );

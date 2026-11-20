@@ -14,7 +14,7 @@ export * from './core/index.js';
 export { errorHandler } from './middleware/errorHandler.js';
 export { registerRequestLogger } from './middleware/requestLogger.js';
 
-export { ApiAuditLogger } from './audit/index.js';
+export * from './audit/index.js';
 
 export type { ICache } from './cache/ICache.js';
 export { NoopCache } from './cache/NoopCache.js';
@@ -43,8 +43,6 @@ export type {
   CreateVcParams,
   StatusListEntryRecord,
 } from './repositories/vc.repository.js';
-export { AuditLogRepository } from './repositories/audit-log.repository.js';
-export type { AuditLogRecord, ListAuditLogFilters } from './repositories/audit-log.repository.js';
 export { AgentRepository } from './repositories/agent.repository.js';
 export type {
   EnrollmentTokenRecord,
@@ -121,7 +119,7 @@ export { default as vcRoutes, type VcRouteOptions } from './routes/vc/index.js';
 export { default as statusListRoutes } from './routes/status-list/index.js';
 export { default as vpRoutes } from './routes/vp/index.js';
 export { default as agentRoutes } from './routes/agent/index.js';
-export { default as auditLogRoutes } from './routes/audit-log/index.js';
+export { default as auditLogRoutes, type AuditLogRouteOptions } from './routes/audit-log/index.js';
 export { default as sessionRoutes } from './routes/sessions/index.js';
 export { default as serviceProviderRoutes } from './routes/service-provider/index.js';
 export type { ServiceProviderAction, ServiceProviderRouteOptions } from './routes/service-provider/index.js';

@@ -6,7 +6,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest
 import Fastify, { type FastifyInstance } from 'fastify';
 import { VPService } from '../../src/services/vp/vp.service.js';
 import vpRoutes from '../../src/routes/vp/index.js';
-import { TestAuditLogger } from '../utils/TestAuditLogger.js';
+import { TestAuditTrail } from '../utils/TestAuditTrail.js';
 import {
   API_BASE_URL,
   OWN_LIST_ID,
@@ -23,11 +23,11 @@ import {
 describe('VP integration API', () => {
   let app: FastifyInstance;
   let issuer: Actor;
-  let auditLogger: TestAuditLogger;
+  let auditLogger: TestAuditTrail;
 
   beforeAll(async () => {
     issuer = makeActor();
-    auditLogger = new TestAuditLogger();
+    auditLogger = new TestAuditTrail();
     app = Fastify({ logger: false });
     const service = new VPService(
       makeVcServiceStub({ [OWN_LIST_ID]: makeOwnStatusList(issuer) }),
@@ -45,7 +45,7 @@ describe('VP integration API', () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
-    auditLogger.events.length = 0;
+    auditLogger.clear();
   });
 
   it('POST /v1/vp/template is removed from the API', async () => {

@@ -1,0 +1,2654 @@
+{
+  "generator": "scripts/generate-audit-fixtures.ts",
+  "story": "A-1",
+  "spec": {
+    "commit": "a4d7f61",
+    "suite": "1.10.0",
+    "event_digest_domain": "org.kya-os.audit.event.v1"
+  },
+  "trail": {
+    "sourceId": "fixture-source-1",
+    "producer": {
+      "kind": "pairwise_did",
+      "did": "did:key:zFixtureProducer"
+    },
+    "tenantRef": {
+      "kind": "keyed_commitment",
+      "value": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "keyId": "tenant-key-v1"
+    },
+    "binding": "urn:kya-os:audit-binding:mcp:2025-11-25",
+    "privacy": {
+      "classification": "internal",
+      "retentionClass": "audit-365d"
+    }
+  },
+  "events": [
+    {
+      "name": "session_established",
+      "input": {
+        "eventType": "session.established",
+        "actor": {
+          "kind": "pairwise_did",
+          "did": "did:key:zFixtureAgent"
+        },
+        "resource": {
+          "kind": "public_did",
+          "did": "did:web:orders.example"
+        },
+        "correlationId": "call-0001",
+        "session": {
+          "ref": {
+            "kind": "keyed_commitment",
+            "value": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "keyId": "session-key-v1"
+          }
+        },
+        "action": {
+          "category": "session"
+        },
+        "outcome": "succeeded",
+        "details": {
+          "family": "session",
+          "phase": "established"
+        }
+      },
+      "event": {
+        "schema": "https://schema.kya-os.org/v1/protocol/audit/event/v1.0.0",
+        "eventId": "fixture-event-1",
+        "eventType": "session.established",
+        "eventVersion": "1.0.0",
+        "binding": "urn:kya-os:audit-binding:mcp:2025-11-25",
+        "occurredAt": 1750000001123,
+        "tenantRef": {
+          "kind": "keyed_commitment",
+          "value": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "keyId": "tenant-key-v1"
+        },
+        "source": {
+          "producer": {
+            "kind": "pairwise_did",
+            "did": "did:key:zFixtureProducer"
+          },
+          "sourceId": "fixture-source-1",
+          "sourceSequence": "1"
+        },
+        "correlationId": "call-0001",
+        "session": {
+          "ref": {
+            "kind": "keyed_commitment",
+            "value": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "keyId": "session-key-v1"
+          }
+        },
+        "actor": {
+          "kind": "pairwise_did",
+          "did": "did:key:zFixtureAgent"
+        },
+        "resource": {
+          "kind": "public_did",
+          "did": "did:web:orders.example"
+        },
+        "action": {
+          "category": "session"
+        },
+        "outcome": "succeeded",
+        "evidence": [],
+        "details": {
+          "family": "session",
+          "phase": "established"
+        },
+        "privacy": {
+          "classification": "internal",
+          "retentionClass": "audit-365d"
+        }
+      },
+      "canonical": "{\"action\":{\"category\":\"session\"},\"actor\":{\"did\":\"did:key:zFixtureAgent\",\"kind\":\"pairwise_did\"},\"binding\":\"urn:kya-os:audit-binding:mcp:2025-11-25\",\"correlationId\":\"call-0001\",\"details\":{\"family\":\"session\",\"phase\":\"established\"},\"eventId\":\"fixture-event-1\",\"eventType\":\"session.established\",\"eventVersion\":\"1.0.0\",\"evidence\":[],\"occurredAt\":1750000001123,\"outcome\":\"succeeded\",\"privacy\":{\"classification\":\"internal\",\"retentionClass\":\"audit-365d\"},\"resource\":{\"did\":\"did:web:orders.example\",\"kind\":\"public_did\"},\"schema\":\"https://schema.kya-os.org/v1/protocol/audit/event/v1.0.0\",\"session\":{\"ref\":{\"keyId\":\"session-key-v1\",\"kind\":\"keyed_commitment\",\"value\":\"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}},\"source\":{\"producer\":{\"did\":\"did:key:zFixtureProducer\",\"kind\":\"pairwise_did\"},\"sourceId\":\"fixture-source-1\",\"sourceSequence\":\"1\"},\"tenantRef\":{\"keyId\":\"tenant-key-v1\",\"kind\":\"keyed_commitment\",\"value\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}}",
+      "digest": "sha256:d2ba655062759a3c11bef669e982e8b002f64573946a685610f65057760ba2f9"
+    },
+    {
+      "name": "tool_call_completed_name_withheld",
+      "input": {
+        "eventType": "tool.call.completed",
+        "actor": {
+          "kind": "pairwise_did",
+          "did": "did:key:zFixtureAgent"
+        },
+        "resource": {
+          "kind": "public_did",
+          "did": "did:web:orders.example"
+        },
+        "correlationId": "call-0001",
+        "action": {
+          "category": "tool.call",
+          "name": "lookup_order"
+        },
+        "outcome": "succeeded",
+        "details": {
+          "family": "tool",
+          "phase": "completed",
+          "attempt": "1"
+        }
+      },
+      "event": {
+        "schema": "https://schema.kya-os.org/v1/protocol/audit/event/v1.0.0",
+        "eventId": "fixture-event-1",
+        "eventType": "tool.call.completed",
+        "eventVersion": "1.0.0",
+        "binding": "urn:kya-os:audit-binding:mcp:2025-11-25",
+        "occurredAt": 1750000001123,
+        "tenantRef": {
+          "kind": "keyed_commitment",
+          "value": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "keyId": "tenant-key-v1"
+        },
+        "source": {
+          "producer": {
+            "kind": "pairwise_did",
+            "did": "did:key:zFixtureProducer"
+          },
+          "sourceId": "fixture-source-1",
+          "sourceSequence": "1"
+        },
+        "correlationId": "call-0001",
+        "actor": {
+          "kind": "pairwise_did",
+          "did": "did:key:zFixtureAgent"
+        },
+        "resource": {
+          "kind": "public_did",
+          "did": "did:web:orders.example"
+        },
+        "action": {
+          "category": "tool.call"
+        },
+        "outcome": "succeeded",
+        "evidence": [],
+        "details": {
+          "family": "tool",
+          "phase": "completed",
+          "attempt": "1"
+        },
+        "privacy": {
+          "classification": "internal",
+          "retentionClass": "audit-365d"
+        }
+      },
+      "canonical": "{\"action\":{\"category\":\"tool.call\"},\"actor\":{\"did\":\"did:key:zFixtureAgent\",\"kind\":\"pairwise_did\"},\"binding\":\"urn:kya-os:audit-binding:mcp:2025-11-25\",\"correlationId\":\"call-0001\",\"details\":{\"attempt\":\"1\",\"family\":\"tool\",\"phase\":\"completed\"},\"eventId\":\"fixture-event-1\",\"eventType\":\"tool.call.completed\",\"eventVersion\":\"1.0.0\",\"evidence\":[],\"occurredAt\":1750000001123,\"outcome\":\"succeeded\",\"privacy\":{\"classification\":\"internal\",\"retentionClass\":\"audit-365d\"},\"resource\":{\"did\":\"did:web:orders.example\",\"kind\":\"public_did\"},\"schema\":\"https://schema.kya-os.org/v1/protocol/audit/event/v1.0.0\",\"source\":{\"producer\":{\"did\":\"did:key:zFixtureProducer\",\"kind\":\"pairwise_did\"},\"sourceId\":\"fixture-source-1\",\"sourceSequence\":\"1\"},\"tenantRef\":{\"keyId\":\"tenant-key-v1\",\"kind\":\"keyed_commitment\",\"value\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}}",
+      "digest": "sha256:af82bba1623812b1a010422b32af5e3b465090408368fdce10e0a7649969f865"
+    },
+    {
+      "name": "proof_verified",
+      "input": {
+        "eventType": "proof.verified",
+        "actor": {
+          "kind": "pairwise_did",
+          "did": "did:key:zFixtureAgent"
+        },
+        "resource": {
+          "kind": "public_did",
+          "did": "did:web:orders.example"
+        },
+        "correlationId": "call-0001",
+        "action": {
+          "category": "proof"
+        },
+        "outcome": "succeeded",
+        "details": {
+          "family": "proof",
+          "phase": "verified",
+          "proofDigest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "verificationCode": "PROOF_VALID"
+        }
+      },
+      "event": {
+        "schema": "https://schema.kya-os.org/v1/protocol/audit/event/v1.0.0",
+        "eventId": "fixture-event-1",
+        "eventType": "proof.verified",
+        "eventVersion": "1.0.0",
+        "binding": "urn:kya-os:audit-binding:mcp:2025-11-25",
+        "occurredAt": 1750000001123,
+        "tenantRef": {
+          "kind": "keyed_commitment",
+          "value": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "keyId": "tenant-key-v1"
+        },
+        "source": {
+          "producer": {
+            "kind": "pairwise_did",
+            "did": "did:key:zFixtureProducer"
+          },
+          "sourceId": "fixture-source-1",
+          "sourceSequence": "1"
+        },
+        "correlationId": "call-0001",
+        "actor": {
+          "kind": "pairwise_did",
+          "did": "did:key:zFixtureAgent"
+        },
+        "resource": {
+          "kind": "public_did",
+          "did": "did:web:orders.example"
+        },
+        "action": {
+          "category": "proof"
+        },
+        "outcome": "succeeded",
+        "evidence": [],
+        "details": {
+          "family": "proof",
+          "phase": "verified",
+          "proofDigest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "verificationCode": "PROOF_VALID"
+        },
+        "privacy": {
+          "classification": "internal",
+          "retentionClass": "audit-365d"
+        }
+      },
+      "canonical": "{\"action\":{\"category\":\"proof\"},\"actor\":{\"did\":\"did:key:zFixtureAgent\",\"kind\":\"pairwise_did\"},\"binding\":\"urn:kya-os:audit-binding:mcp:2025-11-25\",\"correlationId\":\"call-0001\",\"details\":{\"family\":\"proof\",\"phase\":\"verified\",\"proofDigest\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"verificationCode\":\"PROOF_VALID\"},\"eventId\":\"fixture-event-1\",\"eventType\":\"proof.verified\",\"eventVersion\":\"1.0.0\",\"evidence\":[],\"occurredAt\":1750000001123,\"outcome\":\"succeeded\",\"privacy\":{\"classification\":\"internal\",\"retentionClass\":\"audit-365d\"},\"resource\":{\"did\":\"did:web:orders.example\",\"kind\":\"public_did\"},\"schema\":\"https://schema.kya-os.org/v1/protocol/audit/event/v1.0.0\",\"source\":{\"producer\":{\"did\":\"did:key:zFixtureProducer\",\"kind\":\"pairwise_did\"},\"sourceId\":\"fixture-source-1\",\"sourceSequence\":\"1\"},\"tenantRef\":{\"keyId\":\"tenant-key-v1\",\"kind\":\"keyed_commitment\",\"value\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}}",
+      "digest": "sha256:f8e0b5caac1805059d1e2ea23aa9d8cb8ca6e5207debf18916d94ffae3f5af9a"
+    },
+    {
+      "name": "delegation_verified_with_chain",
+      "input": {
+        "eventType": "delegation.verified",
+        "actor": {
+          "kind": "pairwise_did",
+          "did": "did:key:zFixtureAgent"
+        },
+        "resource": {
+          "kind": "public_did",
+          "did": "did:web:orders.example"
+        },
+        "correlationId": "call-0001",
+        "action": {
+          "category": "delegation"
+        },
+        "outcome": "succeeded",
+        "authorization": {
+          "source": "delegation",
+          "decision": "allowed",
+          "scopeId": "orders:read",
+          "delegationRef": "urn:uuid:1111-aaaa",
+          "delegationCredentialDigest": "sha256:6fbe4c0f04413cb40ec3b3069bf7c73dc1b6a681765e95ac451672136328712e",
+          "delegationChainDigests": [
+            "sha256:6fbe4c0f04413cb40ec3b3069bf7c73dc1b6a681765e95ac451672136328712e",
+            "sha256:d29d65862fce70137390bea2859696c7ad80ce88cede778fea1cab24d513eed1"
+          ],
+          "verificationCode": "DELEGATION_CHAIN_VALID"
+        },
+        "details": {
+          "family": "delegation",
+          "phase": "verified",
+          "delegationRef": "urn:uuid:1111-aaaa",
+          "parentRef": "urn:uuid:0000-root"
+        }
+      },
+      "event": {
+        "schema": "https://schema.kya-os.org/v1/protocol/audit/event/v1.0.0",
+        "eventId": "fixture-event-1",
+        "eventType": "delegation.verified",
+        "eventVersion": "1.0.0",
+        "binding": "urn:kya-os:audit-binding:mcp:2025-11-25",
+        "occurredAt": 1750000001123,
+        "tenantRef": {
+          "kind": "keyed_commitment",
+          "value": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "keyId": "tenant-key-v1"
+        },
+        "source": {
+          "producer": {
+            "kind": "pairwise_did",
+            "did": "did:key:zFixtureProducer"
+          },
+          "sourceId": "fixture-source-1",
+          "sourceSequence": "1"
+        },
+        "correlationId": "call-0001",
+        "actor": {
+          "kind": "pairwise_did",
+          "did": "did:key:zFixtureAgent"
+        },
+        "resource": {
+          "kind": "public_did",
+          "did": "did:web:orders.example"
+        },
+        "action": {
+          "category": "delegation"
+        },
+        "outcome": "succeeded",
+        "authorization": {
+          "source": "delegation",
+          "decision": "allowed",
+          "scopeId": "orders:read",
+          "delegationRef": "urn:uuid:1111-aaaa",
+          "delegationCredentialDigest": "sha256:6fbe4c0f04413cb40ec3b3069bf7c73dc1b6a681765e95ac451672136328712e",
+          "delegationChainDigests": [
+            "sha256:6fbe4c0f04413cb40ec3b3069bf7c73dc1b6a681765e95ac451672136328712e",
+            "sha256:d29d65862fce70137390bea2859696c7ad80ce88cede778fea1cab24d513eed1"
+          ],
+          "verificationCode": "DELEGATION_CHAIN_VALID"
+        },
+        "evidence": [],
+        "details": {
+          "family": "delegation",
+          "phase": "verified",
+          "delegationRef": "urn:uuid:1111-aaaa",
+          "parentRef": "urn:uuid:0000-root"
+        },
+        "privacy": {
+          "classification": "internal",
+          "retentionClass": "audit-365d"
+        }
+      },
+      "canonical": "{\"action\":{\"category\":\"delegation\"},\"actor\":{\"did\":\"did:key:zFixtureAgent\",\"kind\":\"pairwise_did\"},\"authorization\":{\"decision\":\"allowed\",\"delegationChainDigests\":[\"sha256:6fbe4c0f04413cb40ec3b3069bf7c73dc1b6a681765e95ac451672136328712e\",\"sha256:d29d65862fce70137390bea2859696c7ad80ce88cede778fea1cab24d513eed1\"],\"delegationCredentialDigest\":\"sha256:6fbe4c0f04413cb40ec3b3069bf7c73dc1b6a681765e95ac451672136328712e\",\"delegationRef\":\"urn:uuid:1111-aaaa\",\"scopeId\":\"orders:read\",\"source\":\"delegation\",\"verificationCode\":\"DELEGATION_CHAIN_VALID\"},\"binding\":\"urn:kya-os:audit-binding:mcp:2025-11-25\",\"correlationId\":\"call-0001\",\"details\":{\"delegationRef\":\"urn:uuid:1111-aaaa\",\"family\":\"delegation\",\"parentRef\":\"urn:uuid:0000-root\",\"phase\":\"verified\"},\"eventId\":\"fixture-event-1\",\"eventType\":\"delegation.verified\",\"eventVersion\":\"1.0.0\",\"evidence\":[],\"occurredAt\":1750000001123,\"outcome\":\"succeeded\",\"privacy\":{\"classification\":\"internal\",\"retentionClass\":\"audit-365d\"},\"resource\":{\"did\":\"did:web:orders.example\",\"kind\":\"public_did\"},\"schema\":\"https://schema.kya-os.org/v1/protocol/audit/event/v1.0.0\",\"source\":{\"producer\":{\"did\":\"did:key:zFixtureProducer\",\"kind\":\"pairwise_did\"},\"sourceId\":\"fixture-source-1\",\"sourceSequence\":\"1\"},\"tenantRef\":{\"keyId\":\"tenant-key-v1\",\"kind\":\"keyed_commitment\",\"value\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}}",
+      "digest": "sha256:6584cee9b8d5e82d783118c92b377a4dadb80de3e8f8671732990f0cb4a2b02d"
+    },
+    {
+      "name": "authorization_denied_with_overlong_scope",
+      "input": {
+        "eventType": "authorization.denied",
+        "actor": {
+          "kind": "pairwise_did",
+          "did": "did:key:zFixtureAgent"
+        },
+        "resource": {
+          "kind": "public_did",
+          "did": "did:web:orders.example"
+        },
+        "correlationId": "call-0002",
+        "action": {
+          "category": "authorization"
+        },
+        "outcome": "denied",
+        "reason": {
+          "code": "insufficient_scope"
+        },
+        "authorization": {
+          "source": "delegation",
+          "decision": "denied",
+          "scopeId": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+        },
+        "details": {
+          "family": "authorization",
+          "phase": "denied"
+        }
+      },
+      "event": {
+        "schema": "https://schema.kya-os.org/v1/protocol/audit/event/v1.0.0",
+        "eventId": "fixture-event-1",
+        "eventType": "authorization.denied",
+        "eventVersion": "1.0.0",
+        "binding": "urn:kya-os:audit-binding:mcp:2025-11-25",
+        "occurredAt": 1750000001123,
+        "tenantRef": {
+          "kind": "keyed_commitment",
+          "value": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "keyId": "tenant-key-v1"
+        },
+        "source": {
+          "producer": {
+            "kind": "pairwise_did",
+            "did": "did:key:zFixtureProducer"
+          },
+          "sourceId": "fixture-source-1",
+          "sourceSequence": "1"
+        },
+        "correlationId": "call-0002",
+        "actor": {
+          "kind": "pairwise_did",
+          "did": "did:key:zFixtureAgent"
+        },
+        "resource": {
+          "kind": "public_did",
+          "did": "did:web:orders.example"
+        },
+        "action": {
+          "category": "authorization"
+        },
+        "outcome": "denied",
+        "reason": {
+          "code": "insufficient_scope"
+        },
+        "authorization": {
+          "source": "delegation",
+          "decision": "denied",
+          "scopeId": "sha256:0d4e2ca9e9cbced7a7a5380eb29e1a3783b9b6d0db72de36a1051038e1c1fbc7"
+        },
+        "evidence": [],
+        "details": {
+          "family": "authorization",
+          "phase": "denied"
+        },
+        "privacy": {
+          "classification": "internal",
+          "retentionClass": "audit-365d"
+        }
+      },
+      "canonical": "{\"action\":{\"category\":\"authorization\"},\"actor\":{\"did\":\"did:key:zFixtureAgent\",\"kind\":\"pairwise_did\"},\"authorization\":{\"decision\":\"denied\",\"scopeId\":\"sha256:0d4e2ca9e9cbced7a7a5380eb29e1a3783b9b6d0db72de36a1051038e1c1fbc7\",\"source\":\"delegation\"},\"binding\":\"urn:kya-os:audit-binding:mcp:2025-11-25\",\"correlationId\":\"call-0002\",\"details\":{\"family\":\"authorization\",\"phase\":\"denied\"},\"eventId\":\"fixture-event-1\",\"eventType\":\"authorization.denied\",\"eventVersion\":\"1.0.0\",\"evidence\":[],\"occurredAt\":1750000001123,\"outcome\":\"denied\",\"privacy\":{\"classification\":\"internal\",\"retentionClass\":\"audit-365d\"},\"reason\":{\"code\":\"insufficient_scope\"},\"resource\":{\"did\":\"did:web:orders.example\",\"kind\":\"public_did\"},\"schema\":\"https://schema.kya-os.org/v1/protocol/audit/event/v1.0.0\",\"source\":{\"producer\":{\"did\":\"did:key:zFixtureProducer\",\"kind\":\"pairwise_did\"},\"sourceId\":\"fixture-source-1\",\"sourceSequence\":\"1\"},\"tenantRef\":{\"keyId\":\"tenant-key-v1\",\"kind\":\"keyed_commitment\",\"value\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}}",
+      "digest": "sha256:a069415af6344e3b94f35770787f492adfedb6e63c4126a2a9ff212d57c6edd4"
+    },
+    {
+      "name": "grant_used",
+      "input": {
+        "eventType": "grant.used",
+        "actor": {
+          "kind": "pairwise_did",
+          "did": "did:key:zFixtureAgent"
+        },
+        "resource": {
+          "kind": "public_did",
+          "did": "did:web:orders.example"
+        },
+        "action": {
+          "category": "authorization"
+        },
+        "outcome": "succeeded",
+        "authorization": {
+          "source": "grant",
+          "decision": "allowed",
+          "grantRef": "vc:helix:grant-1"
+        },
+        "details": {
+          "family": "authorization",
+          "phase": "grant_used",
+          "grantRef": "vc:helix:grant-1"
+        }
+      },
+      "event": {
+        "schema": "https://schema.kya-os.org/v1/protocol/audit/event/v1.0.0",
+        "eventId": "fixture-event-1",
+        "eventType": "grant.used",
+        "eventVersion": "1.0.0",
+        "binding": "urn:kya-os:audit-binding:mcp:2025-11-25",
+        "occurredAt": 1750000001123,
+        "tenantRef": {
+          "kind": "keyed_commitment",
+          "value": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "keyId": "tenant-key-v1"
+        },
+        "source": {
+          "producer": {
+            "kind": "pairwise_did",
+            "did": "did:key:zFixtureProducer"
+          },
+          "sourceId": "fixture-source-1",
+          "sourceSequence": "1"
+        },
+        "actor": {
+          "kind": "pairwise_did",
+          "did": "did:key:zFixtureAgent"
+        },
+        "resource": {
+          "kind": "public_did",
+          "did": "did:web:orders.example"
+        },
+        "action": {
+          "category": "authorization"
+        },
+        "outcome": "succeeded",
+        "authorization": {
+          "source": "grant",
+          "decision": "allowed",
+          "grantRef": "vc:helix:grant-1"
+        },
+        "evidence": [],
+        "details": {
+          "family": "authorization",
+          "phase": "grant_used",
+          "grantRef": "vc:helix:grant-1"
+        },
+        "privacy": {
+          "classification": "internal",
+          "retentionClass": "audit-365d"
+        }
+      },
+      "canonical": "{\"action\":{\"category\":\"authorization\"},\"actor\":{\"did\":\"did:key:zFixtureAgent\",\"kind\":\"pairwise_did\"},\"authorization\":{\"decision\":\"allowed\",\"grantRef\":\"vc:helix:grant-1\",\"source\":\"grant\"},\"binding\":\"urn:kya-os:audit-binding:mcp:2025-11-25\",\"details\":{\"family\":\"authorization\",\"grantRef\":\"vc:helix:grant-1\",\"phase\":\"grant_used\"},\"eventId\":\"fixture-event-1\",\"eventType\":\"grant.used\",\"eventVersion\":\"1.0.0\",\"evidence\":[],\"occurredAt\":1750000001123,\"outcome\":\"succeeded\",\"privacy\":{\"classification\":\"internal\",\"retentionClass\":\"audit-365d\"},\"resource\":{\"did\":\"did:web:orders.example\",\"kind\":\"public_did\"},\"schema\":\"https://schema.kya-os.org/v1/protocol/audit/event/v1.0.0\",\"source\":{\"producer\":{\"did\":\"did:key:zFixtureProducer\",\"kind\":\"pairwise_did\"},\"sourceId\":\"fixture-source-1\",\"sourceSequence\":\"1\"},\"tenantRef\":{\"keyId\":\"tenant-key-v1\",\"kind\":\"keyed_commitment\",\"value\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}}",
+      "digest": "sha256:e532ed90443bc70fe749791db312eec26f181a7a3764b06d79bf40388b502150"
+    },
+    {
+      "name": "consent_approved",
+      "input": {
+        "eventType": "consent.approved",
+        "actor": {
+          "kind": "public_did",
+          "did": "did:key:zFixtureUser"
+        },
+        "responsibleParty": {
+          "kind": "public_did",
+          "did": "did:key:zFixtureUser"
+        },
+        "resource": {
+          "kind": "public_did",
+          "did": "did:web:orders.example"
+        },
+        "action": {
+          "category": "consent"
+        },
+        "outcome": "succeeded",
+        "details": {
+          "family": "consent",
+          "phase": "approved",
+          "consentRef": "vc:helix:grant-1"
+        }
+      },
+      "event": {
+        "schema": "https://schema.kya-os.org/v1/protocol/audit/event/v1.0.0",
+        "eventId": "fixture-event-1",
+        "eventType": "consent.approved",
+        "eventVersion": "1.0.0",
+        "binding": "urn:kya-os:audit-binding:mcp:2025-11-25",
+        "occurredAt": 1750000001123,
+        "tenantRef": {
+          "kind": "keyed_commitment",
+          "value": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "keyId": "tenant-key-v1"
+        },
+        "source": {
+          "producer": {
+            "kind": "pairwise_did",
+            "did": "did:key:zFixtureProducer"
+          },
+          "sourceId": "fixture-source-1",
+          "sourceSequence": "1"
+        },
+        "actor": {
+          "kind": "public_did",
+          "did": "did:key:zFixtureUser"
+        },
+        "responsibleParty": {
+          "kind": "public_did",
+          "did": "did:key:zFixtureUser"
+        },
+        "resource": {
+          "kind": "public_did",
+          "did": "did:web:orders.example"
+        },
+        "action": {
+          "category": "consent"
+        },
+        "outcome": "succeeded",
+        "evidence": [],
+        "details": {
+          "family": "consent",
+          "phase": "approved",
+          "consentRef": "vc:helix:grant-1"
+        },
+        "privacy": {
+          "classification": "internal",
+          "retentionClass": "audit-365d"
+        }
+      },
+      "canonical": "{\"action\":{\"category\":\"consent\"},\"actor\":{\"did\":\"did:key:zFixtureUser\",\"kind\":\"public_did\"},\"binding\":\"urn:kya-os:audit-binding:mcp:2025-11-25\",\"details\":{\"consentRef\":\"vc:helix:grant-1\",\"family\":\"consent\",\"phase\":\"approved\"},\"eventId\":\"fixture-event-1\",\"eventType\":\"consent.approved\",\"eventVersion\":\"1.0.0\",\"evidence\":[],\"occurredAt\":1750000001123,\"outcome\":\"succeeded\",\"privacy\":{\"classification\":\"internal\",\"retentionClass\":\"audit-365d\"},\"resource\":{\"did\":\"did:web:orders.example\",\"kind\":\"public_did\"},\"responsibleParty\":{\"did\":\"did:key:zFixtureUser\",\"kind\":\"public_did\"},\"schema\":\"https://schema.kya-os.org/v1/protocol/audit/event/v1.0.0\",\"source\":{\"producer\":{\"did\":\"did:key:zFixtureProducer\",\"kind\":\"pairwise_did\"},\"sourceId\":\"fixture-source-1\",\"sourceSequence\":\"1\"},\"tenantRef\":{\"keyId\":\"tenant-key-v1\",\"kind\":\"keyed_commitment\",\"value\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}}",
+      "digest": "sha256:ed3a80d94233b0748f7d275fb9d8909d2ffb5562a644d232832328b1ca6228e8"
+    },
+    {
+      "name": "credential_failed",
+      "input": {
+        "eventType": "credential.failed",
+        "action": {
+          "category": "enrollment"
+        },
+        "outcome": "failed",
+        "reason": {
+          "code": "enrollment_token_expired"
+        },
+        "details": {
+          "family": "consent",
+          "phase": "credential_failed"
+        }
+      },
+      "event": {
+        "schema": "https://schema.kya-os.org/v1/protocol/audit/event/v1.0.0",
+        "eventId": "fixture-event-1",
+        "eventType": "credential.failed",
+        "eventVersion": "1.0.0",
+        "binding": "urn:kya-os:audit-binding:mcp:2025-11-25",
+        "occurredAt": 1750000001123,
+        "tenantRef": {
+          "kind": "keyed_commitment",
+          "value": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "keyId": "tenant-key-v1"
+        },
+        "source": {
+          "producer": {
+            "kind": "pairwise_did",
+            "did": "did:key:zFixtureProducer"
+          },
+          "sourceId": "fixture-source-1",
+          "sourceSequence": "1"
+        },
+        "action": {
+          "category": "enrollment"
+        },
+        "outcome": "failed",
+        "reason": {
+          "code": "enrollment_token_expired"
+        },
+        "evidence": [],
+        "details": {
+          "family": "consent",
+          "phase": "credential_failed"
+        },
+        "privacy": {
+          "classification": "internal",
+          "retentionClass": "audit-365d"
+        }
+      },
+      "canonical": "{\"action\":{\"category\":\"enrollment\"},\"binding\":\"urn:kya-os:audit-binding:mcp:2025-11-25\",\"details\":{\"family\":\"consent\",\"phase\":\"credential_failed\"},\"eventId\":\"fixture-event-1\",\"eventType\":\"credential.failed\",\"eventVersion\":\"1.0.0\",\"evidence\":[],\"occurredAt\":1750000001123,\"outcome\":\"failed\",\"privacy\":{\"classification\":\"internal\",\"retentionClass\":\"audit-365d\"},\"reason\":{\"code\":\"enrollment_token_expired\"},\"schema\":\"https://schema.kya-os.org/v1/protocol/audit/event/v1.0.0\",\"source\":{\"producer\":{\"did\":\"did:key:zFixtureProducer\",\"kind\":\"pairwise_did\"},\"sourceId\":\"fixture-source-1\",\"sourceSequence\":\"1\"},\"tenantRef\":{\"keyId\":\"tenant-key-v1\",\"kind\":\"keyed_commitment\",\"value\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}}",
+      "digest": "sha256:d6b298c9d20e5975103e290bdbd468211aa77e907b0eb52a005dbf2951d84e98"
+    },
+    {
+      "name": "key_rotated",
+      "input": {
+        "eventType": "key.rotated",
+        "actor": {
+          "kind": "public_did",
+          "did": "did:web:orders.example"
+        },
+        "action": {
+          "category": "configuration"
+        },
+        "outcome": "succeeded",
+        "details": {
+          "family": "key",
+          "phase": "rotated",
+          "previousSigner": {
+            "did": "did:web:orders.example",
+            "kid": "did:web:orders.example#key-1",
+            "alg": "EdDSA"
+          },
+          "nextSigner": {
+            "did": "did:web:orders.example",
+            "kid": "did:web:orders.example#key-2",
+            "alg": "EdDSA"
+          }
+        }
+      },
+      "event": {
+        "schema": "https://schema.kya-os.org/v1/protocol/audit/event/v1.0.0",
+        "eventId": "fixture-event-1",
+        "eventType": "key.rotated",
+        "eventVersion": "1.0.0",
+        "binding": "urn:kya-os:audit-binding:mcp:2025-11-25",
+        "occurredAt": 1750000001123,
+        "tenantRef": {
+          "kind": "keyed_commitment",
+          "value": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "keyId": "tenant-key-v1"
+        },
+        "source": {
+          "producer": {
+            "kind": "pairwise_did",
+            "did": "did:key:zFixtureProducer"
+          },
+          "sourceId": "fixture-source-1",
+          "sourceSequence": "1"
+        },
+        "actor": {
+          "kind": "public_did",
+          "did": "did:web:orders.example"
+        },
+        "action": {
+          "category": "configuration"
+        },
+        "outcome": "succeeded",
+        "evidence": [],
+        "details": {
+          "family": "key",
+          "phase": "rotated",
+          "previousSigner": {
+            "did": "did:web:orders.example",
+            "kid": "did:web:orders.example#key-1",
+            "alg": "EdDSA"
+          },
+          "nextSigner": {
+            "did": "did:web:orders.example",
+            "kid": "did:web:orders.example#key-2",
+            "alg": "EdDSA"
+          }
+        },
+        "privacy": {
+          "classification": "internal",
+          "retentionClass": "audit-365d"
+        }
+      },
+      "canonical": "{\"action\":{\"category\":\"configuration\"},\"actor\":{\"did\":\"did:web:orders.example\",\"kind\":\"public_did\"},\"binding\":\"urn:kya-os:audit-binding:mcp:2025-11-25\",\"details\":{\"family\":\"key\",\"nextSigner\":{\"alg\":\"EdDSA\",\"did\":\"did:web:orders.example\",\"kid\":\"did:web:orders.example#key-2\"},\"phase\":\"rotated\",\"previousSigner\":{\"alg\":\"EdDSA\",\"did\":\"did:web:orders.example\",\"kid\":\"did:web:orders.example#key-1\"}},\"eventId\":\"fixture-event-1\",\"eventType\":\"key.rotated\",\"eventVersion\":\"1.0.0\",\"evidence\":[],\"occurredAt\":1750000001123,\"outcome\":\"succeeded\",\"privacy\":{\"classification\":\"internal\",\"retentionClass\":\"audit-365d\"},\"schema\":\"https://schema.kya-os.org/v1/protocol/audit/event/v1.0.0\",\"source\":{\"producer\":{\"did\":\"did:key:zFixtureProducer\",\"kind\":\"pairwise_did\"},\"sourceId\":\"fixture-source-1\",\"sourceSequence\":\"1\"},\"tenantRef\":{\"keyId\":\"tenant-key-v1\",\"kind\":\"keyed_commitment\",\"value\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}}",
+      "digest": "sha256:31316324b556fcf72fe52a1df27cb64ba28bdb9efff32d43e5794db549266cd1"
+    },
+    {
+      "name": "configuration_changed",
+      "input": {
+        "eventType": "configuration.changed",
+        "action": {
+          "category": "configuration"
+        },
+        "outcome": "succeeded",
+        "details": {
+          "family": "key",
+          "phase": "configuration_changed",
+          "configurationDigest": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+        }
+      },
+      "event": {
+        "schema": "https://schema.kya-os.org/v1/protocol/audit/event/v1.0.0",
+        "eventId": "fixture-event-1",
+        "eventType": "configuration.changed",
+        "eventVersion": "1.0.0",
+        "binding": "urn:kya-os:audit-binding:mcp:2025-11-25",
+        "occurredAt": 1750000001123,
+        "tenantRef": {
+          "kind": "keyed_commitment",
+          "value": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "keyId": "tenant-key-v1"
+        },
+        "source": {
+          "producer": {
+            "kind": "pairwise_did",
+            "did": "did:key:zFixtureProducer"
+          },
+          "sourceId": "fixture-source-1",
+          "sourceSequence": "1"
+        },
+        "action": {
+          "category": "configuration"
+        },
+        "outcome": "succeeded",
+        "evidence": [],
+        "details": {
+          "family": "key",
+          "phase": "configuration_changed",
+          "configurationDigest": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+        },
+        "privacy": {
+          "classification": "internal",
+          "retentionClass": "audit-365d"
+        }
+      },
+      "canonical": "{\"action\":{\"category\":\"configuration\"},\"binding\":\"urn:kya-os:audit-binding:mcp:2025-11-25\",\"details\":{\"configurationDigest\":\"sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\",\"family\":\"key\",\"phase\":\"configuration_changed\"},\"eventId\":\"fixture-event-1\",\"eventType\":\"configuration.changed\",\"eventVersion\":\"1.0.0\",\"evidence\":[],\"occurredAt\":1750000001123,\"outcome\":\"succeeded\",\"privacy\":{\"classification\":\"internal\",\"retentionClass\":\"audit-365d\"},\"schema\":\"https://schema.kya-os.org/v1/protocol/audit/event/v1.0.0\",\"source\":{\"producer\":{\"did\":\"did:key:zFixtureProducer\",\"kind\":\"pairwise_did\"},\"sourceId\":\"fixture-source-1\",\"sourceSequence\":\"1\"},\"tenantRef\":{\"keyId\":\"tenant-key-v1\",\"kind\":\"keyed_commitment\",\"value\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}}",
+      "digest": "sha256:8eb3d016c867ceaadc04865f346ed38d1e82903db77aa8fe5c689bfb29f60018"
+    },
+    {
+      "name": "checkpoint_created",
+      "input": {
+        "eventType": "checkpoint.created",
+        "action": {
+          "category": "audit.ledger"
+        },
+        "outcome": "succeeded",
+        "details": {
+          "family": "ledger",
+          "phase": "checkpoint_created",
+          "checkpointDigest": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+          "successorEpochIds": [
+            "epoch-2"
+          ]
+        }
+      },
+      "event": {
+        "schema": "https://schema.kya-os.org/v1/protocol/audit/event/v1.0.0",
+        "eventId": "fixture-event-1",
+        "eventType": "checkpoint.created",
+        "eventVersion": "1.0.0",
+        "binding": "urn:kya-os:audit-binding:mcp:2025-11-25",
+        "occurredAt": 1750000001123,
+        "tenantRef": {
+          "kind": "keyed_commitment",
+          "value": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "keyId": "tenant-key-v1"
+        },
+        "source": {
+          "producer": {
+            "kind": "pairwise_did",
+            "did": "did:key:zFixtureProducer"
+          },
+          "sourceId": "fixture-source-1",
+          "sourceSequence": "1"
+        },
+        "action": {
+          "category": "audit.ledger"
+        },
+        "outcome": "succeeded",
+        "evidence": [],
+        "details": {
+          "family": "ledger",
+          "phase": "checkpoint_created",
+          "checkpointDigest": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+          "successorEpochIds": [
+            "epoch-2"
+          ]
+        },
+        "privacy": {
+          "classification": "internal",
+          "retentionClass": "audit-365d"
+        }
+      },
+      "canonical": "{\"action\":{\"category\":\"audit.ledger\"},\"binding\":\"urn:kya-os:audit-binding:mcp:2025-11-25\",\"details\":{\"checkpointDigest\":\"sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\",\"family\":\"ledger\",\"phase\":\"checkpoint_created\",\"successorEpochIds\":[\"epoch-2\"]},\"eventId\":\"fixture-event-1\",\"eventType\":\"checkpoint.created\",\"eventVersion\":\"1.0.0\",\"evidence\":[],\"occurredAt\":1750000001123,\"outcome\":\"succeeded\",\"privacy\":{\"classification\":\"internal\",\"retentionClass\":\"audit-365d\"},\"schema\":\"https://schema.kya-os.org/v1/protocol/audit/event/v1.0.0\",\"source\":{\"producer\":{\"did\":\"did:key:zFixtureProducer\",\"kind\":\"pairwise_did\"},\"sourceId\":\"fixture-source-1\",\"sourceSequence\":\"1\"},\"tenantRef\":{\"keyId\":\"tenant-key-v1\",\"kind\":\"keyed_commitment\",\"value\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}}",
+      "digest": "sha256:4065806288772d11e9db319333a7e21d392d3df27caf2ad786bea627b5b4e305"
+    },
+    {
+      "name": "audit_accessed",
+      "input": {
+        "eventType": "audit.accessed",
+        "actor": {
+          "kind": "public_did",
+          "did": "did:web:operator.example"
+        },
+        "action": {
+          "category": "audit.administration"
+        },
+        "outcome": "succeeded",
+        "details": {
+          "family": "administration",
+          "phase": "accessed",
+          "purpose": "incident-review",
+          "sourceSequence": "42"
+        }
+      },
+      "event": {
+        "schema": "https://schema.kya-os.org/v1/protocol/audit/event/v1.0.0",
+        "eventId": "fixture-event-1",
+        "eventType": "audit.accessed",
+        "eventVersion": "1.0.0",
+        "binding": "urn:kya-os:audit-binding:mcp:2025-11-25",
+        "occurredAt": 1750000001123,
+        "tenantRef": {
+          "kind": "keyed_commitment",
+          "value": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "keyId": "tenant-key-v1"
+        },
+        "source": {
+          "producer": {
+            "kind": "pairwise_did",
+            "did": "did:key:zFixtureProducer"
+          },
+          "sourceId": "fixture-source-1",
+          "sourceSequence": "1"
+        },
+        "actor": {
+          "kind": "public_did",
+          "did": "did:web:operator.example"
+        },
+        "action": {
+          "category": "audit.administration"
+        },
+        "outcome": "succeeded",
+        "evidence": [],
+        "details": {
+          "family": "administration",
+          "phase": "accessed",
+          "purpose": "incident-review",
+          "sourceSequence": "42"
+        },
+        "privacy": {
+          "classification": "internal",
+          "retentionClass": "audit-365d"
+        }
+      },
+      "canonical": "{\"action\":{\"category\":\"audit.administration\"},\"actor\":{\"did\":\"did:web:operator.example\",\"kind\":\"public_did\"},\"binding\":\"urn:kya-os:audit-binding:mcp:2025-11-25\",\"details\":{\"family\":\"administration\",\"phase\":\"accessed\",\"purpose\":\"incident-review\",\"sourceSequence\":\"42\"},\"eventId\":\"fixture-event-1\",\"eventType\":\"audit.accessed\",\"eventVersion\":\"1.0.0\",\"evidence\":[],\"occurredAt\":1750000001123,\"outcome\":\"succeeded\",\"privacy\":{\"classification\":\"internal\",\"retentionClass\":\"audit-365d\"},\"schema\":\"https://schema.kya-os.org/v1/protocol/audit/event/v1.0.0\",\"source\":{\"producer\":{\"did\":\"did:key:zFixtureProducer\",\"kind\":\"pairwise_did\"},\"sourceId\":\"fixture-source-1\",\"sourceSequence\":\"1\"},\"tenantRef\":{\"keyId\":\"tenant-key-v1\",\"kind\":\"keyed_commitment\",\"value\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}}",
+      "digest": "sha256:df9832db810faee4bd00cd9e63a48d77a898bdca6b06aa1f4a526129bcfd4bbb"
+    },
+    {
+      "name": "unicode_correlation",
+      "input": {
+        "eventType": "tool.call.failed",
+        "actor": {
+          "kind": "pairwise_did",
+          "did": "did:key:zFixtureAgent"
+        },
+        "correlationId": "trace-α-42",
+        "action": {
+          "category": "tool.call"
+        },
+        "outcome": "failed",
+        "reason": {
+          "code": "handler_error"
+        },
+        "details": {
+          "family": "tool",
+          "phase": "failed",
+          "attempt": "2"
+        }
+      },
+      "event": {
+        "schema": "https://schema.kya-os.org/v1/protocol/audit/event/v1.0.0",
+        "eventId": "fixture-event-1",
+        "eventType": "tool.call.failed",
+        "eventVersion": "1.0.0",
+        "binding": "urn:kya-os:audit-binding:mcp:2025-11-25",
+        "occurredAt": 1750000001123,
+        "tenantRef": {
+          "kind": "keyed_commitment",
+          "value": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "keyId": "tenant-key-v1"
+        },
+        "source": {
+          "producer": {
+            "kind": "pairwise_did",
+            "did": "did:key:zFixtureProducer"
+          },
+          "sourceId": "fixture-source-1",
+          "sourceSequence": "1"
+        },
+        "correlationId": "trace-α-42",
+        "actor": {
+          "kind": "pairwise_did",
+          "did": "did:key:zFixtureAgent"
+        },
+        "action": {
+          "category": "tool.call"
+        },
+        "outcome": "failed",
+        "reason": {
+          "code": "handler_error"
+        },
+        "evidence": [],
+        "details": {
+          "family": "tool",
+          "phase": "failed",
+          "attempt": "2"
+        },
+        "privacy": {
+          "classification": "internal",
+          "retentionClass": "audit-365d"
+        }
+      },
+      "canonical": "{\"action\":{\"category\":\"tool.call\"},\"actor\":{\"did\":\"did:key:zFixtureAgent\",\"kind\":\"pairwise_did\"},\"binding\":\"urn:kya-os:audit-binding:mcp:2025-11-25\",\"correlationId\":\"trace-α-42\",\"details\":{\"attempt\":\"2\",\"family\":\"tool\",\"phase\":\"failed\"},\"eventId\":\"fixture-event-1\",\"eventType\":\"tool.call.failed\",\"eventVersion\":\"1.0.0\",\"evidence\":[],\"occurredAt\":1750000001123,\"outcome\":\"failed\",\"privacy\":{\"classification\":\"internal\",\"retentionClass\":\"audit-365d\"},\"reason\":{\"code\":\"handler_error\"},\"schema\":\"https://schema.kya-os.org/v1/protocol/audit/event/v1.0.0\",\"source\":{\"producer\":{\"did\":\"did:key:zFixtureProducer\",\"kind\":\"pairwise_did\"},\"sourceId\":\"fixture-source-1\",\"sourceSequence\":\"1\"},\"tenantRef\":{\"keyId\":\"tenant-key-v1\",\"kind\":\"keyed_commitment\",\"value\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}}",
+      "digest": "sha256:e0bb1fd8e198fc4bda34a27f9e75467c450568ba52beff06e870f0e316c49706"
+    }
+  ],
+  "chain": {
+    "sourceId": "fixture-source-1",
+    "entries": [
+      {
+        "event": {
+          "schema": "https://schema.kya-os.org/v1/protocol/audit/event/v1.0.0",
+          "eventId": "fixture-event-1",
+          "eventType": "session.established",
+          "eventVersion": "1.0.0",
+          "binding": "urn:kya-os:audit-binding:mcp:2025-11-25",
+          "occurredAt": 1750000001123,
+          "tenantRef": {
+            "kind": "keyed_commitment",
+            "value": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "keyId": "tenant-key-v1"
+          },
+          "source": {
+            "producer": {
+              "kind": "pairwise_did",
+              "did": "did:key:zFixtureProducer"
+            },
+            "sourceId": "fixture-source-1",
+            "sourceSequence": "1"
+          },
+          "correlationId": "call-0001",
+          "session": {
+            "ref": {
+              "kind": "keyed_commitment",
+              "value": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "keyId": "session-key-v1"
+            }
+          },
+          "actor": {
+            "kind": "pairwise_did",
+            "did": "did:key:zFixtureAgent"
+          },
+          "resource": {
+            "kind": "public_did",
+            "did": "did:web:orders.example"
+          },
+          "action": {
+            "category": "session"
+          },
+          "outcome": "succeeded",
+          "evidence": [],
+          "details": {
+            "family": "session",
+            "phase": "established"
+          },
+          "privacy": {
+            "classification": "internal",
+            "retentionClass": "audit-365d"
+          }
+        },
+        "canonical": "{\"action\":{\"category\":\"session\"},\"actor\":{\"did\":\"did:key:zFixtureAgent\",\"kind\":\"pairwise_did\"},\"binding\":\"urn:kya-os:audit-binding:mcp:2025-11-25\",\"correlationId\":\"call-0001\",\"details\":{\"family\":\"session\",\"phase\":\"established\"},\"eventId\":\"fixture-event-1\",\"eventType\":\"session.established\",\"eventVersion\":\"1.0.0\",\"evidence\":[],\"occurredAt\":1750000001123,\"outcome\":\"succeeded\",\"privacy\":{\"classification\":\"internal\",\"retentionClass\":\"audit-365d\"},\"resource\":{\"did\":\"did:web:orders.example\",\"kind\":\"public_did\"},\"schema\":\"https://schema.kya-os.org/v1/protocol/audit/event/v1.0.0\",\"session\":{\"ref\":{\"keyId\":\"session-key-v1\",\"kind\":\"keyed_commitment\",\"value\":\"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}},\"source\":{\"producer\":{\"did\":\"did:key:zFixtureProducer\",\"kind\":\"pairwise_did\"},\"sourceId\":\"fixture-source-1\",\"sourceSequence\":\"1\"},\"tenantRef\":{\"keyId\":\"tenant-key-v1\",\"kind\":\"keyed_commitment\",\"value\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}}",
+        "digest": "sha256:d2ba655062759a3c11bef669e982e8b002f64573946a685610f65057760ba2f9"
+      },
+      {
+        "event": {
+          "schema": "https://schema.kya-os.org/v1/protocol/audit/event/v1.0.0",
+          "eventId": "fixture-event-2",
+          "eventType": "tool.call.completed",
+          "eventVersion": "1.0.0",
+          "binding": "urn:kya-os:audit-binding:mcp:2025-11-25",
+          "occurredAt": 1750000002123,
+          "tenantRef": {
+            "kind": "keyed_commitment",
+            "value": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "keyId": "tenant-key-v1"
+          },
+          "source": {
+            "producer": {
+              "kind": "pairwise_did",
+              "did": "did:key:zFixtureProducer"
+            },
+            "sourceId": "fixture-source-1",
+            "sourceSequence": "2",
+            "previousSourceEventDigest": "sha256:d2ba655062759a3c11bef669e982e8b002f64573946a685610f65057760ba2f9"
+          },
+          "correlationId": "call-0001",
+          "actor": {
+            "kind": "pairwise_did",
+            "did": "did:key:zFixtureAgent"
+          },
+          "resource": {
+            "kind": "public_did",
+            "did": "did:web:orders.example"
+          },
+          "action": {
+            "category": "tool.call"
+          },
+          "outcome": "succeeded",
+          "evidence": [],
+          "details": {
+            "family": "tool",
+            "phase": "completed",
+            "attempt": "1"
+          },
+          "privacy": {
+            "classification": "internal",
+            "retentionClass": "audit-365d"
+          }
+        },
+        "canonical": "{\"action\":{\"category\":\"tool.call\"},\"actor\":{\"did\":\"did:key:zFixtureAgent\",\"kind\":\"pairwise_did\"},\"binding\":\"urn:kya-os:audit-binding:mcp:2025-11-25\",\"correlationId\":\"call-0001\",\"details\":{\"attempt\":\"1\",\"family\":\"tool\",\"phase\":\"completed\"},\"eventId\":\"fixture-event-2\",\"eventType\":\"tool.call.completed\",\"eventVersion\":\"1.0.0\",\"evidence\":[],\"occurredAt\":1750000002123,\"outcome\":\"succeeded\",\"privacy\":{\"classification\":\"internal\",\"retentionClass\":\"audit-365d\"},\"resource\":{\"did\":\"did:web:orders.example\",\"kind\":\"public_did\"},\"schema\":\"https://schema.kya-os.org/v1/protocol/audit/event/v1.0.0\",\"source\":{\"previousSourceEventDigest\":\"sha256:d2ba655062759a3c11bef669e982e8b002f64573946a685610f65057760ba2f9\",\"producer\":{\"did\":\"did:key:zFixtureProducer\",\"kind\":\"pairwise_did\"},\"sourceId\":\"fixture-source-1\",\"sourceSequence\":\"2\"},\"tenantRef\":{\"keyId\":\"tenant-key-v1\",\"kind\":\"keyed_commitment\",\"value\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}}",
+        "digest": "sha256:2c7538ba4bbc6bc59f721f7712905a0fc6ec239d0cad4933fcf48f62da916002"
+      },
+      {
+        "event": {
+          "schema": "https://schema.kya-os.org/v1/protocol/audit/event/v1.0.0",
+          "eventId": "fixture-event-3",
+          "eventType": "proof.verified",
+          "eventVersion": "1.0.0",
+          "binding": "urn:kya-os:audit-binding:mcp:2025-11-25",
+          "occurredAt": 1750000003123,
+          "tenantRef": {
+            "kind": "keyed_commitment",
+            "value": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "keyId": "tenant-key-v1"
+          },
+          "source": {
+            "producer": {
+              "kind": "pairwise_did",
+              "did": "did:key:zFixtureProducer"
+            },
+            "sourceId": "fixture-source-1",
+            "sourceSequence": "3",
+            "previousSourceEventDigest": "sha256:2c7538ba4bbc6bc59f721f7712905a0fc6ec239d0cad4933fcf48f62da916002"
+          },
+          "correlationId": "call-0001",
+          "actor": {
+            "kind": "pairwise_did",
+            "did": "did:key:zFixtureAgent"
+          },
+          "resource": {
+            "kind": "public_did",
+            "did": "did:web:orders.example"
+          },
+          "action": {
+            "category": "proof"
+          },
+          "outcome": "succeeded",
+          "evidence": [],
+          "details": {
+            "family": "proof",
+            "phase": "verified",
+            "proofDigest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+            "verificationCode": "PROOF_VALID"
+          },
+          "privacy": {
+            "classification": "internal",
+            "retentionClass": "audit-365d"
+          }
+        },
+        "canonical": "{\"action\":{\"category\":\"proof\"},\"actor\":{\"did\":\"did:key:zFixtureAgent\",\"kind\":\"pairwise_did\"},\"binding\":\"urn:kya-os:audit-binding:mcp:2025-11-25\",\"correlationId\":\"call-0001\",\"details\":{\"family\":\"proof\",\"phase\":\"verified\",\"proofDigest\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"verificationCode\":\"PROOF_VALID\"},\"eventId\":\"fixture-event-3\",\"eventType\":\"proof.verified\",\"eventVersion\":\"1.0.0\",\"evidence\":[],\"occurredAt\":1750000003123,\"outcome\":\"succeeded\",\"privacy\":{\"classification\":\"internal\",\"retentionClass\":\"audit-365d\"},\"resource\":{\"did\":\"did:web:orders.example\",\"kind\":\"public_did\"},\"schema\":\"https://schema.kya-os.org/v1/protocol/audit/event/v1.0.0\",\"source\":{\"previousSourceEventDigest\":\"sha256:2c7538ba4bbc6bc59f721f7712905a0fc6ec239d0cad4933fcf48f62da916002\",\"producer\":{\"did\":\"did:key:zFixtureProducer\",\"kind\":\"pairwise_did\"},\"sourceId\":\"fixture-source-1\",\"sourceSequence\":\"3\"},\"tenantRef\":{\"keyId\":\"tenant-key-v1\",\"kind\":\"keyed_commitment\",\"value\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}}",
+        "digest": "sha256:74d1ab78b76ad03dd33d26f944ed7d5a721fd4689294e930125caaab6182edeb"
+      }
+    ]
+  },
+  "tool_names": {
+    "input": {
+      "eventType": "tool.call.completed",
+      "actor": {
+        "kind": "pairwise_did",
+        "did": "did:key:zFixtureAgent"
+      },
+      "resource": {
+        "kind": "public_did",
+        "did": "did:web:orders.example"
+      },
+      "correlationId": "call-0001",
+      "action": {
+        "category": "tool.call",
+        "name": "lookup_order"
+      },
+      "outcome": "succeeded",
+      "details": {
+        "family": "tool",
+        "phase": "completed",
+        "attempt": "1"
+      }
+    },
+    "included": {
+      "schema": "https://schema.kya-os.org/v1/protocol/audit/event/v1.0.0",
+      "eventId": "fixture-event-1",
+      "eventType": "tool.call.completed",
+      "eventVersion": "1.0.0",
+      "binding": "urn:kya-os:audit-binding:mcp:2025-11-25",
+      "occurredAt": 1750000001123,
+      "tenantRef": {
+        "kind": "keyed_commitment",
+        "value": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "keyId": "tenant-key-v1"
+      },
+      "source": {
+        "producer": {
+          "kind": "pairwise_did",
+          "did": "did:key:zFixtureProducer"
+        },
+        "sourceId": "fixture-source-1",
+        "sourceSequence": "1"
+      },
+      "correlationId": "call-0001",
+      "actor": {
+        "kind": "pairwise_did",
+        "did": "did:key:zFixtureAgent"
+      },
+      "resource": {
+        "kind": "public_did",
+        "did": "did:web:orders.example"
+      },
+      "action": {
+        "category": "tool.call",
+        "name": "lookup_order"
+      },
+      "outcome": "succeeded",
+      "evidence": [],
+      "details": {
+        "family": "tool",
+        "phase": "completed",
+        "attempt": "1"
+      },
+      "privacy": {
+        "classification": "internal",
+        "retentionClass": "audit-365d"
+      }
+    },
+    "withheld": {
+      "schema": "https://schema.kya-os.org/v1/protocol/audit/event/v1.0.0",
+      "eventId": "fixture-event-1",
+      "eventType": "tool.call.completed",
+      "eventVersion": "1.0.0",
+      "binding": "urn:kya-os:audit-binding:mcp:2025-11-25",
+      "occurredAt": 1750000001123,
+      "tenantRef": {
+        "kind": "keyed_commitment",
+        "value": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "keyId": "tenant-key-v1"
+      },
+      "source": {
+        "producer": {
+          "kind": "pairwise_did",
+          "did": "did:key:zFixtureProducer"
+        },
+        "sourceId": "fixture-source-1",
+        "sourceSequence": "1"
+      },
+      "correlationId": "call-0001",
+      "actor": {
+        "kind": "pairwise_did",
+        "did": "did:key:zFixtureAgent"
+      },
+      "resource": {
+        "kind": "public_did",
+        "did": "did:web:orders.example"
+      },
+      "action": {
+        "category": "tool.call"
+      },
+      "outcome": "succeeded",
+      "evidence": [],
+      "details": {
+        "family": "tool",
+        "phase": "completed",
+        "attempt": "1"
+      },
+      "privacy": {
+        "classification": "internal",
+        "retentionClass": "audit-365d"
+      }
+    }
+  },
+  "rejections": [
+    {
+      "name": "unknown_top_level_member",
+      "event": {
+        "schema": "https://schema.kya-os.org/v1/protocol/audit/event/v1.0.0",
+        "eventId": "fixture-event-1",
+        "eventType": "session.established",
+        "eventVersion": "1.0.0",
+        "binding": "urn:kya-os:audit-binding:mcp:2025-11-25",
+        "occurredAt": 1750000001123,
+        "tenantRef": {
+          "kind": "keyed_commitment",
+          "value": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "keyId": "tenant-key-v1"
+        },
+        "source": {
+          "producer": {
+            "kind": "pairwise_did",
+            "did": "did:key:zFixtureProducer"
+          },
+          "sourceId": "fixture-source-1",
+          "sourceSequence": "1"
+        },
+        "correlationId": "call-0001",
+        "session": {
+          "ref": {
+            "kind": "keyed_commitment",
+            "value": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "keyId": "session-key-v1"
+          }
+        },
+        "actor": {
+          "kind": "pairwise_did",
+          "did": "did:key:zFixtureAgent"
+        },
+        "resource": {
+          "kind": "public_did",
+          "did": "did:web:orders.example"
+        },
+        "action": {
+          "category": "session"
+        },
+        "outcome": "succeeded",
+        "evidence": [],
+        "details": {
+          "family": "session",
+          "phase": "established"
+        },
+        "privacy": {
+          "classification": "internal",
+          "retentionClass": "audit-365d"
+        },
+        "extra": "x"
+      },
+      "path": ""
+    },
+    {
+      "name": "unknown_details_member",
+      "event": {
+        "schema": "https://schema.kya-os.org/v1/protocol/audit/event/v1.0.0",
+        "eventId": "fixture-event-1",
+        "eventType": "session.established",
+        "eventVersion": "1.0.0",
+        "binding": "urn:kya-os:audit-binding:mcp:2025-11-25",
+        "occurredAt": 1750000001123,
+        "tenantRef": {
+          "kind": "keyed_commitment",
+          "value": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "keyId": "tenant-key-v1"
+        },
+        "source": {
+          "producer": {
+            "kind": "pairwise_did",
+            "did": "did:key:zFixtureProducer"
+          },
+          "sourceId": "fixture-source-1",
+          "sourceSequence": "1"
+        },
+        "correlationId": "call-0001",
+        "session": {
+          "ref": {
+            "kind": "keyed_commitment",
+            "value": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "keyId": "session-key-v1"
+          }
+        },
+        "actor": {
+          "kind": "pairwise_did",
+          "did": "did:key:zFixtureAgent"
+        },
+        "resource": {
+          "kind": "public_did",
+          "did": "did:web:orders.example"
+        },
+        "action": {
+          "category": "session"
+        },
+        "outcome": "succeeded",
+        "evidence": [],
+        "details": {
+          "family": "session",
+          "phase": "established",
+          "bogus": 1
+        },
+        "privacy": {
+          "classification": "internal",
+          "retentionClass": "audit-365d"
+        }
+      },
+      "path": "details"
+    },
+    {
+      "name": "unknown_source_member",
+      "event": {
+        "schema": "https://schema.kya-os.org/v1/protocol/audit/event/v1.0.0",
+        "eventId": "fixture-event-1",
+        "eventType": "session.established",
+        "eventVersion": "1.0.0",
+        "binding": "urn:kya-os:audit-binding:mcp:2025-11-25",
+        "occurredAt": 1750000001123,
+        "tenantRef": {
+          "kind": "keyed_commitment",
+          "value": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "keyId": "tenant-key-v1"
+        },
+        "source": {
+          "producer": {
+            "kind": "pairwise_did",
+            "did": "did:key:zFixtureProducer"
+          },
+          "sourceId": "fixture-source-1",
+          "sourceSequence": "1",
+          "host": "x"
+        },
+        "correlationId": "call-0001",
+        "session": {
+          "ref": {
+            "kind": "keyed_commitment",
+            "value": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "keyId": "session-key-v1"
+          }
+        },
+        "actor": {
+          "kind": "pairwise_did",
+          "did": "did:key:zFixtureAgent"
+        },
+        "resource": {
+          "kind": "public_did",
+          "did": "did:web:orders.example"
+        },
+        "action": {
+          "category": "session"
+        },
+        "outcome": "succeeded",
+        "evidence": [],
+        "details": {
+          "family": "session",
+          "phase": "established"
+        },
+        "privacy": {
+          "classification": "internal",
+          "retentionClass": "audit-365d"
+        }
+      },
+      "path": "source"
+    },
+    {
+      "name": "unknown_action_member",
+      "event": {
+        "schema": "https://schema.kya-os.org/v1/protocol/audit/event/v1.0.0",
+        "eventId": "fixture-event-1",
+        "eventType": "session.established",
+        "eventVersion": "1.0.0",
+        "binding": "urn:kya-os:audit-binding:mcp:2025-11-25",
+        "occurredAt": 1750000001123,
+        "tenantRef": {
+          "kind": "keyed_commitment",
+          "value": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "keyId": "tenant-key-v1"
+        },
+        "source": {
+          "producer": {
+            "kind": "pairwise_did",
+            "did": "did:key:zFixtureProducer"
+          },
+          "sourceId": "fixture-source-1",
+          "sourceSequence": "1"
+        },
+        "correlationId": "call-0001",
+        "session": {
+          "ref": {
+            "kind": "keyed_commitment",
+            "value": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "keyId": "session-key-v1"
+          }
+        },
+        "actor": {
+          "kind": "pairwise_did",
+          "did": "did:key:zFixtureAgent"
+        },
+        "resource": {
+          "kind": "public_did",
+          "did": "did:web:orders.example"
+        },
+        "action": {
+          "category": "session",
+          "arguments": {
+            "orderId": "ORD-1"
+          }
+        },
+        "outcome": "succeeded",
+        "evidence": [],
+        "details": {
+          "family": "session",
+          "phase": "established"
+        },
+        "privacy": {
+          "classification": "internal",
+          "retentionClass": "audit-365d"
+        }
+      },
+      "path": "action"
+    },
+    {
+      "name": "details_family_mismatch",
+      "event": {
+        "schema": "https://schema.kya-os.org/v1/protocol/audit/event/v1.0.0",
+        "eventId": "fixture-event-1",
+        "eventType": "session.established",
+        "eventVersion": "1.0.0",
+        "binding": "urn:kya-os:audit-binding:mcp:2025-11-25",
+        "occurredAt": 1750000001123,
+        "tenantRef": {
+          "kind": "keyed_commitment",
+          "value": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "keyId": "tenant-key-v1"
+        },
+        "source": {
+          "producer": {
+            "kind": "pairwise_did",
+            "did": "did:key:zFixtureProducer"
+          },
+          "sourceId": "fixture-source-1",
+          "sourceSequence": "1"
+        },
+        "correlationId": "call-0001",
+        "session": {
+          "ref": {
+            "kind": "keyed_commitment",
+            "value": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "keyId": "session-key-v1"
+          }
+        },
+        "actor": {
+          "kind": "pairwise_did",
+          "did": "did:key:zFixtureAgent"
+        },
+        "resource": {
+          "kind": "public_did",
+          "did": "did:web:orders.example"
+        },
+        "action": {
+          "category": "session"
+        },
+        "outcome": "succeeded",
+        "evidence": [],
+        "details": {
+          "family": "tool",
+          "phase": "completed",
+          "attempt": "1"
+        },
+        "privacy": {
+          "classification": "internal",
+          "retentionClass": "audit-365d"
+        }
+      },
+      "path": "details.family"
+    },
+    {
+      "name": "unknown_event_type",
+      "event": {
+        "schema": "https://schema.kya-os.org/v1/protocol/audit/event/v1.0.0",
+        "eventId": "fixture-event-1",
+        "eventType": "session.opened",
+        "eventVersion": "1.0.0",
+        "binding": "urn:kya-os:audit-binding:mcp:2025-11-25",
+        "occurredAt": 1750000001123,
+        "tenantRef": {
+          "kind": "keyed_commitment",
+          "value": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "keyId": "tenant-key-v1"
+        },
+        "source": {
+          "producer": {
+            "kind": "pairwise_did",
+            "did": "did:key:zFixtureProducer"
+          },
+          "sourceId": "fixture-source-1",
+          "sourceSequence": "1"
+        },
+        "correlationId": "call-0001",
+        "session": {
+          "ref": {
+            "kind": "keyed_commitment",
+            "value": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "keyId": "session-key-v1"
+          }
+        },
+        "actor": {
+          "kind": "pairwise_did",
+          "did": "did:key:zFixtureAgent"
+        },
+        "resource": {
+          "kind": "public_did",
+          "did": "did:web:orders.example"
+        },
+        "action": {
+          "category": "session"
+        },
+        "outcome": "succeeded",
+        "evidence": [],
+        "details": {
+          "family": "session",
+          "phase": "established"
+        },
+        "privacy": {
+          "classification": "internal",
+          "retentionClass": "audit-365d"
+        }
+      },
+      "path": "eventType"
+    },
+    {
+      "name": "bad_digest_form",
+      "event": {
+        "schema": "https://schema.kya-os.org/v1/protocol/audit/event/v1.0.0",
+        "eventId": "fixture-event-1",
+        "eventType": "session.established",
+        "eventVersion": "1.0.0",
+        "binding": "urn:kya-os:audit-binding:mcp:2025-11-25",
+        "occurredAt": 1750000001123,
+        "tenantRef": {
+          "kind": "keyed_commitment",
+          "value": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "keyId": "tenant-key-v1"
+        },
+        "source": {
+          "producer": {
+            "kind": "pairwise_did",
+            "did": "did:key:zFixtureProducer"
+          },
+          "sourceId": "fixture-source-1",
+          "sourceSequence": "1",
+          "previousSourceEventDigest": "sha256:xyz"
+        },
+        "correlationId": "call-0001",
+        "session": {
+          "ref": {
+            "kind": "keyed_commitment",
+            "value": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "keyId": "session-key-v1"
+          }
+        },
+        "actor": {
+          "kind": "pairwise_did",
+          "did": "did:key:zFixtureAgent"
+        },
+        "resource": {
+          "kind": "public_did",
+          "did": "did:web:orders.example"
+        },
+        "action": {
+          "category": "session"
+        },
+        "outcome": "succeeded",
+        "evidence": [],
+        "details": {
+          "family": "session",
+          "phase": "established"
+        },
+        "privacy": {
+          "classification": "internal",
+          "retentionClass": "audit-365d"
+        }
+      },
+      "path": "source.previousSourceEventDigest"
+    },
+    {
+      "name": "bad_binding",
+      "event": {
+        "schema": "https://schema.kya-os.org/v1/protocol/audit/event/v1.0.0",
+        "eventId": "fixture-event-1",
+        "eventType": "session.established",
+        "eventVersion": "1.0.0",
+        "binding": "urn:other:binding",
+        "occurredAt": 1750000001123,
+        "tenantRef": {
+          "kind": "keyed_commitment",
+          "value": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "keyId": "tenant-key-v1"
+        },
+        "source": {
+          "producer": {
+            "kind": "pairwise_did",
+            "did": "did:key:zFixtureProducer"
+          },
+          "sourceId": "fixture-source-1",
+          "sourceSequence": "1"
+        },
+        "correlationId": "call-0001",
+        "session": {
+          "ref": {
+            "kind": "keyed_commitment",
+            "value": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "keyId": "session-key-v1"
+          }
+        },
+        "actor": {
+          "kind": "pairwise_did",
+          "did": "did:key:zFixtureAgent"
+        },
+        "resource": {
+          "kind": "public_did",
+          "did": "did:web:orders.example"
+        },
+        "action": {
+          "category": "session"
+        },
+        "outcome": "succeeded",
+        "evidence": [],
+        "details": {
+          "family": "session",
+          "phase": "established"
+        },
+        "privacy": {
+          "classification": "internal",
+          "retentionClass": "audit-365d"
+        }
+      },
+      "path": "binding"
+    },
+    {
+      "name": "unknown_party_kind",
+      "event": {
+        "schema": "https://schema.kya-os.org/v1/protocol/audit/event/v1.0.0",
+        "eventId": "fixture-event-1",
+        "eventType": "session.established",
+        "eventVersion": "1.0.0",
+        "binding": "urn:kya-os:audit-binding:mcp:2025-11-25",
+        "occurredAt": 1750000001123,
+        "tenantRef": {
+          "kind": "keyed_commitment",
+          "value": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "keyId": "tenant-key-v1"
+        },
+        "source": {
+          "producer": {
+            "kind": "pairwise_did",
+            "did": "did:key:zFixtureProducer"
+          },
+          "sourceId": "fixture-source-1",
+          "sourceSequence": "1"
+        },
+        "correlationId": "call-0001",
+        "session": {
+          "ref": {
+            "kind": "keyed_commitment",
+            "value": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "keyId": "session-key-v1"
+          }
+        },
+        "actor": {
+          "kind": "email",
+          "value": "a@b.c"
+        },
+        "resource": {
+          "kind": "public_did",
+          "did": "did:web:orders.example"
+        },
+        "action": {
+          "category": "session"
+        },
+        "outcome": "succeeded",
+        "evidence": [],
+        "details": {
+          "family": "session",
+          "phase": "established"
+        },
+        "privacy": {
+          "classification": "internal",
+          "retentionClass": "audit-365d"
+        }
+      },
+      "path": "actor.kind"
+    },
+    {
+      "name": "missing_evidence_array",
+      "event": {
+        "schema": "https://schema.kya-os.org/v1/protocol/audit/event/v1.0.0",
+        "eventId": "fixture-event-1",
+        "eventType": "session.established",
+        "eventVersion": "1.0.0",
+        "binding": "urn:kya-os:audit-binding:mcp:2025-11-25",
+        "occurredAt": 1750000001123,
+        "tenantRef": {
+          "kind": "keyed_commitment",
+          "value": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "keyId": "tenant-key-v1"
+        },
+        "source": {
+          "producer": {
+            "kind": "pairwise_did",
+            "did": "did:key:zFixtureProducer"
+          },
+          "sourceId": "fixture-source-1",
+          "sourceSequence": "1"
+        },
+        "correlationId": "call-0001",
+        "session": {
+          "ref": {
+            "kind": "keyed_commitment",
+            "value": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "keyId": "session-key-v1"
+          }
+        },
+        "actor": {
+          "kind": "pairwise_did",
+          "did": "did:key:zFixtureAgent"
+        },
+        "resource": {
+          "kind": "public_did",
+          "did": "did:web:orders.example"
+        },
+        "action": {
+          "category": "session"
+        },
+        "outcome": "succeeded",
+        "details": {
+          "family": "session",
+          "phase": "established"
+        },
+        "privacy": {
+          "classification": "internal",
+          "retentionClass": "audit-365d"
+        }
+      },
+      "path": "evidence"
+    },
+    {
+      "name": "occurred_at_not_integer",
+      "event": {
+        "schema": "https://schema.kya-os.org/v1/protocol/audit/event/v1.0.0",
+        "eventId": "fixture-event-1",
+        "eventType": "session.established",
+        "eventVersion": "1.0.0",
+        "binding": "urn:kya-os:audit-binding:mcp:2025-11-25",
+        "occurredAt": 1.5,
+        "tenantRef": {
+          "kind": "keyed_commitment",
+          "value": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "keyId": "tenant-key-v1"
+        },
+        "source": {
+          "producer": {
+            "kind": "pairwise_did",
+            "did": "did:key:zFixtureProducer"
+          },
+          "sourceId": "fixture-source-1",
+          "sourceSequence": "1"
+        },
+        "correlationId": "call-0001",
+        "session": {
+          "ref": {
+            "kind": "keyed_commitment",
+            "value": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "keyId": "session-key-v1"
+          }
+        },
+        "actor": {
+          "kind": "pairwise_did",
+          "did": "did:key:zFixtureAgent"
+        },
+        "resource": {
+          "kind": "public_did",
+          "did": "did:web:orders.example"
+        },
+        "action": {
+          "category": "session"
+        },
+        "outcome": "succeeded",
+        "evidence": [],
+        "details": {
+          "family": "session",
+          "phase": "established"
+        },
+        "privacy": {
+          "classification": "internal",
+          "retentionClass": "audit-365d"
+        }
+      },
+      "path": "occurredAt"
+    },
+    {
+      "name": "overlong_reference",
+      "event": {
+        "schema": "https://schema.kya-os.org/v1/protocol/audit/event/v1.0.0",
+        "eventId": "fixture-event-1",
+        "eventType": "session.established",
+        "eventVersion": "1.0.0",
+        "binding": "urn:kya-os:audit-binding:mcp:2025-11-25",
+        "occurredAt": 1750000001123,
+        "tenantRef": {
+          "kind": "keyed_commitment",
+          "value": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "keyId": "tenant-key-v1"
+        },
+        "source": {
+          "producer": {
+            "kind": "pairwise_did",
+            "did": "did:key:zFixtureProducer"
+          },
+          "sourceId": "fixture-source-1",
+          "sourceSequence": "1"
+        },
+        "correlationId": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+        "session": {
+          "ref": {
+            "kind": "keyed_commitment",
+            "value": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "keyId": "session-key-v1"
+          }
+        },
+        "actor": {
+          "kind": "pairwise_did",
+          "did": "did:key:zFixtureAgent"
+        },
+        "resource": {
+          "kind": "public_did",
+          "did": "did:web:orders.example"
+        },
+        "action": {
+          "category": "session"
+        },
+        "outcome": "succeeded",
+        "evidence": [],
+        "details": {
+          "family": "session",
+          "phase": "established"
+        },
+        "privacy": {
+          "classification": "internal",
+          "retentionClass": "audit-365d"
+        }
+      },
+      "path": "correlationId"
+    }
+  ],
+  "references": [
+    {
+      "input": "call-0001",
+      "output": "call-0001"
+    },
+    {
+      "input": "",
+      "output": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "input": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+      "output": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+    },
+    {
+      "input": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+      "output": "sha256:15eb95a462ee20bd91a415ae2d4aed341288186ddaa2b37908f7d592f0c3f85f"
+    },
+    {
+      "input": "line\nbreak",
+      "output": "sha256:697affca60d5d0dc96f00aac4b2d833e3adc0708a4efd8b657acc4229f4449ef"
+    },
+    {
+      "input": "zero​width",
+      "output": "sha256:cabb886dc821c97ba07fc5a80689433008db346ffb00ac2b8b514e9850abc249"
+    },
+    {
+      "input": "bidi‮override",
+      "output": "sha256:bbc8599cce6576d2daee94d456ad60f0a90af17303ab93fb58a9b898ae0fe9d2"
+    },
+    {
+      "input": "tag󠁁",
+      "output": "sha256:51ef0ae8b46244f4b32e0c0997d1e60956a5cc9298d47e4ae0909a92af50f2dc"
+    },
+    {
+      "input": "lone\ud800surrogate",
+      "output": "sha256:5c9ceca03396ce46fa0d199bd5e390813f56bc18303771a73890ffdd7b5b45f0"
+    },
+    {
+      "input": "trace-α-42",
+      "output": "trace-α-42"
+    },
+    {
+      "input": "emoji-😀",
+      "output": "emoji-😀"
+    },
+    {
+      "input": "short-bound",
+      "max_length": 5,
+      "output": "sha256:321553851d653040805c3b90cda7b4b0631d1e6bd97e7e8749b8b37d4610557a"
+    }
+  ],
+  "delegation": [
+    {
+      "name": "c4_root_object",
+      "credential": {
+        "id": "urn:uuid:1111-aaaa",
+        "type": [
+          "VerifiableCredential",
+          "DelegationCredential"
+        ],
+        "issuer": "did:web:user.example.com",
+        "credentialSubject": {
+          "id": "did:web:agent-a.example.com"
+        },
+        "proof": {
+          "type": "Ed25519Signature2020",
+          "created": "2024-03-01T12:00:00Z",
+          "verificationMethod": "did:web:user.example.com#key-1",
+          "proofPurpose": "assertionMethod",
+          "proofValue": "c2lnbmF0dXJlLW9mLXJvb3Q"
+        }
+      },
+      "delegation_ref": "urn:uuid:1111-aaaa",
+      "credential_digest": "sha256:6fbe4c0f04413cb40ec3b3069bf7c73dc1b6a681765e95ac451672136328712e"
+    },
+    {
+      "name": "c4_leaf_jwt",
+      "credential": "eyJhbGciOiJFZERTQSJ9.eyJ2YyI6e319.c2lnbmF0dXJlLW9mLWxlYWY",
+      "delegation_ref": null,
+      "credential_digest": "sha256:d29d65862fce70137390bea2859696c7ad80ce88cede778fea1cab24d513eed1"
+    },
+    {
+      "name": "c4_root_padded_proof_value",
+      "credential": {
+        "id": "urn:uuid:1111-aaaa",
+        "type": [
+          "VerifiableCredential",
+          "DelegationCredential"
+        ],
+        "issuer": "did:web:user.example.com",
+        "credentialSubject": {
+          "id": "did:web:agent-a.example.com"
+        },
+        "proof": {
+          "type": "Ed25519Signature2020",
+          "created": "2024-03-01T12:00:00Z",
+          "verificationMethod": "did:web:user.example.com#key-1",
+          "proofPurpose": "assertionMethod",
+          "proofValue": "c2lnbmF0dXJlLW9mLXJvb3Q="
+        }
+      },
+      "delegation_ref": "urn:uuid:1111-aaaa",
+      "credential_digest": "sha256:6fbe4c0f04413cb40ec3b3069bf7c73dc1b6a681765e95ac451672136328712e"
+    },
+    {
+      "name": "c4_root_spare_bit",
+      "credential": {
+        "id": "urn:uuid:1111-aaaa",
+        "type": [
+          "VerifiableCredential",
+          "DelegationCredential"
+        ],
+        "issuer": "did:web:user.example.com",
+        "credentialSubject": {
+          "id": "did:web:agent-a.example.com"
+        },
+        "proof": {
+          "type": "Ed25519Signature2020",
+          "created": "2024-03-01T12:00:00Z",
+          "verificationMethod": "did:web:user.example.com#key-1",
+          "proofPurpose": "assertionMethod",
+          "proofValue": "c2lnbmF0dXJlLW9mLXJvb3R"
+        }
+      },
+      "delegation_ref": "urn:uuid:1111-aaaa",
+      "credential_digest": "sha256:6fbe4c0f04413cb40ec3b3069bf7c73dc1b6a681765e95ac451672136328712e"
+    },
+    {
+      "name": "c4_root_space_inside",
+      "credential": {
+        "id": "urn:uuid:1111-aaaa",
+        "type": [
+          "VerifiableCredential",
+          "DelegationCredential"
+        ],
+        "issuer": "did:web:user.example.com",
+        "credentialSubject": {
+          "id": "did:web:agent-a.example.com"
+        },
+        "proof": {
+          "type": "Ed25519Signature2020",
+          "created": "2024-03-01T12:00:00Z",
+          "verificationMethod": "did:web:user.example.com#key-1",
+          "proofPurpose": "assertionMethod",
+          "proofValue": "c2lnbmF0dXJl LW9mLXJvb3Q"
+        }
+      },
+      "delegation_ref": "urn:uuid:1111-aaaa",
+      "credential_digest": "sha256:6fbe4c0f04413cb40ec3b3069bf7c73dc1b6a681765e95ac451672136328712e"
+    },
+    {
+      "name": "id_is_unknown",
+      "credential": {
+        "id": "unknown",
+        "type": [
+          "VerifiableCredential",
+          "DelegationCredential"
+        ],
+        "issuer": "did:web:user.example.com",
+        "credentialSubject": {
+          "id": "did:web:agent-a.example.com"
+        },
+        "proof": {
+          "type": "Ed25519Signature2020",
+          "created": "2024-03-01T12:00:00Z",
+          "verificationMethod": "did:web:user.example.com#key-1",
+          "proofPurpose": "assertionMethod",
+          "proofValue": "c2lnbmF0dXJlLW9mLXJvb3Q"
+        }
+      },
+      "delegation_ref": "sha256:b23a6a8439c0dde5515893e7c90c1e3233b8616e634470f20dc4928bcf3609bc",
+      "credential_digest": "sha256:b426bb25e178770b46a3a3a2e8944cdd149271dc6514e7fd4b7348195f9defe4"
+    },
+    {
+      "name": "id_looks_like_digest",
+      "credential": {
+        "id": "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+        "type": [
+          "VerifiableCredential",
+          "DelegationCredential"
+        ],
+        "issuer": "did:web:user.example.com",
+        "credentialSubject": {
+          "id": "did:web:agent-a.example.com"
+        },
+        "proof": {
+          "type": "Ed25519Signature2020",
+          "created": "2024-03-01T12:00:00Z",
+          "verificationMethod": "did:web:user.example.com#key-1",
+          "proofPurpose": "assertionMethod",
+          "proofValue": "c2lnbmF0dXJlLW9mLXJvb3Q"
+        }
+      },
+      "delegation_ref": "sha256:c94e1f633ffed03d1a3f7321ab56a61acb905a1fa5cb9002f71cde85c4cabcac",
+      "credential_digest": "sha256:b0768289589239151ec1466596fc93dd93e5f8dc71189219717e67ea5f37c80a"
+    },
+    {
+      "name": "id_overlong",
+      "credential": {
+        "id": "urn:x:yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy",
+        "type": [
+          "VerifiableCredential",
+          "DelegationCredential"
+        ],
+        "issuer": "did:web:user.example.com",
+        "credentialSubject": {
+          "id": "did:web:agent-a.example.com"
+        },
+        "proof": {
+          "type": "Ed25519Signature2020",
+          "created": "2024-03-01T12:00:00Z",
+          "verificationMethod": "did:web:user.example.com#key-1",
+          "proofPurpose": "assertionMethod",
+          "proofValue": "c2lnbmF0dXJlLW9mLXJvb3Q"
+        }
+      },
+      "delegation_ref": "sha256:0dc0b3e2def6a71d351d99f6c909982946e24d89e90b66e7dec3b01b87571ee9",
+      "credential_digest": "sha256:74eaf4eed193827a868f127584c3b345c804c0d66dc64f3dfabdf08f9f742664"
+    },
+    {
+      "name": "id_unprintable",
+      "credential": {
+        "id": "urn:x:​1",
+        "type": [
+          "VerifiableCredential",
+          "DelegationCredential"
+        ],
+        "issuer": "did:web:user.example.com",
+        "credentialSubject": {
+          "id": "did:web:agent-a.example.com"
+        },
+        "proof": {
+          "type": "Ed25519Signature2020",
+          "created": "2024-03-01T12:00:00Z",
+          "verificationMethod": "did:web:user.example.com#key-1",
+          "proofPurpose": "assertionMethod",
+          "proofValue": "c2lnbmF0dXJlLW9mLXJvb3Q"
+        }
+      },
+      "delegation_ref": "sha256:8666c320a1a2cc3aeb6f8b786c8c4731dbe4b6160a0e78a27933689ada7bc3d2",
+      "credential_digest": "sha256:b2e99eb9a40e2e5c8ad135a1617735b938e8e034a25ee9ecc8e570ddbecb5d8c"
+    },
+    {
+      "name": "id_from_delegation_subject",
+      "credential": {
+        "type": [
+          "VerifiableCredential",
+          "DelegationCredential"
+        ],
+        "issuer": "did:web:user.example.com",
+        "credentialSubject": {
+          "id": "did:web:a",
+          "delegation": {
+            "id": "urn:uuid:nested"
+          }
+        },
+        "proof": {
+          "type": "Ed25519Signature2020",
+          "created": "2024-03-01T12:00:00Z",
+          "verificationMethod": "did:web:user.example.com#key-1",
+          "proofPurpose": "assertionMethod",
+          "proofValue": "c2lnbmF0dXJlLW9mLXJvb3Q"
+        }
+      },
+      "delegation_ref": "urn:uuid:nested",
+      "credential_digest": "sha256:c48e3387d4fb5aa32318ccab37b6f20b1da902d603274027a299f47e34cadb7e"
+    },
+    {
+      "name": "no_id",
+      "credential": {
+        "type": [
+          "VerifiableCredential",
+          "DelegationCredential"
+        ],
+        "issuer": "did:web:user.example.com",
+        "credentialSubject": {
+          "id": "did:web:agent-a.example.com"
+        },
+        "proof": {
+          "type": "Ed25519Signature2020",
+          "created": "2024-03-01T12:00:00Z",
+          "verificationMethod": "did:web:user.example.com#key-1",
+          "proofPurpose": "assertionMethod",
+          "proofValue": "c2lnbmF0dXJlLW9mLXJvb3Q"
+        }
+      },
+      "delegation_ref": null,
+      "credential_digest": "sha256:07f05f53247688896c163139054e55d84d4db6ca097c2f4cf6458920d3c962fd"
+    },
+    {
+      "name": "no_proof_value",
+      "credential": {
+        "id": "urn:uuid:1111-aaaa",
+        "type": [
+          "VerifiableCredential",
+          "DelegationCredential"
+        ],
+        "issuer": "did:web:user.example.com",
+        "credentialSubject": {
+          "id": "did:web:agent-a.example.com"
+        },
+        "proof": {
+          "type": "Ed25519Signature2020"
+        }
+      },
+      "delegation_ref": "urn:uuid:1111-aaaa",
+      "credential_digest": null
+    },
+    {
+      "name": "proof_value_not_base64",
+      "credential": {
+        "id": "urn:uuid:1111-aaaa",
+        "type": [
+          "VerifiableCredential",
+          "DelegationCredential"
+        ],
+        "issuer": "did:web:user.example.com",
+        "credentialSubject": {
+          "id": "did:web:agent-a.example.com"
+        },
+        "proof": {
+          "type": "Ed25519Signature2020",
+          "created": "2024-03-01T12:00:00Z",
+          "verificationMethod": "did:web:user.example.com#key-1",
+          "proofPurpose": "assertionMethod",
+          "proofValue": "!!!"
+        }
+      },
+      "delegation_ref": "urn:uuid:1111-aaaa",
+      "credential_digest": null
+    },
+    {
+      "name": "proof_value_padding_before_data",
+      "credential": {
+        "id": "urn:uuid:1111-aaaa",
+        "type": [
+          "VerifiableCredential",
+          "DelegationCredential"
+        ],
+        "issuer": "did:web:user.example.com",
+        "credentialSubject": {
+          "id": "did:web:agent-a.example.com"
+        },
+        "proof": {
+          "type": "Ed25519Signature2020",
+          "created": "2024-03-01T12:00:00Z",
+          "verificationMethod": "did:web:user.example.com#key-1",
+          "proofPurpose": "assertionMethod",
+          "proofValue": "c2ln=bmF0"
+        }
+      },
+      "delegation_ref": "urn:uuid:1111-aaaa",
+      "credential_digest": null
+    },
+    {
+      "name": "jwt_two_segments",
+      "credential": "eyJhbGciOiJFZERTQSJ9.eyJ2YyI6e319",
+      "delegation_ref": null,
+      "credential_digest": null
+    },
+    {
+      "name": "jwt_empty_payload",
+      "credential": "eyJhbGciOiJFZERTQSJ9..c2lnbmF0dXJlLW9mLWxlYWY",
+      "delegation_ref": null,
+      "credential_digest": null
+    },
+    {
+      "name": "jwt_padded_signature",
+      "credential": "eyJhbGciOiJFZERTQSJ9.eyJ2YyI6e319.c2lnbmF0dXJlLW9mLWxlYWY=",
+      "delegation_ref": null,
+      "credential_digest": "sha256:d29d65862fce70137390bea2859696c7ad80ce88cede778fea1cab24d513eed1"
+    },
+    {
+      "name": "jwt_wrong_padding",
+      "credential": "eyJhbGciOiJFZERTQSJ9.eyJ2YyI6e319.c2lnbmF0dXJlLW9mLWxlYWY==",
+      "delegation_ref": null,
+      "credential_digest": null
+    },
+    {
+      "name": "jwt_signature_standard_alphabet",
+      "credential": "eyJhbGciOiJFZERTQSJ9.eyJ2YyI6e319.c2ln+bmF0",
+      "delegation_ref": null,
+      "credential_digest": null
+    },
+    {
+      "name": "jwt_with_vc_id",
+      "credential": "eyJhbGciOiJFZERTQSJ9.eyJ2YyI6eyJpZCI6InVybjp1dWlkOmp3dC12YyJ9fQ.c2ln",
+      "delegation_ref": "urn:uuid:jwt-vc",
+      "credential_digest": "sha256:612fb8c17e6293dc3f58e2ecb46994f766cf310b467a289fbc593c35fddb1f42"
+    },
+    {
+      "name": "jwt_with_jti",
+      "credential": "eyJhbGciOiJFZERTQSJ9.eyJqdGkiOiJ1cm46dXVpZDpqd3QtanRpIiwidmMiOnt9fQ.c2ln",
+      "delegation_ref": "urn:uuid:jwt-jti",
+      "credential_digest": "sha256:bc26bbbd8754dfbd9273f6836f96ea8c5cbb3af66c326b8c878a20a2edd27337"
+    },
+    {
+      "name": "jwt_with_delegation_id",
+      "credential": "eyJhbGciOiJFZERTQSJ9.eyJ2YyI6eyJjcmVkZW50aWFsU3ViamVjdCI6eyJkZWxlZ2F0aW9uIjp7ImlkIjoidXJuOnV1aWQ6and0LWRlbCJ9fX19.c2ln",
+      "delegation_ref": "urn:uuid:jwt-del",
+      "credential_digest": "sha256:8333e3cac4ef7140b45e4a37a48c8427dee3c496798215fe9264e2e7f6bf8121"
+    },
+    {
+      "name": "jwt_payload_not_object",
+      "credential": "eyJhbGciOiJFZERTQSJ9.WzFd.c2ln",
+      "delegation_ref": null,
+      "credential_digest": "sha256:239c63c7b08a309861858ff58ea11c4e29bb98e7cb3b341e59b6b5b1492e3b88"
+    },
+    {
+      "name": "jwt_payload_with_bom",
+      "credential": "eyJhbGciOiJFZERTQSJ9.77u_eyJ2YyI6eyJpZCI6IngifX0.c2ln",
+      "delegation_ref": null,
+      "credential_digest": "sha256:f6b113223e11fd7b0138b2c40cb6ae2c21168767d1bc48a9e27d69f3146100cd"
+    },
+    {
+      "name": "jwt_payload_not_json",
+      "credential": "eyJhbGciOiJFZERTQSJ9.e25vdCBqc29u.c2ln",
+      "delegation_ref": null,
+      "credential_digest": "sha256:89fd83660b276faf3bf8181d27f832916dc107dfeeed65cdd10dcc3fa73ed273"
+    },
+    {
+      "name": "jwt_payload_not_utf8",
+      "credential": "eyJhbGciOiJFZERTQSJ9.__57.c2ln",
+      "delegation_ref": null,
+      "credential_digest": "sha256:1a3d325f8cfa4d2c850beb4c727da9fe5573a9f84abfd28e3482b1ff6c963eb3"
+    },
+    {
+      "name": "jwt_payload_too_deep",
+      "credential": "eyJhbGciOiJFZERTQSJ9.eyJ2YyI6eyJpZCI6ImRlZXAiLCJhIjpbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXX19.c2ln",
+      "delegation_ref": null,
+      "credential_digest": "sha256:520c6c0e334f897fb491d662d01ddcc723aeb1458c28abc7b043f51ee6e61ba7"
+    },
+    {
+      "name": "jwt_payload_depth_64_ok",
+      "credential": "eyJhbGciOiJFZERTQSJ9.eyJ2YyI6eyJpZCI6ImRlZXA2NCIsImEiOltbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV19fQ.c2ln",
+      "delegation_ref": "deep64",
+      "credential_digest": "sha256:5c362f69c65c4259b76ff880b16d45896f57a95ef2280fc2d904b69e28ccf9e6"
+    },
+    {
+      "name": "object_too_deep",
+      "credential": {
+        "id": "urn:uuid:1111-aaaa",
+        "type": [
+          "VerifiableCredential",
+          "DelegationCredential"
+        ],
+        "issuer": "did:web:user.example.com",
+        "credentialSubject": {
+          "id": "did:web:agent-a.example.com"
+        },
+        "proof": {
+          "type": "Ed25519Signature2020",
+          "created": "2024-03-01T12:00:00Z",
+          "verificationMethod": "did:web:user.example.com#key-1",
+          "proofPurpose": "assertionMethod",
+          "proofValue": "c2lnbmF0dXJlLW9mLXJvb3Q"
+        },
+        "deep": [
+          [
+            [
+              [
+                [
+                  [
+                    [
+                      [
+                        [
+                          [
+                            [
+                              [
+                                [
+                                  [
+                                    [
+                                      [
+                                        [
+                                          [
+                                            [
+                                              [
+                                                [
+                                                  [
+                                                    [
+                                                      [
+                                                        [
+                                                          [
+                                                            [
+                                                              [
+                                                                [
+                                                                  [
+                                                                    [
+                                                                      [
+                                                                        [
+                                                                          [
+                                                                            [
+                                                                              [
+                                                                                [
+                                                                                  [
+                                                                                    [
+                                                                                      [
+                                                                                        [
+                                                                                          [
+                                                                                            [
+                                                                                              [
+                                                                                                [
+                                                                                                  [
+                                                                                                    [
+                                                                                                      [
+                                                                                                        [
+                                                                                                          [
+                                                                                                            [
+                                                                                                              [
+                                                                                                                [
+                                                                                                                  [
+                                                                                                                    [
+                                                                                                                      [
+                                                                                                                        [
+                                                                                                                          [
+                                                                                                                            [
+                                                                                                                              [
+                                                                                                                                [
+                                                                                                                                  [
+                                                                                                                                    [
+                                                                                                                                      [
+                                                                                                                                        [
+                                                                                                                                          [
+                                                                                                                                            [
+                                                                                                                                              [
+                                                                                                                                                [
+                                                                                                                                                  []
+                                                                                                                                                ]
+                                                                                                                                              ]
+                                                                                                                                            ]
+                                                                                                                                          ]
+                                                                                                                                        ]
+                                                                                                                                      ]
+                                                                                                                                    ]
+                                                                                                                                  ]
+                                                                                                                                ]
+                                                                                                                              ]
+                                                                                                                            ]
+                                                                                                                          ]
+                                                                                                                        ]
+                                                                                                                      ]
+                                                                                                                    ]
+                                                                                                                  ]
+                                                                                                                ]
+                                                                                                              ]
+                                                                                                            ]
+                                                                                                          ]
+                                                                                                        ]
+                                                                                                      ]
+                                                                                                    ]
+                                                                                                  ]
+                                                                                                ]
+                                                                                              ]
+                                                                                            ]
+                                                                                          ]
+                                                                                        ]
+                                                                                      ]
+                                                                                    ]
+                                                                                  ]
+                                                                                ]
+                                                                              ]
+                                                                            ]
+                                                                          ]
+                                                                        ]
+                                                                      ]
+                                                                    ]
+                                                                  ]
+                                                                ]
+                                                              ]
+                                                            ]
+                                                          ]
+                                                        ]
+                                                      ]
+                                                    ]
+                                                  ]
+                                                ]
+                                              ]
+                                            ]
+                                          ]
+                                        ]
+                                      ]
+                                    ]
+                                  ]
+                                ]
+                              ]
+                            ]
+                          ]
+                        ]
+                      ]
+                    ]
+                  ]
+                ]
+              ]
+            ]
+          ]
+        ]
+      },
+      "delegation_ref": "urn:uuid:1111-aaaa",
+      "credential_digest": null
+    },
+    {
+      "name": "not_a_credential",
+      "credential": 42,
+      "delegation_ref": null,
+      "credential_digest": null
+    },
+    {
+      "name": "object_unsafe_integer",
+      "credential": {
+        "id": "urn:uuid:1111-aaaa",
+        "type": [
+          "VerifiableCredential",
+          "DelegationCredential"
+        ],
+        "issuer": "did:web:user.example.com",
+        "credentialSubject": {
+          "id": "did:web:agent-a.example.com"
+        },
+        "proof": {
+          "type": "Ed25519Signature2020",
+          "created": "2024-03-01T12:00:00Z",
+          "verificationMethod": "did:web:user.example.com#key-1",
+          "proofPurpose": "assertionMethod",
+          "proofValue": "c2lnbmF0dXJlLW9mLXJvb3Q"
+        },
+        "amount": 9007199254740992
+      },
+      "delegation_ref": "urn:uuid:1111-aaaa",
+      "credential_digest": null
+    }
+  ],
+  "delegation_chain": {
+    "credentials": [
+      {
+        "id": "urn:uuid:1111-aaaa",
+        "type": [
+          "VerifiableCredential",
+          "DelegationCredential"
+        ],
+        "issuer": "did:web:user.example.com",
+        "credentialSubject": {
+          "id": "did:web:agent-a.example.com"
+        },
+        "proof": {
+          "type": "Ed25519Signature2020",
+          "created": "2024-03-01T12:00:00Z",
+          "verificationMethod": "did:web:user.example.com#key-1",
+          "proofPurpose": "assertionMethod",
+          "proofValue": "c2lnbmF0dXJlLW9mLXJvb3Q"
+        }
+      },
+      "eyJhbGciOiJFZERTQSJ9.eyJ2YyI6e319.c2lnbmF0dXJlLW9mLWxlYWY"
+    ],
+    "digests": [
+      "sha256:6fbe4c0f04413cb40ec3b3069bf7c73dc1b6a681765e95ac451672136328712e",
+      "sha256:d29d65862fce70137390bea2859696c7ad80ce88cede778fea1cab24d513eed1"
+    ],
+    "chain_digest": "sha256:2df99ab7f9b80436dba945e0dfb7a37bd7b35400c82bbc72a5c2744f516eb788",
+    "too_long_chain_length": 257,
+    "too_long_chain_digests": null,
+    "unsigned_member_digests": null
+  },
+  "evidence": {
+    "key_hex": "6d7d51f0ff998063f440f7891c0a2832346aaf1008884df5c4a4c254ef9479b5",
+    "key_id": "evidence-key-v1",
+    "tenant": {
+      "kind": "keyed_commitment",
+      "value": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "keyId": "tenant-key-v1"
+    },
+    "purpose": "tool.call.arguments",
+    "aad_utf8": "{\"purpose\":\"tool.call.arguments\",\"tenant\":{\"keyId\":\"tenant-key-v1\",\"kind\":\"keyed_commitment\",\"value\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}}",
+    "plaintext_utf8": "{\"orderId\":\"ORD-1001\",\"reason\":\"damaged\"}",
+    "media_type": "application/json",
+    "ref": {
+      "objectId": "evi_JOceVIpK85d4HobHnXY1uw",
+      "ciphertextDigest": "sha256:0afdbf446a4b51b02b11bbb2277e52613eed90ce89ceb7576423ac0994e80764",
+      "plaintextCommitment": "sha256:8dd29ec1bd8c8a1385a39ad0304ab2e2ac96e1c07ca87ef293db1e923dace752",
+      "mediaType": "application/json",
+      "size": "57",
+      "encryption": {
+        "suite": "A256GCM",
+        "keyId": "evidence-key-v1",
+        "nonce": "x-fcxIFX9lkk1Eri",
+        "aadDigest": "sha256:11872b906ef576142f8e9602a102407a3604d31716ded58be023d3c718914481"
+      }
+    },
+    "ciphertext_b64url": "16rgbchlQPgKpSAeO5KF7Vj8R3EXgfkMqdMzln-UwPGOS5bh3gIy5yriIxRiuJ5CQ_sxFbVF0LW9",
+    "wrong_purpose": "tool.call.response",
+    "wrong_tenant": {
+      "kind": "keyed_commitment",
+      "value": "sha256:9999999999999999999999999999999999999999999999999999999999999999",
+      "keyId": "tenant-key-v1"
+    }
+  },
+  "evidence_event": {
+    "event": {
+      "schema": "https://schema.kya-os.org/v1/protocol/audit/event/v1.0.0",
+      "eventId": "fixture-event-1",
+      "eventType": "tool.call.started",
+      "eventVersion": "1.0.0",
+      "binding": "urn:kya-os:audit-binding:mcp:2025-11-25",
+      "occurredAt": 1750000001123,
+      "tenantRef": {
+        "kind": "keyed_commitment",
+        "value": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "keyId": "tenant-key-v1"
+      },
+      "source": {
+        "producer": {
+          "kind": "pairwise_did",
+          "did": "did:key:zFixtureProducer"
+        },
+        "sourceId": "fixture-source-1",
+        "sourceSequence": "1"
+      },
+      "actor": {
+        "kind": "pairwise_did",
+        "did": "did:key:zFixtureAgent"
+      },
+      "action": {
+        "category": "tool.call",
+        "detailRef": {
+          "objectId": "evi_JOceVIpK85d4HobHnXY1uw",
+          "ciphertextDigest": "sha256:0afdbf446a4b51b02b11bbb2277e52613eed90ce89ceb7576423ac0994e80764",
+          "plaintextCommitment": "sha256:8dd29ec1bd8c8a1385a39ad0304ab2e2ac96e1c07ca87ef293db1e923dace752",
+          "mediaType": "application/json",
+          "size": "57",
+          "encryption": {
+            "suite": "A256GCM",
+            "keyId": "evidence-key-v1",
+            "nonce": "x-fcxIFX9lkk1Eri",
+            "aadDigest": "sha256:11872b906ef576142f8e9602a102407a3604d31716ded58be023d3c718914481"
+          }
+        }
+      },
+      "outcome": "unknown",
+      "evidence": [
+        {
+          "objectId": "evi_JOceVIpK85d4HobHnXY1uw",
+          "ciphertextDigest": "sha256:0afdbf446a4b51b02b11bbb2277e52613eed90ce89ceb7576423ac0994e80764",
+          "plaintextCommitment": "sha256:8dd29ec1bd8c8a1385a39ad0304ab2e2ac96e1c07ca87ef293db1e923dace752",
+          "mediaType": "application/json",
+          "size": "57",
+          "encryption": {
+            "suite": "A256GCM",
+            "keyId": "evidence-key-v1",
+            "nonce": "x-fcxIFX9lkk1Eri",
+            "aadDigest": "sha256:11872b906ef576142f8e9602a102407a3604d31716ded58be023d3c718914481"
+          }
+        }
+      ],
+      "details": {
+        "family": "tool",
+        "phase": "started",
+        "attempt": "1"
+      },
+      "privacy": {
+        "classification": "internal",
+        "retentionClass": "audit-365d"
+      }
+    },
+    "canonical": "{\"action\":{\"category\":\"tool.call\",\"detailRef\":{\"ciphertextDigest\":\"sha256:0afdbf446a4b51b02b11bbb2277e52613eed90ce89ceb7576423ac0994e80764\",\"encryption\":{\"aadDigest\":\"sha256:11872b906ef576142f8e9602a102407a3604d31716ded58be023d3c718914481\",\"keyId\":\"evidence-key-v1\",\"nonce\":\"x-fcxIFX9lkk1Eri\",\"suite\":\"A256GCM\"},\"mediaType\":\"application/json\",\"objectId\":\"evi_JOceVIpK85d4HobHnXY1uw\",\"plaintextCommitment\":\"sha256:8dd29ec1bd8c8a1385a39ad0304ab2e2ac96e1c07ca87ef293db1e923dace752\",\"size\":\"57\"}},\"actor\":{\"did\":\"did:key:zFixtureAgent\",\"kind\":\"pairwise_did\"},\"binding\":\"urn:kya-os:audit-binding:mcp:2025-11-25\",\"details\":{\"attempt\":\"1\",\"family\":\"tool\",\"phase\":\"started\"},\"eventId\":\"fixture-event-1\",\"eventType\":\"tool.call.started\",\"eventVersion\":\"1.0.0\",\"evidence\":[{\"ciphertextDigest\":\"sha256:0afdbf446a4b51b02b11bbb2277e52613eed90ce89ceb7576423ac0994e80764\",\"encryption\":{\"aadDigest\":\"sha256:11872b906ef576142f8e9602a102407a3604d31716ded58be023d3c718914481\",\"keyId\":\"evidence-key-v1\",\"nonce\":\"x-fcxIFX9lkk1Eri\",\"suite\":\"A256GCM\"},\"mediaType\":\"application/json\",\"objectId\":\"evi_JOceVIpK85d4HobHnXY1uw\",\"plaintextCommitment\":\"sha256:8dd29ec1bd8c8a1385a39ad0304ab2e2ac96e1c07ca87ef293db1e923dace752\",\"size\":\"57\"}],\"occurredAt\":1750000001123,\"outcome\":\"unknown\",\"privacy\":{\"classification\":\"internal\",\"retentionClass\":\"audit-365d\"},\"schema\":\"https://schema.kya-os.org/v1/protocol/audit/event/v1.0.0\",\"source\":{\"producer\":{\"did\":\"did:key:zFixtureProducer\",\"kind\":\"pairwise_did\"},\"sourceId\":\"fixture-source-1\",\"sourceSequence\":\"1\"},\"tenantRef\":{\"keyId\":\"tenant-key-v1\",\"kind\":\"keyed_commitment\",\"value\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}}",
+    "digest": "sha256:a95710e858003b2653d85d03854b4045969e28172ec7d6db57edd2d3f389f396"
+  }
+}
