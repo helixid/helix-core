@@ -164,12 +164,39 @@ CREATE TABLE IF NOT EXISTS agents (
 CREATE INDEX IF NOT EXISTS idx_agents_visibility_published_at ON agents(visibility, published_at);
 CREATE INDEX IF NOT EXISTS idx_agents_credential_vc_id ON agents(credential_vc_id);
 
-CREATE TABLE IF NOT EXISTS audit_log (
+DROP TABLE IF EXISTS audit_log;
+
+CREATE TABLE IF NOT EXISTS audit_events (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  timestamp TEXT NOT NULL,
+  event_id TEXT NOT NULL,
   event_type TEXT NOT NULL,
-  request_id TEXT,
-  payload_json TEXT NOT NULL
+  family TEXT NOT NULL,
+  source_id TEXT NOT NULL,
+  source_sequence INTEGER,
+  previous_source_event_digest TEXT,
+  event_digest TEXT NOT NULL UNIQUE,
+  occurred_at TEXT NOT NULL,
+  recorded_at TEXT NOT NULL,
+  correlation_id TEXT,
+  actor_ref TEXT,
+  canonical TEXT NOT NULL,
+  event_json TEXT NOT NULL,
+  UNIQUE (source_id, event_id)
+);
+CREATE INDEX IF NOT EXISTS idx_audit_events_type_recorded ON audit_events(event_type, recorded_at);
+CREATE INDEX IF NOT EXISTS idx_audit_events_family_recorded ON audit_events(family, recorded_at);
+CREATE INDEX IF NOT EXISTS idx_audit_events_correlation ON audit_events(correlation_id);
+CREATE INDEX IF NOT EXISTS idx_audit_events_actor ON audit_events(actor_ref);
+
+CREATE TABLE IF NOT EXISTS audit_evidence (
+  object_id TEXT PRIMARY KEY,
+  ciphertext_digest TEXT NOT NULL,
+  size INTEGER NOT NULL,
+  media_type TEXT NOT NULL,
+  key_id TEXT NOT NULL,
+  ref_json TEXT NOT NULL,
+  ciphertext BLOB NOT NULL,
+  stored_at TEXT NOT NULL
 );
       `.trim(),
     );

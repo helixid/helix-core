@@ -180,15 +180,45 @@ model Agent {
   @@map("agents")
 }
 
-model AuditLog {
-  id          String   @id @default(cuid())
-  timestamp   DateTime @default(now())
-  eventType   String
-  requestId   String
-  payloadJson String
-  createdAt   DateTime @default(now())
+/// KYA-OS audit producer events (story A-1, AAP-1 Recorded). Append-only:
+/// no update or delete path exists in code, and rows are retained
+/// indefinitely by default. `event` is the strict producer event, `canonical`
+/// its RFC 8785 text, `eventDigest` the domain-separated digest over it.
+model AuditEvent {
+  id                        String   @id @default(cuid())
+  eventId                   String
+  eventType                 String
+  family                    String
+  sourceId                  String
+  sourceSequence            BigInt?
+  previousSourceEventDigest String?
+  eventDigest               String   @unique
+  occurredAt                DateTime
+  recordedAt                DateTime @default(now())
+  correlationId             String?
+  actorRef                  String?
+  canonical                 String
+  event                     Json
 
-  @@index([eventType])
-  @@index([requestId])
-  @@map("audit_log")
+  @@unique([sourceId, eventId])
+  @@index([eventType, recordedAt])
+  @@index([family, recordedAt])
+  @@index([correlationId])
+  @@index([actorRef])
+  @@map("audit_events")
+}
+
+/// The evidence vault: AES-256-GCM objects an event refers to by `EvidenceRef`.
+/// The ciphertext is opaque without the key and the tenant-bound AAD.
+model AuditEvidence {
+  objectId         String   @id
+  ciphertextDigest String
+  size             BigInt
+  mediaType        String
+  keyId            String
+  ref              Json
+  ciphertext       Bytes
+  storedAt         DateTime @default(now())
+
+  @@map("audit_evidence")
 }

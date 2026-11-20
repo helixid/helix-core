@@ -1,7 +1,9 @@
 // Copyright 2026 DgVerse LLP
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import { AgentService } from '../../../src/services/agent/agent.service.js';
+import { TestAuditTrail } from '../../utils/TestAuditTrail.js';
 import {
+  hashJson,
   AgentKeyNotFoundError,
   AgentActiveCredentialNotFoundError,
   MaxDelegationDepthExceededError,
@@ -14,7 +16,7 @@ describe('AgentService Unit Tests', () => {
   let repository: any;
   let didService: any;
   let vcService: any;
-  let auditLogger: any;
+  let auditLogger: TestAuditTrail;
   let agentKeyRepository: any;
   let keyCustody: any;
   let agentService: AgentService;
@@ -50,7 +52,7 @@ describe('AgentService Unit Tests', () => {
         statusListIndex: 42,
       }),
     };
-    auditLogger = { log: vi.fn() };
+    auditLogger = new TestAuditTrail();
     agentKeyRepository = { create: vi.fn(), findByDid: vi.fn() };
     keyCustody = {
       generateAndEncrypt: vi.fn(),
@@ -195,14 +197,14 @@ describe('AgentService Unit Tests', () => {
       expect(result.signedVP.holder).toBe(agentDid);
       expect(result.signedVP.proof).toBeDefined();
       expect(result.signedVP.verifiableCredential.map((vc) => vc['id'])).toEqual(['vc:test:1', 'vc:test:2']);
-      expect(auditLogger.log).toHaveBeenCalledWith(
-        'AGENT_VP_SIGNED',
-        expect.objectContaining({
-          agentDid,
-          targetService: 'did:web:svc.example.com',
-          vcIds: ['vc:test:1', 'vc:test:2'],
-        }),
-      );
+      await auditLogger.flush();
+      expect(auditLogger.ofType('proof.generated')).toHaveLength(1);
+      expect(auditLogger.ofType('proof.generated')[0]).toMatchObject({
+        actor: { kind: 'public_did', did: agentDid },
+        resource: { kind: 'public_did', did: 'did:web:svc.example.com' },
+        details: { family: 'proof', phase: 'generated', proofDigest: hashJson(result.signedVP) },
+      });
+      expect(auditLogger.ofType('proof.generated')[0]).not.toHaveProperty('responsibleParty');
     });
 
     describe('on a user\'s behalf', () => {
@@ -250,10 +252,12 @@ describe('AgentService Unit Tests', () => {
         expect(vcService.listActiveGrants).toHaveBeenCalledWith({ agentDid, serviceDid, userDid });
         expect(signedVP.verifiableCredential.map((vc) => vc['id'])).toEqual(['vc:test:1', 'vc:g1', 'vc:g2']);
         expect(signedVP.delegatedBy).toBe(userDid);
-        expect(auditLogger.log).toHaveBeenCalledWith(
-          'AGENT_VP_SIGNED',
-          expect.objectContaining({ userDid, grantVcIds: ['vc:g1', 'vc:g2'] }),
-        );
+        await auditLogger.flush();
+        expect(auditLogger.ofType('proof.generated')[0]).toMatchObject({
+          actor: { kind: 'public_did', did: agentDid },
+          responsibleParty: { kind: 'public_did', did: userDid },
+          details: { proofDigest: hashJson(signedVP) },
+        });
       });
 
       it('throws ConsentGrantNotFoundError when the user has no active grant', async () => {
@@ -298,10 +302,11 @@ describe('AgentService Unit Tests', () => {
           // include write, which the delegator never delegated.
           expect(signedVP.verifiableCredential.map((vc) => vc['id'])).toEqual(['vc:delegated:1', 'vc:g-parent']);
           expect(signedVP.delegatedBy).toBe(userDid);
-          expect(auditLogger.log).toHaveBeenCalledWith(
-            'AGENT_VP_SIGNED',
-            expect.objectContaining({ vcIds: ['vc:delegated:1'], grantVcIds: ['vc:g-parent'], grantHolderDids: [parentDid] }),
-          );
+          await auditLogger.flush();
+          expect(auditLogger.ofType('proof.generated')[0]).toMatchObject({
+            responsibleParty: { kind: 'public_did', did: userDid },
+            details: { proofDigest: hashJson(signedVP) },
+          });
         });
 
         it("prefers the agent's own grant and never looks further up", async () => {
@@ -554,15 +559,16 @@ describe('AgentService Unit Tests', () => {
         statusListCredential: 'http://localhost/v1/status-list/helix-status-list-1',
       });
       expect(vcService.registerSignedVC).toHaveBeenCalledWith(result.delegatedVC, { revokeExisting: undefined });
-      expect(auditLogger.log).toHaveBeenCalledWith(
-        'VC_DELEGATED',
-        expect.objectContaining({
-          delegatorDid,
-          delegateDid: subAgentDid,
-          scopes: ['read:orders'],
-          delegatedVcId: result.delegatedVC.id,
-        }),
-      );
+      await auditLogger.flush();
+      expect(auditLogger.ofType('delegation.issued')).toHaveLength(1);
+      expect(auditLogger.ofType('delegation.issued')[0]).toMatchObject({
+        actor: { kind: 'public_did', did: delegatorDid },
+        resource: { kind: 'public_did', did: subAgentDid },
+        authorization: { source: 'delegation', decision: 'allowed', delegationRef: result.delegatedVC.id },
+        details: { family: 'delegation', phase: 'issued', delegationRef: result.delegatedVC.id, parentRef: fromVC.id },
+      });
+      // The event names the credential; it never carries the credential or its scopes.
+      expect(JSON.stringify(auditLogger.events)).not.toContain('read:orders');
     });
 
     it('rejects delegation beyond maxDelegationDepth before signing', async () => {

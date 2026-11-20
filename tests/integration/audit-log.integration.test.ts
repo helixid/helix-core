@@ -1,466 +1,149 @@
-import { describe, expect, it, vi } from 'vitest';
+// Copyright 2026 DgVerse LLP
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//    http://www.apache.org/licenses/LICENSE-2.0
 import Fastify from 'fastify';
-import { ErrorCode } from '../../src/core/index.js';
-
-import auditLogRoutes from '../../src/routes/audit-log/index.js';
+import { describe, expect, it } from 'vitest';
+import { AuditTrail, pairwiseDid, publicDid, type AuditProducerEvent } from '../../src/core/index.js';
+import { MemoryAuditStore } from '../../src/audit/index.js';
 import { errorHandler } from '../../src/middleware/errorHandler.js';
-import type { AuditLogRepository } from '../../src/repositories/audit-log.repository.js';
+import auditLogRoutes from '../../src/routes/audit-log/index.js';
+import { fixture } from '../unit/core/audit/fixture.js';
 
-describe('Audit log route surface', () => {
-  async function makeApp(repository: Pick<AuditLogRepository, 'list'>) {
-    const app = Fastify({ logger: false });
-    app.setErrorHandler(errorHandler);
-    await app.register(auditLogRoutes, {
-      prefix: '/v1/audit-log',
-      auditLogRepository: repository as AuditLogRepository,
-      auditLogger: {
-        log: async () => undefined,
-      },
-      adminApiKey: 'test-admin-key-0001',
-    });
-    await app.ready();
-    return app;
-  }
+const ADMIN = 'test-admin-key-0001';
+const admin = { 'x-admin-api-key': ADMIN };
 
-  it('lists audit events behind admin auth', async () => {
-    const app = await makeApp({
-      list: async () => [
-        {
-          id: '1',
-          eventType: 'VC_ISSUED',
-          timestamp: new Date('2026-07-03T00:00:00.000Z'),
-          requestId: 'req-1',
-          payload: {
-            subjectDid: 'did:hedera:testnet:agent',
-            vcId: 'vc:helix:abc',
-            result: 'success',
-          },
-        },
-      ],
-    });
+async function makeApp(store = new MemoryAuditStore()) {
+  const app = Fastify({ logger: false });
+  app.setErrorHandler(errorHandler);
+  await app.register(auditLogRoutes, { prefix: '/v1/audit-log', auditStore: store, adminApiKey: ADMIN });
+  await app.ready();
+  return { app, store };
+}
 
-    const response = await app.inject({
-      method: 'GET',
-      url: '/v1/audit-log?eventType=VC_ISSUED&limit=10',
-      headers: { 'x-admin-api-key': 'test-admin-key-0001' },
-    });
+/** A producer event as the middleware would post it: its own source sequence and predecessor. */
+function producerEvent(overrides: Partial<AuditProducerEvent> = {}): AuditProducerEvent {
+  return { ...fixture.chain.entries[1]!.event, ...overrides };
+}
 
-    expect(response.statusCode).toBe(200);
-    expect(JSON.parse(response.body)).toEqual([
-      {
-        id: '1',
-        eventType: 'VC_ISSUED',
-        timestamp: '2026-07-03T00:00:00.000Z',
-        subjectDid: 'did:hedera:testnet:agent',
-        vcId: 'vc:helix:abc',
-        result: 'success',
-        delegatedTo: 'did:hedera:testnet:agent',
-      },
-    ]);
-    await app.close();
+describe('audit log routes (KYA-OS A-1)', () => {
+  it('records a typed producer event as presented and lists it', async () => {
+    const { app, store } = await makeApp();
+    const event = producerEvent();
+    const posted = await app.inject({ method: 'POST', url: '/v1/audit-log/events', headers: admin, payload: event });
+    expect(posted.statusCode, posted.body).toBe(201);
+    expect(posted.json()).toEqual({ recorded: true, eventId: event.eventId, eventDigest: fixture.chain.entries[1]!.digest });
+    const again = await app.inject({ method: 'POST', url: '/v1/audit-log/events', headers: admin, payload: event });
+    expect(again.statusCode).toBe(201);
+    expect(await store.list({ limit: 10 })).toHaveLength(1);
+
+    const list = await app.inject({ method: 'GET', url: '/v1/audit-log?eventType=tool.call.completed&limit=10', headers: admin });
+    expect(list.statusCode).toBe(200);
+    const rows = list.json() as Array<{ id: string; recordedAt: string; eventDigest: string; event: AuditProducerEvent }>;
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ id: '1', eventDigest: fixture.chain.entries[1]!.digest, event });
+    expect(new Date(rows[0]!.recordedAt).getTime()).toBeGreaterThan(0);
+    expect(rows[0]!.event.source).toMatchObject({ sourceSequence: '2', previousSourceEventDigest: fixture.chain.entries[0]!.digest });
+    expect((await app.inject({ method: 'GET', url: '/v1/audit-log?family=session', headers: admin })).json()).toEqual([]);
+    expect((await app.inject({ method: 'GET', url: '/v1/audit-log?correlationId=call-0001&since=2020-01-01T00:00:00Z', headers: admin })).json()).toHaveLength(1);
   });
 
-  it('requires admin auth', async () => {
-    const app = await makeApp({ list: async () => [] });
-
-    const response = await app.inject({ method: 'GET', url: '/v1/audit-log' });
-
-    expect(response.statusCode).toBe(403);
-    expect(JSON.parse(response.body).error.code).toBe(ErrorCode.ADMIN_AUTH_REQUIRED);
-    await app.close();
+  it('refuses an event with an unknown member, a wrong family, or a secret-shaped extra, with the path', async () => {
+    const { app, store } = await makeApp();
+    const cases: Array<[Record<string, unknown>, string]> = [
+      [{ ...producerEvent(), arguments: { orderId: 'ORD-1' } }, ''],
+      [{ ...producerEvent(), details: { family: 'tool', phase: 'completed', attempt: '1', response: 'x' } }, 'details'],
+      [{ ...producerEvent(), details: { family: 'session', phase: 'established' } }, 'details.family'],
+      [{ ...producerEvent(), correlationId: 'x'.repeat(257) }, 'correlationId'],
+    ];
+    for (const [payload, path] of cases) {
+      const res = await app.inject({ method: 'POST', url: '/v1/audit-log/events', headers: admin, payload });
+      expect(res.statusCode, JSON.stringify(payload)).toBe(400);
+      const body = res.json() as { error: { code: string; details: { issues: Array<{ path: string }> } } };
+      expect(body.error.code).toBe('AUDIT_EVENT_INVALID');
+      expect(body.error.details.issues[0]!.path).toBe(path);
+    }
+    for (const rejection of fixture.rejections) {
+      const res = await app.inject({ method: 'POST', url: '/v1/audit-log/events', headers: admin, payload: rejection.event });
+      expect(res.statusCode, rejection.name).toBe(400);
+    }
+    expect(await store.list({ limit: 10 })).toEqual([]);
   });
 
-  it('records VP verification audit entries behind admin auth', async () => {
-    const log = vi.fn().mockResolvedValue(undefined);
-    const app = Fastify({ logger: false });
-    app.setErrorHandler(errorHandler);
-    await app.register(auditLogRoutes, {
-      prefix: '/v1/audit-log',
-      auditLogRepository: { list: async () => [] } as AuditLogRepository,
-      auditLogger: { log },
-      adminApiKey: 'test-admin-key-0001',
-    });
-    await app.ready();
-
-    const response = await app.inject({
-      method: 'POST',
-      url: '/v1/audit-log/vp-verification',
-      headers: { 'x-admin-api-key': 'test-admin-key-0001' },
-      payload: {
-        vpId: 'vp:test:1',
-        agentDid: 'did:key:agent',
-        targetService: 'orders',
-        result: 'success',
-        delegatedFrom: 'did:key:parent',
-        delegatedTo: 'did:key:agent',
-        parentVcId: 'vc:parent',
-        delegationDepth: 1,
-        verifiedAt: '2026-07-03T00:00:00.000Z',
-      },
-    });
-
-    expect(response.statusCode).toBe(201);
-    expect(log).toHaveBeenCalledWith(
-      expect.objectContaining({
-        event: 'VP_VERIFIED',
-        requestId: expect.any(String),
-        vpId: 'vp:test:1',
-        agentDid: 'did:key:agent',
-        subjectDid: 'did:key:agent',
-        targetService: 'orders',
-        result: 'success',
-        delegatedFrom: 'did:key:parent',
-        delegatedTo: 'did:key:agent',
-        parentVcId: 'vc:parent',
-        delegationDepth: 1,
-        source: 'sdk',
-      }),
-    );
-    await app.close();
+  it('refuses the same event id from one source with different content', async () => {
+    const { app } = await makeApp();
+    const event = producerEvent();
+    expect((await app.inject({ method: 'POST', url: '/v1/audit-log/events', headers: admin, payload: event })).statusCode).toBe(201);
+    const res = await app.inject({ method: 'POST', url: '/v1/audit-log/events', headers: admin, payload: { ...event, outcome: 'failed' } });
+    expect(res.statusCode).toBe(409);
   });
 
-  // Audit-enrichment epic §2a — agent-side consent grants.
-  it('records CONSENT_GRANTED entries behind admin auth', async () => {
-    const log = vi.fn().mockResolvedValue(undefined);
-    const app = Fastify({ logger: false });
-    app.setErrorHandler(errorHandler);
-    await app.register(auditLogRoutes, {
-      prefix: '/v1/audit-log',
-      auditLogRepository: { list: async () => [] } as unknown as AuditLogRepository,
-      auditLogger: { log },
-      adminApiKey: 'test-admin-key-0001',
-    });
-    await app.ready();
-
-    const response = await app.inject({
-      method: 'POST',
-      url: '/v1/audit-log/consent-granted',
-      headers: { 'x-admin-api-key': 'test-admin-key-0001' },
-      payload: {
-        vcId: 'vc:helix:grant-1',
-        agentDid: 'did:key:agent',
-        issuer: 'did:web:airline.example',
-        userDid: 'did:key:user',
-        scopes: ['book:flight'],
-        durability: 'standing',
-        grantedAt: '2026-07-03T00:00:00.000Z',
-      },
-    });
-
-    expect(response.statusCode).toBe(201);
-    expect(log).toHaveBeenCalledWith(
-      expect.objectContaining({
-        event: 'CONSENT_GRANTED',
-        vcId: 'vc:helix:grant-1',
-        agentDid: 'did:key:agent',
-        subjectDid: 'did:key:agent',
-        issuer: 'did:web:airline.example',
-        userDid: 'did:key:user',
-        scopes: ['book:flight'],
-        durability: 'standing',
-        timestamp: '2026-07-03T00:00:00.000Z',
-        source: 'sdk',
-      }),
-    );
-    await app.close();
+  it('is admin-gated on every route', async () => {
+    const { app } = await makeApp();
+    for (const [method, url] of [
+      ['POST', '/v1/audit-log/events'],
+      ['GET', '/v1/audit-log'],
+      ['POST', '/v1/audit-log/evidence'],
+      ['GET', '/v1/audit-log/evidence/x'],
+    ] as const) {
+      expect((await app.inject({ method, url, payload: method === 'POST' ? {} : undefined })).statusCode, url).toBe(403);
+      expect((await app.inject({ method, url, headers: { 'x-admin-api-key': ['wrong'] }, payload: method === 'POST' ? {} : undefined })).statusCode, url).toBe(403);
+    }
+    const noKey = Fastify({ logger: false });
+    noKey.setErrorHandler(errorHandler);
+    await noKey.register(auditLogRoutes, { prefix: '/v1/audit-log', auditStore: new MemoryAuditStore() });
+    await noKey.ready();
+    expect((await noKey.inject({ method: 'GET', url: '/v1/audit-log', headers: admin })).statusCode).toBe(403);
   });
 
-  it('rejects CONSENT_GRANTED entries missing required identifiers', async () => {
-    const app = await makeApp({ list: async () => [] });
-
-    const response = await app.inject({
-      method: 'POST',
-      url: '/v1/audit-log/consent-granted',
-      headers: { 'x-admin-api-key': 'test-admin-key-0001' },
-      payload: { issuer: 'did:web:airline.example' },
-    });
-
-    expect(response.statusCode).toBe(400);
-    expect(JSON.parse(response.body).error.code).toBe(ErrorCode.VALIDATION_ERROR);
-    await app.close();
+  it('validates the list query', async () => {
+    const { app } = await makeApp();
+    for (const query of ['limit=0', 'limit=501', 'limit=abc', 'since=yesterday', 'eventType=nope', 'family=nope']) {
+      const res = await app.inject({ method: 'GET', url: `/v1/audit-log?${query}`, headers: admin });
+      expect(res.statusCode, query).toBe(400);
+      expect((res.json() as { error: { code: string } }).error.code).toBe('VALIDATION_ERROR');
+    }
+    expect((await app.inject({ method: 'GET', url: '/v1/audit-log?eventType=&family=&since=&correlationId=', headers: admin })).statusCode).toBe(200);
   });
 
-  it('requires admin auth for CONSENT_GRANTED', async () => {
-    const app = await makeApp({ list: async () => [] });
+  it('stores and returns evidence by object id, only for bytes that match the reference', async () => {
+    const { app } = await makeApp();
+    const { ref, ciphertext_b64url } = fixture.evidence;
+    const stored = await app.inject({ method: 'POST', url: '/v1/audit-log/evidence', headers: admin, payload: { ref, ciphertextBase64url: ciphertext_b64url } });
+    expect(stored.statusCode, stored.body).toBe(201);
+    expect(stored.json()).toEqual({ stored: true, objectId: ref.objectId, ciphertextDigest: ref.ciphertextDigest });
+    const got = await app.inject({ method: 'GET', url: `/v1/audit-log/evidence/${ref.objectId}`, headers: admin });
+    expect(got.statusCode).toBe(200);
+    expect(got.json()).toEqual({ ref, ciphertextBase64url: ciphertext_b64url });
+    expect((await app.inject({ method: 'GET', url: '/v1/audit-log/evidence/evi_missing', headers: admin })).statusCode).toBe(404);
 
-    const response = await app.inject({
-      method: 'POST',
-      url: '/v1/audit-log/consent-granted',
-      payload: { vcId: 'vc:helix:grant-1', agentDid: 'did:key:agent' },
-    });
-
-    expect(response.statusCode).toBe(403);
-    await app.close();
+    const bad: Array<Record<string, unknown>> = [
+      { ref, ciphertextBase64url: 'AAAA' },
+      { ref: { ...ref, bytes: 'x' }, ciphertextBase64url: ciphertext_b64url },
+      { ref, ciphertextBase64url: 'not base64url!' },
+      { ref },
+      {},
+    ];
+    for (const payload of bad) {
+      const res = await app.inject({ method: 'POST', url: '/v1/audit-log/evidence', headers: admin, payload });
+      expect(res.statusCode, JSON.stringify(payload)).toBe(400);
+      expect((res.json() as { error: { code: string } }).error.code).toBe('AUDIT_EVIDENCE_INVALID');
+    }
   });
 
-  it('surfaces consent and attempted-rejection fields in the listing', async () => {
-    const app = await makeApp({
-      list: async () => [
-        {
-          id: '1',
-          eventType: 'VP_REJECTED',
-          timestamp: new Date('2026-07-03T00:00:00.000Z'),
-          requestId: 'req-1',
-          payload: {
-            subjectDid: 'did:key:agent',
-            vpId: 'vp:test:1',
-            attemptedVcId: 'vc:helix:attempted',
-            attemptedParentVcId: 'vc:helix:parent',
-            attemptedDelegatedFrom: 'did:key:parent',
-          },
-        },
-        {
-          id: '2',
-          eventType: 'CONSENT_GRANTED',
-          timestamp: new Date('2026-07-03T00:00:01.000Z'),
-          requestId: 'req-2',
-          payload: {
-            subjectDid: 'did:key:agent',
-            vcId: 'vc:helix:grant-1',
-            userDid: 'did:key:user',
-            scopes: ['book:flight'],
-            durability: 'standing',
-          },
-        },
-      ],
+  it('records what the API trail produces through the same store', async () => {
+    const store = new MemoryAuditStore();
+    const { app } = await makeApp(store);
+    const trail = new AuditTrail({ sink: store, sourceId: 'helix-api', producer: publicDid('did:web:issuer.example'), tenantRef: publicDid('did:web:issuer.example') });
+    await trail.record({
+      eventType: 'proof.verified',
+      actor: pairwiseDid('did:key:zAgent'),
+      action: { category: 'presentation' },
+      outcome: 'succeeded',
+      details: { family: 'proof', phase: 'verified' },
     });
-
-    const response = await app.inject({
-      method: 'GET',
-      url: '/v1/audit-log?limit=10',
-      headers: { 'x-admin-api-key': 'test-admin-key-0001' },
-    });
-
-    expect(response.statusCode).toBe(200);
-    const [rejected, granted] = JSON.parse(response.body);
-    expect(rejected).toMatchObject({
-      eventType: 'VP_REJECTED',
-      attemptedVcId: 'vc:helix:attempted',
-      attemptedParentVcId: 'vc:helix:parent',
-      attemptedDelegatedFrom: 'did:key:parent',
-    });
-    // Unverified context must not be laundered into the verified fields.
-    expect(rejected.delegatedFrom).toBeUndefined();
-    expect(rejected.parentVcId).toBeUndefined();
-    expect(granted).toMatchObject({
-      eventType: 'CONSENT_GRANTED',
-      vcId: 'vc:helix:grant-1',
-      userDid: 'did:key:user',
-      scopes: ['book:flight'],
-      durability: 'standing',
-    });
-    await app.close();
-  });
-
-  // Activity-trail ingestion — the shared envelope SPs and agents both post to.
-  it('records an activity event with the full envelope', async () => {
-    const log = vi.fn().mockResolvedValue(undefined);
-    const app = Fastify({ logger: false });
-    app.setErrorHandler(errorHandler);
-    await app.register(auditLogRoutes, {
-      prefix: '/v1/audit-log',
-      auditLogRepository: { list: async () => [] } as unknown as AuditLogRepository,
-      auditLogger: { log },
-      adminApiKey: 'test-admin-key-0001',
-    });
-    await app.ready();
-
-    const response = await app.inject({
-      method: 'POST',
-      url: '/v1/audit-log/events',
-      headers: { 'x-admin-api-key': 'test-admin-key-0001' },
-      payload: {
-        event: 'AUTHZ_DENIED',
-        correlationId: 'act_abc123',
-        agentDid: 'did:key:agent',
-        userDid: 'did:web:traveler.example',
-        serviceDid: 'did:web:localhost%3A4102',
-        serviceName: 'Helix Stay',
-        toolName: 'book_hotel',
-        requiredScope: 'book:hotel',
-        effectiveScopes: ['book:flights'],
-        result: 'blocked',
-        reason: 'INSUFFICIENT_EFFECTIVE_SCOPE',
-        resultSummary: 'book_hotel blocked',
-        timestamp: '2026-07-03T00:00:00.000Z',
-        source: 'sp',
-      },
-    });
-
-    expect(response.statusCode).toBe(201);
-    expect(log).toHaveBeenCalledWith(
-      expect.objectContaining({
-        event: 'AUTHZ_DENIED',
-        correlationId: 'act_abc123',
-        agentDid: 'did:key:agent',
-        subjectDid: 'did:key:agent',
-        userDid: 'did:web:traveler.example',
-        serviceDid: 'did:web:localhost%3A4102',
-        serviceName: 'Helix Stay',
-        toolName: 'book_hotel',
-        requiredScope: 'book:hotel',
-        effectiveScopes: ['book:flights'],
-        result: 'blocked',
-        reason: 'INSUFFICIENT_EFFECTIVE_SCOPE',
-        timestamp: '2026-07-03T00:00:00.000Z',
-        source: 'sp',
-      }),
-    );
-    await app.close();
-  });
-
-  it('falls back to serviceDid as subject when no agent is known', async () => {
-    const log = vi.fn().mockResolvedValue(undefined);
-    const app = Fastify({ logger: false });
-    app.setErrorHandler(errorHandler);
-    await app.register(auditLogRoutes, {
-      prefix: '/v1/audit-log',
-      auditLogRepository: { list: async () => [] } as unknown as AuditLogRepository,
-      auditLogger: { log },
-      adminApiKey: 'test-admin-key-0001',
-    });
-    await app.ready();
-
-    const response = await app.inject({
-      method: 'POST',
-      url: '/v1/audit-log/events',
-      headers: { 'x-admin-api-key': 'test-admin-key-0001' },
-      payload: { event: 'TOOL_INVOKED', serviceDid: 'did:web:sp', toolName: 'search_flights' },
-    });
-
-    expect(response.statusCode).toBe(201);
-    expect(log).toHaveBeenCalledWith(expect.objectContaining({ subjectDid: 'did:web:sp' }));
-    await app.close();
-  });
-
-  it('rejects event types outside the ingestion allowlist', async () => {
-    const app = await makeApp({ list: async () => [] });
-
-    const response = await app.inject({
-      method: 'POST',
-      url: '/v1/audit-log/events',
-      headers: { 'x-admin-api-key': 'test-admin-key-0001' },
-      payload: { event: 'TOTALLY_MADE_UP', agentDid: 'did:key:agent' },
-    });
-
-    expect(response.statusCode).toBe(400);
-    expect(JSON.parse(response.body).error.code).toBe(ErrorCode.VALIDATION_ERROR);
-    await app.close();
-  });
-
-  it('rejects an activity event with neither agentDid nor serviceDid', async () => {
-    const app = await makeApp({ list: async () => [] });
-
-    const response = await app.inject({
-      method: 'POST',
-      url: '/v1/audit-log/events',
-      headers: { 'x-admin-api-key': 'test-admin-key-0001' },
-      payload: { event: 'TOOL_INVOKED', toolName: 'search_flights' },
-    });
-
-    expect(response.statusCode).toBe(400);
-    await app.close();
-  });
-
-  it('requires admin auth for activity ingestion', async () => {
-    const app = await makeApp({ list: async () => [] });
-
-    const response = await app.inject({
-      method: 'POST',
-      url: '/v1/audit-log/events',
-      payload: { event: 'TOOL_INVOKED', agentDid: 'did:key:agent' },
-    });
-
-    expect(response.statusCode).toBe(403);
-    await app.close();
-  });
-
-  it('projects activity fields into the listing', async () => {
-    const app = await makeApp({
-      list: async () => [
-        {
-          id: '1',
-          eventType: 'AUTHZ_DENIED',
-          timestamp: new Date('2026-07-03T00:00:00.000Z'),
-          requestId: 'req-1',
-          payload: {
-            subjectDid: 'did:key:agent',
-            correlationId: 'act_abc123',
-            serviceName: 'Helix Stay',
-            toolName: 'book_hotel',
-            requiredScope: 'book:hotel',
-            effectiveScopes: ['book:flights'],
-            result: 'blocked',
-            reason: 'INSUFFICIENT_EFFECTIVE_SCOPE',
-            resultSummary: 'book_hotel blocked',
-          },
-        },
-      ],
-    });
-
-    const response = await app.inject({
-      method: 'GET',
-      url: '/v1/audit-log?limit=10',
-      headers: { 'x-admin-api-key': 'test-admin-key-0001' },
-    });
-
-    expect(response.statusCode).toBe(200);
-    expect(JSON.parse(response.body)[0]).toMatchObject({
-      eventType: 'AUTHZ_DENIED',
-      correlationId: 'act_abc123',
-      serviceName: 'Helix Stay',
-      toolName: 'book_hotel',
-      requiredScope: 'book:hotel',
-      effectiveScopes: ['book:flights'],
-      result: 'blocked',
-      reason: 'INSUFFICIENT_EFFECTIVE_SCOPE',
-      resultSummary: 'book_hotel blocked',
-    });
-    await app.close();
-  });
-
-  it('derives delegation context from verification audit payloads', async () => {
-    const app = await makeApp({
-      list: async () => [
-        {
-          id: '1',
-          eventType: 'VP_VERIFIED',
-          timestamp: new Date('2026-07-03T00:00:00.000Z'),
-          requestId: 'req-1',
-          payload: {
-            subjectDid: 'did:key:agent',
-            vpId: 'vp:test:1',
-            result: 'success',
-            delegatedFrom: 'did:key:parent',
-            delegatedTo: 'did:key:agent',
-            parentVcId: 'vc:parent',
-            delegationDepth: 2,
-          },
-        },
-      ],
-    });
-
-    const response = await app.inject({
-      method: 'GET',
-      url: '/v1/audit-log?eventType=VP_VERIFIED&limit=10',
-      headers: { 'x-admin-api-key': 'test-admin-key-0001' },
-    });
-
-    expect(response.statusCode).toBe(200);
-    expect(JSON.parse(response.body)).toEqual([
-      {
-        id: '1',
-        eventType: 'VP_VERIFIED',
-        timestamp: '2026-07-03T00:00:00.000Z',
-        subjectDid: 'did:key:agent',
-        vcId: 'vp:test:1',
-        result: 'success',
-        delegatedFrom: 'did:key:parent',
-        delegatedTo: 'did:key:agent',
-        parentVcId: 'vc:parent',
-        delegationDepth: 2,
-      },
-    ]);
-    await app.close();
+    const list = await app.inject({ method: 'GET', url: '/v1/audit-log?family=proof', headers: admin });
+    expect((list.json() as Array<{ event: AuditProducerEvent }>)[0]!.event.source).toMatchObject({ sourceId: 'helix-api', sourceSequence: '1' });
   });
 });

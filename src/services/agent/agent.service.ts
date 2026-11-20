@@ -4,7 +4,6 @@ import {
   AgentAlreadyOnboardedError,
   AgentActiveCredentialNotFoundError,
   AgentKeyNotFoundError,
-  AuditEvents,
   ChallengeAlreadyVerifiedError,
   ChallengeExpiredError,
   ChallengeNotFoundError,
@@ -23,7 +22,15 @@ import {
   verifySignature,
   VPBuilder,
   VPMultipleActiveVCError,
-  type IAuditLogger,
+  UNKNOWN_DELEGATION_REF,
+  credentialDigest,
+  delegationRef,
+  jsonDigest,
+  publicDid,
+  type AuditEventInput,
+  type AuditTrail,
+  type Digest,
+  type PartyRef,
   type SignedVC,
   type SignedVP,
 } from '../../core/index.js';
@@ -101,17 +108,43 @@ function extractPublicKeyHex(doc: Awaited<ReturnType<IDIDService['resolveDID']>>
   throw new ChallengeSignatureInvalidError();
 }
 
+
+const DID_PATTERN = /^did:[^\r\n]+$/;
+
+/** A `public_did` reference, or nothing when the value is not a DID: the event then names no party rather than failing validation. */
+function didRef(value: string | undefined): PartyRef | undefined {
+  return value !== undefined && DID_PATTERN.test(value) ? publicDid(value) : undefined;
+}
+
+function reportAuditFailure(error: unknown): void {
+  console.error('AUDIT_RECORD_FAILED', error instanceof Error ? error.message : String(error));
+}
+
+/** The `consentRef` an enrollment token is recorded by: the digest the token row is keyed on, never the token. */
+function tokenRef(tokenHash: string): string {
+  return `sha256:${tokenHash}`;
+}
+
 export class AgentService implements IAgentService {
   constructor(
     private readonly repository: AgentRepository,
     private readonly didService: IDIDService,
     private readonly vcService: IVCService,
-    private readonly auditLogger: IAuditLogger,
+    private readonly auditTrail: AuditTrail,
     private readonly agentKeyRepository: DidKeyRepository,
     private readonly keyCustody: IKeyCustody,
     private readonly enrollmentTokenTtlSeconds = 900,
     private readonly challengeTtlSeconds = 300,
   ) {}
+
+  /** Records one typed audit event; a failure to record never breaks the request. */
+  private audit(input: AuditEventInput): void {
+    try {
+      this.auditTrail.record(input).catch(reportAuditFailure);
+    } catch (error) {
+      reportAuditFailure(error);
+    }
+  }
 
   async generateEnrollmentToken(
     input: {
@@ -160,13 +193,12 @@ export class AgentService implements IAgentService {
       maxDelegationDepth: input.maxDelegationDepth ?? 0,
       expiresAt: expiresAt ?? null,
     });
-    this.auditLogger.log(AuditEvents.ENROLLMENT_TOKEN_GENERATED, {
-      requestId,
-      tokenIdHash: tokenHash,
-      agentName: input.agentName,
-      requestedScopes: input.requestedScopes,
-      // null: the token, and the agent it onboards, never expire.
-      expiresAt: expiresAt ? expiresAt.toISOString() : null,
+    this.audit({
+      eventType: 'credential.required',
+      action: { category: 'enrollment', name: 'token_generated' },
+      outcome: 'succeeded',
+      correlationId: requestId,
+      details: { family: 'consent', phase: 'credential_required', consentRef: tokenRef(tokenHash) },
     });
     return { token, ...(expiresAt ? { expiresAt: expiresAt.toISOString() } : {}) };
   }
@@ -284,14 +316,17 @@ export class AgentService implements IAgentService {
       }).sign(privateKeyHex, `${input.did}#key-1`),
     );
 
-    this.auditLogger.log(AuditEvents.AGENT_VP_SIGNED, {
-      requestId,
-      agentDid: input.did,
-      targetService: input.targetService,
-      ...(input.userDid ? { userDid: input.userDid } : {}),
-      vcIds: agentCredentials.map((vc) => vc.id),
-      grantVcIds: grants.map((grant) => grant.id),
-      ...(grantHolderDids.length > 0 ? { grantHolderDids } : {}),
+    const targetRef = didRef(input.targetService);
+    const userRef = didRef(input.userDid);
+    this.audit({
+      eventType: 'proof.generated',
+      action: { category: 'presentation', name: 'vp_signed' },
+      outcome: 'succeeded',
+      correlationId: requestId,
+      actor: publicDid(input.did),
+      ...(targetRef !== undefined ? { resource: targetRef } : {}),
+      ...(userRef !== undefined ? { responsibleParty: userRef } : {}),
+      details: { family: 'proof', phase: 'generated', proofDigest: jsonDigest(signedVP) as Digest },
     });
 
     return { signedVP };
@@ -420,13 +455,28 @@ export class AgentService implements IAgentService {
       revokeExisting: input.revokeExisting,
     });
 
-    this.auditLogger.log(AuditEvents.VC_DELEGATED, {
-      requestId,
-      delegatorDid: input.did,
-      delegateDid: input.to,
-      scopes: input.scopes,
-      delegatedVcId: delegatedVC.id,
-      ...reconciled,
+    const delegatedRef = delegationRef(delegatedVC);
+    const delegatedDigest = credentialDigest(delegatedVC);
+    const parentId = (fromVC as { id?: unknown }).id;
+    this.audit({
+      eventType: 'delegation.issued',
+      action: { category: 'delegation' },
+      outcome: 'succeeded',
+      correlationId: requestId,
+      actor: publicDid(input.did),
+      resource: publicDid(input.to),
+      authorization: {
+        source: 'delegation',
+        decision: 'allowed',
+        ...(delegatedRef !== undefined ? { delegationRef: delegatedRef } : {}),
+        ...(delegatedDigest !== undefined ? { delegationCredentialDigest: delegatedDigest } : {}),
+      },
+      details: {
+        family: 'delegation',
+        phase: 'issued',
+        delegationRef: delegatedRef ?? UNKNOWN_DELEGATION_REF,
+        ...(typeof parentId === 'string' ? { parentRef: parentId } : {}),
+      },
     });
 
     return { delegatedVC, ...reconciled };
@@ -499,11 +549,13 @@ export class AgentService implements IAgentService {
       throw new EnrollmentTokenAlreadyUsedError();
     }
     if (tokenRecord.expiresAt && tokenRecord.expiresAt.getTime() <= Date.now()) {
-      this.auditLogger.log(AuditEvents.ENROLLMENT_TOKEN_REJECTED, {
-        requestId,
-        tokenIdHash: tokenHash,
-        reason: 'expired',
-        timestamp: new Date().toISOString(),
+      this.audit({
+        eventType: 'credential.failed',
+        action: { category: 'enrollment', name: 'token_rejected' },
+        outcome: 'failed',
+        correlationId: requestId,
+        reason: { code: 'enrollment_token_expired' },
+        details: { family: 'consent', phase: 'credential_failed', consentRef: tokenRef(tokenHash) },
       });
       throw new EnrollmentTokenExpiredError();
     }
@@ -542,17 +594,20 @@ export class AgentService implements IAgentService {
       enrollmentTokenId: tokenRecord.id,
     });
 
-    this.auditLogger.log(AuditEvents.ENROLLMENT_TOKEN_CONSUMED, {
-      requestId,
-      tokenIdHash: tokenHash,
-      timestamp: new Date().toISOString(),
+    this.audit({
+      eventType: 'credential.verified',
+      action: { category: 'enrollment', name: 'token_consumed' },
+      outcome: 'succeeded',
+      correlationId: requestId,
+      details: { family: 'consent', phase: 'credential_verified', consentRef: tokenRef(tokenHash) },
     });
-    this.auditLogger.log(AuditEvents.CHALLENGE_ISSUED, {
-      requestId,
-      challengeId,
-      did: '',
-      purpose: 'agent_onboarding',
-      expiresAt: expiresAt.toISOString(),
+    // The agent has no DID yet, so this challenge names no actor.
+    this.audit({
+      eventType: 'credential.required',
+      action: { category: 'challenge', name: 'agent_onboarding' },
+      outcome: 'succeeded',
+      correlationId: requestId,
+      details: { family: 'consent', phase: 'credential_required', consentRef: challengeId },
     });
 
     return {
@@ -648,18 +703,21 @@ export class AgentService implements IAgentService {
     );
 
     await this.repository.markChallengeVerified(input.challengeId);
-    this.auditLogger.log(AuditEvents.CHALLENGE_VERIFIED, {
-      requestId,
-      challengeId: input.challengeId,
-      did: didResult.did,
-      purpose: 'agent_onboarding',
-      success: true,
+    this.audit({
+      eventType: 'credential.verified',
+      action: { category: 'challenge', name: 'agent_onboarding' },
+      outcome: 'succeeded',
+      correlationId: requestId,
+      actor: publicDid(didResult.did),
+      details: { family: 'consent', phase: 'credential_verified', consentRef: input.challengeId },
     });
-    this.auditLogger.log(AuditEvents.AGENT_ONBOARDED, {
-      requestId,
-      agentDid: didResult.did,
-      agentName,
-      hederaTransactionId: didResult.hederaTransactionId,
+    this.audit({
+      eventType: 'credential.verified',
+      action: { category: 'onboarding', name: 'agent_onboarded' },
+      outcome: 'succeeded',
+      correlationId: requestId,
+      actor: publicDid(didResult.did),
+      details: { family: 'consent', phase: 'credential_verified', consentRef: vc.vcId },
     });
 
     return {
@@ -688,12 +746,14 @@ export class AgentService implements IAgentService {
       expiresAt,
       enrollmentTokenId: null,
     });
-    this.auditLogger.log(AuditEvents.CHALLENGE_ISSUED, {
-      requestId,
-      challengeId,
-      did: input.did,
-      purpose: input.purpose,
-      expiresAt: expiresAt.toISOString(),
+    const actor = didRef(input.did);
+    this.audit({
+      eventType: 'credential.required',
+      action: { category: 'challenge', name: input.purpose },
+      outcome: 'succeeded',
+      correlationId: requestId,
+      ...(actor !== undefined ? { actor } : {}),
+      details: { family: 'consent', phase: 'credential_required', consentRef: challengeId },
     });
     return { challengeId, nonce, expiresAt: expiresAt.toISOString() };
   }
@@ -740,17 +800,22 @@ export class AgentService implements IAgentService {
       );
       vc = issued.vc;
     }
-    this.auditLogger.log(AuditEvents.CHALLENGE_VERIFIED, {
-      requestId,
-      challengeId,
-      did: challenge.did,
-      purpose: 'user_verification',
-      success: true,
+    const actor = didRef(challenge.did);
+    this.audit({
+      eventType: 'credential.verified',
+      action: { category: 'challenge', name: 'user_verification' },
+      outcome: 'succeeded',
+      correlationId: requestId,
+      ...(actor !== undefined ? { actor } : {}),
+      details: { family: 'consent', phase: 'credential_verified', consentRef: challengeId },
     });
-    this.auditLogger.log(AuditEvents.USER_DID_VERIFIED, {
-      requestId,
-      userDid: challenge.did,
-      timestamp: new Date().toISOString(),
+    this.audit({
+      eventType: 'credential.verified',
+      action: { category: 'user_verification' },
+      outcome: 'succeeded',
+      correlationId: requestId,
+      ...(actor !== undefined ? { actor } : {}),
+      details: { family: 'consent', phase: 'credential_verified' },
     });
     return { did: challenge.did, verified: true, vc };
   }

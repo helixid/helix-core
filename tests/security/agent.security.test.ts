@@ -7,9 +7,9 @@ import { AgentService } from '../../src/services/agent/agent.service.js';
 import { AesGcmKeyCustody } from '../../src/services/key-custody/key-custody.js';
 import { MockDIDService } from '../mocks/MockDIDService.js';
 import { MockVCService } from '../mocks/MockVCService.js';
-import { TestAuditLogger } from '../utils/TestAuditLogger.js';
+import { TestAuditTrail } from '../utils/TestAuditTrail.js';
 
-function makeApp(auditLogger = new TestAuditLogger()) {
+function makeApp(auditLogger = new TestAuditTrail()) {
   const app = Fastify();
   const service = new AgentService(
     new AgentRepository(),
@@ -69,6 +69,11 @@ describe('agent security', () => {
       url: '/v1/onboard',
       payload: { enrollmentToken: token, domains: [] }
     });
+    await auditLogger.flush();
+    // The onboarding did record: a token digest, never the token.
+    expect(auditLogger.eventTypes).toEqual(
+      expect.arrayContaining(['credential.required', 'credential.verified']),
+    );
     const allLogs = JSON.stringify(auditLogger.events);
     expect(allLogs.includes(token)).toBe(false);
   });

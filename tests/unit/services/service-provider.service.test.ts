@@ -2,6 +2,7 @@
 // Licensed under the Apache License, Version 2.0
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { TestAuditTrail } from '../../utils/TestAuditTrail.js';
 import {
   AgentActiveCredentialNotFoundError,
   DelegateeNotAnAgentError,
@@ -26,7 +27,7 @@ describe('ServiceProviderService', () => {
   let keyCustody: AesGcmKeyCustody;
   let vcService: MockVCService;
   let didService: any;
-  let audit: any;
+  let audit: TestAuditTrail;
   let service: ServiceProviderService;
   let publicKeys: Record<string, string>;
 
@@ -43,7 +44,7 @@ describe('ServiceProviderService', () => {
         return { did, didDocument: buildDIDDocument(did, publicKeyHex), hederaTransactionId: 'x' };
       }),
     };
-    audit = { log: vi.fn() };
+    audit = new TestAuditTrail();
     service = new ServiceProviderService(didService, vcService, services, didKeys, keyCustody, audit);
     // The agent's own onboarding credential: what any consent to it may grant.
     vcService.setActiveVC(agentVC(['read:calendar', 'a', 'b', 'x']));
