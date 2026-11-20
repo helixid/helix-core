@@ -1,0 +1,20 @@
+# KYA-OS Helix fixtures
+
+The Helix-made fixture set for the KYA-OS profile (stories rule 6): generated
+once from helix-core's own implementation by
+`scripts/generate-kya-os-helix-fixtures.ts` (`pnpm generate:kya-os-helix`),
+checked in, and consumed by helix-core, helix-sdk-py and e2e-playwright so the
+numbers live in exactly one place. The vendored KYA-OS suite itself is next
+door in `fixtures/kya-os/` (see its `PIN.md`).
+
+| File       | Story | Covers                                                                 |
+| ---------- | ----- | ---------------------------------------------------------------------- |
+| `jcs.json` | L1-B  | `canonicalize` / `hashJson` (RFC 8785 canonical form and `sha256:<hex>`) over sample values: key order at every depth, UTF-16 member order, string escapes, float layout, an MCP tool call's covered request and response body, an unsigned DelegationCredential and StatusList2021 credential. |
+
+Regenerate whenever the generating source changes and commit the diff in the
+same PR. Do not hand-edit.
+
+Who enforces it: `tests/unit/kya-os/*.test.ts` here re-derive every vector
+from current source; helix-sdk-py's `tests/test_jcs.py` reads this directory
+from the sibling `helix-core` checkout (or `HELIX_CORE_DIR`); the e2e spec
+`tests/suite/kya-os/l1-b-canonical-json.spec.ts` runs both languages over it.
