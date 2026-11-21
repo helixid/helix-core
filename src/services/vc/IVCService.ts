@@ -15,6 +15,9 @@ export interface IssueVCInput {
   maxDelegationDepth?: number;
   parentVcId?: string;
   revokeExisting?: boolean;
+  /** KYA-OS story F-3: recorded on the agent's identity credential. */
+  keyCustody?: 'self' | 'helix';
+  didHosting?: 'own' | 'helix';
 }
 
 export interface IssueVCResult extends Partial<ReconcileResult> {

@@ -57,6 +57,7 @@
     "generate:jws-fixtures": "tsx scripts/generate-jws-fixtures.ts",
     "generate:did-fixtures": "tsx scripts/generate-did-fixtures.ts",
     "generate:entity-card-fixtures": "tsx scripts/generate-entity-card-fixtures.ts",
+    "generate:custody-fixtures": "tsx scripts/generate-custody-fixtures.ts",
     "setup": "tsx scripts/setup.ts",
     "setup:hedera": "tsx scripts/setup-hedera.ts",
     "changeset": "changeset",

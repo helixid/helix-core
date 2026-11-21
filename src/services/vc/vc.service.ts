@@ -75,6 +75,9 @@ export interface IssueVCParams extends ReconcileOptions {
   delegationDepth?: number | undefined;
   maxDelegationDepth?: number | undefined;
   parentVcId?: string | undefined;
+  /** KYA-OS story F-3: recorded on the agent's identity credential. */
+  keyCustody?: 'self' | 'helix' | undefined;
+  didHosting?: 'own' | 'helix' | undefined;
 }
 
 export interface IssueVCResult extends Partial<ReconcileResult> {
@@ -623,6 +626,8 @@ export class VCService implements IVCService {
                 ? {}
                 : { maxDelegationDepth: params.maxDelegationDepth }),
               ...(params.parentVcId ? { parentVcId: params.parentVcId } : {}),
+              ...(params.keyCustody ? { keyCustody: params.keyCustody } : {}),
+              ...(params.didHosting ? { didHosting: params.didHosting } : {}),
             },
           }
         : {

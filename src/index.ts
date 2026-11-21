@@ -127,6 +127,18 @@ export { default as entityCardRoutes, hostedUrls } from './routes/entity-card/in
 export type { EntityCardRouteOptions, EntityCardSource, EntityCardRecord } from './routes/entity-card/index.js';
 export { createEntityCardSource, assertionKeyOf } from './services/entity-card/entity-card.source.js';
 export type { EntityCardSourceOptions, EntityCardDetails } from './services/entity-card/entity-card.source.js';
+// KYA-OS story F-3: custody preference, KeyStore, custodial signing, conformance report.
+export { default as custodyRoutes } from './routes/custody/index.js';
+export type { CustodyAction, CustodyRouteOptions } from './routes/custody/index.js';
+export * from './services/custody/custody.service.js';
+export { DbKeyStore, resolveKeyEncryptionKey, DB_KEY_STORE_ALGORITHM } from './services/custody/db-key-store.js';
+export type { DbKeyStoreOptions, WrappedKeyTable, KeyEncryptionKeyConfig } from './services/custody/db-key-store.js';
+export { CustodyAudit, payloadDigest } from './services/custody/custody-audit.js';
+export type { CustodyActor } from './services/custody/custody-audit.js';
+export { pendingHopReissuer, HOP_REISSUE_PENDING_NOTE } from './services/custody/hop-reissue.js';
+export type { HopReissuer, HopReissueInput, HopReissueResult } from './services/custody/hop-reissue.js';
+export { CustodyRepository, WrappedKeyRepository, CUSTODY_STATUSES } from './repositories/custody.repository.js';
+export type { CustodyRecordRow, CustodyKeyRow, CustodyStatus, CustodyKeyLocation, CustodyKeyStatus, WrappedKeyRow } from './repositories/custody.repository.js';
 export { default as auditLogRoutes } from './routes/audit-log/index.js';
 export { default as sessionRoutes } from './routes/sessions/index.js';
 export { default as serviceProviderRoutes } from './routes/service-provider/index.js';

@@ -1,0 +1,66 @@
+{
+  "description": "KYA-OS story F-3 custody fixtures. TEST-ONLY key. enrollment/rotation: the proof-of-possession message (UTF-8) and the raw Ed25519 signature, base64url without padding. sign: POST /v1/{agents|services|owners}/{did}/sign request and response.",
+  "key": {
+    "seedHex": "9f9f9f9f9f9f9f9f9f9f9f9f9f9f9f9f9f9f9f9f9f9f9f9f9f9f9f9f9f9f9f9f",
+    "publicKeyHex": "ebc198b8b8bfae7723278c3b31629f29de72829797ccc8c2ccce6d9436a4cff2",
+    "publicKeyJwk": {
+      "kty": "OKP",
+      "crv": "Ed25519",
+      "x": "68GYuLi_rncjJ4w7MWKfKd5ygpeXzMjCzM5tlDakz_I"
+    }
+  },
+  "enrollment": {
+    "prefix": "helix-enroll:v1",
+    "did": "did:web:helix.example:acme:fixture-agent",
+    "kid": "did:web:helix.example:acme:fixture-agent#key-1",
+    "nonce": "0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f",
+    "message": "helix-enroll:v1:did:web:helix.example:acme:fixture-agent:did:web:helix.example:acme:fixture-agent#key-1:0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f",
+    "signature": "F2kp8coGSwBFUV92fENgiNDpQwzsahszuUzsYXoTZTamWct_ePzh0OzDQvLl9y-N59O3FkopHr5J-jafTGGtAw",
+    "request": {
+      "enrollmentToken": "enroll:fixture",
+      "publicKeyJwk": {
+        "kty": "OKP",
+        "crv": "Ed25519",
+        "x": "68GYuLi_rncjJ4w7MWKfKd5ygpeXzMjCzM5tlDakz_I"
+      },
+      "signature": "F2kp8coGSwBFUV92fENgiNDpQwzsahszuUzsYXoTZTamWct_ePzh0OzDQvLl9y-N59O3FkopHr5J-jafTGGtAw"
+    }
+  },
+  "rotation": {
+    "prefix": "helix-rotate:v1",
+    "did": "did:web:helix.example:acme:fixture-agent",
+    "kid": "did:web:helix.example:acme:fixture-agent#key-2",
+    "issuedAt": "2026-11-21T12:00:00.000Z",
+    "message": "helix-rotate:v1:did:web:helix.example:acme:fixture-agent:did:web:helix.example:acme:fixture-agent#key-2:2026-11-21T12:00:00.000Z",
+    "signature": "NLrTFiPhZgpHarTcRS1fYNPehK8yBqgLwYEa6RwSpg_5yNQ3bwMMCqqz6qjriaDuq9mh4xZ4HGvR6jtJ0Tq4DQ"
+  },
+  "sign": {
+    "did": "did:web:helix.example:acme:fixture-agent",
+    "kid": "did:web:helix.example:acme:fixture-agent#key-1",
+    "payloadUtf8": "{\"kyaos\":\"request-proof\",\"nonce\":\"n-1\"}",
+    "request": {
+      "payload": "eyJreWFvcyI6InJlcXVlc3QtcHJvb2YiLCJub25jZSI6Im4tMSJ9"
+    },
+    "response": {
+      "did": "did:web:helix.example:acme:fixture-agent",
+      "kid": "did:web:helix.example:acme:fixture-agent#key-1",
+      "alg": "EdDSA",
+      "signature": "jw_ujO9ucOywqLM2Reo2ql3Sg8Qi7ETFRhJjnwPS3C7t-c3uEuhD5gntFQQtYQsQrRkZ41oPFDaJYJF-hUTpAQ"
+    }
+  },
+  "labels": {
+    "helix": "custody: helix",
+    "self": "custody: self"
+  },
+  "privateMaterialMembers": [
+    "d",
+    "privateKey",
+    "privateKeyHex",
+    "privateKeyJwk",
+    "privateKeyMultibase",
+    "private_key",
+    "secret",
+    "secretKey",
+    "seed"
+  ]
+}
