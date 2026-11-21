@@ -124,6 +124,48 @@ describe('CredentialService', () => {
     });
   });
 
+  describe('renewIdentity', () => {
+    it('re-issues the same agent, name and responsible party with a fresh id, links the old record and audits', async () => {
+      const first = await service.issueIdentity({ agentDid: childDid, name: 'orders-agent', ownerDid, validUntil: new Date('2027-01-01T00:00:00Z') }, 'req-1');
+      const renewed = await service.renewIdentity(first.id, {}, 'req-2');
+      expect(renewed).not.toBeNull();
+      expect(renewed!.vcId).not.toBe(first.id);
+      expect(renewed!.previousVcId).toBe(first.id);
+      expect(renewed!.vc.credentialSubject).toEqual(first.credentialSubject);
+      // Without an override the renewed credential keeps the previous validity.
+      expect(renewed!.vc.validUntil).toBe('2027-01-01T00:00:00.000Z');
+      expect(renewed!.expiresAt).toBe('2027-01-01T00:00:00.000Z');
+      expect(renewed!.statusListIndex).toBe(Number(renewed!.vc.credentialStatus.statusListIndex));
+      expect((await vcRepo.findByVcId(first.id))!.renewedByVcId).toBe(renewed!.vcId);
+      expect(audit.log).toHaveBeenCalledWith('VC_RENEWED', expect.objectContaining({ oldVcId: first.id, newVcId: renewed!.vcId, subjectDid: childDid }));
+      // The listing now leads with the renewed identity; the old one stays active.
+      expect((await service.listAgentCredentials(childDid)).identity).toMatchObject({ vcId: renewed!.vcId, status: 'active' });
+      expect((await vcRepo.findByVcId(first.id))!.revokedAt).toBeNull();
+      expect(await verifyIdentityCredential(renewed!.vc, resolve, { agentDid: childDid })).toMatchObject({ ok: true });
+    });
+
+    it('honours expiresInSeconds and carries no validity when the previous had none', async () => {
+      const open = await service.issueIdentity({ agentDid: childDid, name: 'x', ownerDid }, 'req');
+      const before = Date.now();
+      const bounded = await service.renewIdentity(open.id, { expiresInSeconds: 3600 }, 'req');
+      const until = new Date(bounded!.vc.validUntil!).getTime();
+      expect(until).toBeGreaterThanOrEqual(before + 3_600_000);
+      expect(until).toBeLessThanOrEqual(Date.now() + 3_600_000);
+      const carried = await service.renewIdentity(open.id, {}, 'req');
+      expect(carried!.vc.validUntil).toBeUndefined();
+      expect(carried!.expiresAt).toBeNull();
+    });
+
+    it('returns null for an unknown id or a credential that is not an identity, and refuses a revoked identity', async () => {
+      expect(await service.renewIdentity('urn:uuid:missing', {}, 'req')).toBeNull();
+      const [attestation] = await service.issueAttestations({ agentDid: childDid, capabilities: ['read:orders'] }, 'req');
+      expect(await service.renewIdentity(attestation!.id, {}, 'req')).toBeNull();
+      const identity = await service.issueIdentity({ agentDid: childDid, name: 'x', ownerDid }, 'req');
+      await vcRepo.revokeVc(identity.id, 'helix-status-list-1', 'list');
+      await expect(service.renewIdentity(identity.id, {}, 'req')).rejects.toMatchObject({ code: ErrorCode.VC_ALREADY_REVOKED, httpStatus: 409 });
+    });
+  });
+
   describe('attestations', () => {
     it('issues one per capability, Helix-signed by default, two years by default, and the copies carry the scope', async () => {
       const issued = await service.issueAttestations({ agentDid: childDid, capabilities: ['read:orders', 'write:orders'] }, 'req');

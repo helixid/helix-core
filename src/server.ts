@@ -249,6 +249,7 @@ await app.register(didWebRoutes, { issuerDid: config.HELIX_ISSUER_DID, didDomain
 await app.register(vcRoutes, {
   prefix: '/v1/vcs',
   vcService,
+  credentialService,
   adminApiKey: config.HELIX_ADMIN_API_KEY,
 });
 await app.register(statusListRoutes, {
