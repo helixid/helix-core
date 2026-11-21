@@ -33,6 +33,7 @@ import {
   type AuditEpochTransitionReason,
   type AuditHead,
   type AuditLedgerRecord,
+  type AuditEntryPosition,
   type AuditLedgerRef,
   type AuditLedgerStore,
   type AuditRangeQuery,
@@ -284,6 +285,20 @@ export class SqliteAuditJournal implements AuditLedgerStore {
       Math.trunc(filters.limit),
     );
     return rows.map((row) => parseStored(row.entry));
+  }
+
+  async getEntries(positions: readonly AuditEntryPosition[]): Promise<SignedAuditEntry[]> {
+    const found: SignedAuditEntry[] = [];
+    for (const position of positions) {
+      const row = this.sqlite.select<{ entry: string }>(
+        `SELECT entry FROM audit_journal_entries WHERE ledger_id = ? AND ledger_epoch_id = ? AND sequence = ?`,
+        position.ledgerId,
+        position.ledgerEpochId,
+        Number(position.sequence),
+      )[0];
+      if (row !== undefined) found.push(parseStored(row.entry));
+    }
+    return found;
   }
 
   private headRow(ledger: AuditLedgerRef): HeadRow | undefined {

@@ -28,7 +28,7 @@
 import { canonicalize } from '../crypto/jcs.js';
 import { AUDIT_ERROR_CODES, AuditProtocolError } from './ledger-errors.js';
 import type { AuditHead, AuditLedgerRef, SignedAuditEntry } from './ledger.js';
-import { auditEventFamily, type Digest, type PartyRef, type SignerRef } from './types.js';
+import { auditEventFamily, type DecimalString, type Digest, type PartyRef, type SignerRef } from './types.js';
 
 export type AuditAppendResult =
   | { kind: 'appended'; entry: SignedAuditEntry }
@@ -143,6 +143,28 @@ export interface AuditJournalReader {
   readStoredRange(ledger: AuditLedgerRef): AsyncIterable<StoredAuditEntry>;
   /** Newest first. */
   listEntries(filters: ListAuditEntriesFilters): Promise<SignedAuditEntry[]>;
+  /**
+   * The stored entries at these positions, in the order asked; a position
+   * with no entry is left out. For an index kept beside the journal (one
+   * that pages by its own keys and reads the entries here).
+   */
+  getEntries(positions: readonly AuditEntryPosition[]): Promise<SignedAuditEntry[]>;
+}
+
+/** Where one entry sits: its ledger, epoch and sequence. */
+export interface AuditEntryPosition extends AuditLedgerRef {
+  sequence: DecimalString;
+}
+
+/** The text key of a position, for matching rows to positions. */
+export function auditEntryPositionKey(position: AuditEntryPosition): string {
+  return `${position.ledgerId}\u0000${position.ledgerEpochId}\u0000${position.sequence}`;
+}
+
+/** The entries found, in the order of the positions asked (a missing one left out). */
+export function inPositionOrder(positions: readonly AuditEntryPosition[], entries: readonly SignedAuditEntry[]): SignedAuditEntry[] {
+  const byKey = new Map(entries.map((entry) => [auditEntryPositionKey(entry.core), entry]));
+  return positions.flatMap((position) => byKey.get(auditEntryPositionKey(position)) ?? []);
 }
 
 /** Everything the managed recorder needs from storage. */
@@ -365,6 +387,15 @@ export class MemoryAuditJournal implements AuditLedgerStore {
       .filter((entry) => matchesListFilters(entry, filters))
       .sort((a, b) => b.core.recordedAt - a.core.recordedAt)
       .slice(0, filters.limit);
+  }
+
+  async getEntries(positions: readonly AuditEntryPosition[]): Promise<SignedAuditEntry[]> {
+    const found: SignedAuditEntry[] = [];
+    for (const position of positions) {
+      const entry = this.epochs.get(ledgerKey(position))?.entries.find((item) => item.entry.core.sequence === position.sequence)?.entry;
+      if (entry !== undefined) found.push(entry);
+    }
+    return found;
   }
 
   /**

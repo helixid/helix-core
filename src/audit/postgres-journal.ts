@@ -29,6 +29,7 @@
 
 import type pg from 'pg';
 import {
+  inPositionOrder,
   AUDIT_ERROR_CODES,
   AuditProtocolError,
   auditEventFamily,
@@ -44,6 +45,7 @@ import {
   type AuditEpochTransitionReason,
   type AuditHead,
   type AuditLedgerRecord,
+  type AuditEntryPosition,
   type AuditLedgerRef,
   type AuditLedgerStore,
   type AuditRangeQuery,
@@ -332,6 +334,17 @@ export class PostgresAuditJournal implements AuditLedgerStore {
       values,
     );
     return rows.map((row) => parseStored(row.entry));
+  }
+
+  async getEntries(positions: readonly AuditEntryPosition[]): Promise<SignedAuditEntry[]> {
+    if (positions.length === 0) return [];
+    const { rows } = await this.pool.query<{ entry: string }>(
+      `SELECT e."entry" FROM "audit_journal_entries" e
+         JOIN unnest($1::text[], $2::text[], $3::bigint[]) AS p("ledgerId", "ledgerEpochId", "sequence")
+           ON e."ledgerId" = p."ledgerId" AND e."ledgerEpochId" = p."ledgerEpochId" AND e."sequence" = p."sequence"`,
+      [positions.map((p) => p.ledgerId), positions.map((p) => p.ledgerEpochId), positions.map((p) => p.sequence)],
+    );
+    return inPositionOrder(positions, rows.map((row) => parseStored(row.entry)));
   }
 
   private async readHead(db: Queryable, ledger: AuditLedgerRef): Promise<AuditHead | null> {

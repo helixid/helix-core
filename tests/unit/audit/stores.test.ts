@@ -21,6 +21,7 @@ import {
   AuditProtocolError,
   FileRecorderWitness,
   MemoryAuditJournal,
+  inPositionOrder,
   MemoryAuditSink,
   MemoryRecorderWitness,
   assertAuditProviderContract,
@@ -204,6 +205,14 @@ describe('SQLite audit storage', () => {
     const all = await journal.listEntries({ ledgerId, limit: 10 });
     expect(all.map((entry) => entry.core.sequence)).toEqual(['2', '1', '0']);
     expect(await journal.listEntries({ eventType: 'tool.call.completed', family: 'tool', correlationId: 'call-a', since: new Date(0), limit: 10 })).toHaveLength(1);
+    // By position, in the order asked, a missing one left out; the memory journal answers the same.
+    const positions = [all[2]!.core, { ...all[0]!.core, sequence: '99' }, all[0]!.core];
+    expect((await journal.getEntries(positions)).map((entry) => entry.core.sequence)).toEqual(['0', '2']);
+    const memory = new MemoryAuditJournal();
+    const memoryAudit = createApiAudit(baseConfig, { journal: memory, evidence: new MemoryAuditEvidenceStore() }, { signer: testRecorderSigner(), witness: new MemoryRecorderWitness() });
+    const recorded = await memoryAudit.recorder.submit(submission(producerEvent('m')), contextFor(producerEvent('m')));
+    expect(await memory.getEntries([recorded.core, { ...recorded.core, ledgerEpochId: 'none' }])).toEqual([recorded]);
+    expect(inPositionOrder([recorded.core], [])).toEqual([]);
     expect(await journal.findLedgerByTenant(all[0]!.core.event.tenantRef)).toMatchObject({ ledgerId });
     expect(await journal.findLedgerByTenant(publicDid('did:web:nobody'))).toBeNull();
     expect(await journal.getLedger('nope')).toBeNull();
