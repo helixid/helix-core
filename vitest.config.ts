@@ -48,6 +48,7 @@ export default defineConfig({
       exclude: [
         'src/index.ts',
         'src/server.ts',
+        'src/cli/audit-bin.ts',
         'src/prisma.ts',
         'src/loadEnv.ts',
         'src/**/index.ts',

@@ -49,8 +49,6 @@ describe('DID API Integration', () => {
   afterEach(async () => {
     await prisma.vc.deleteMany();
     await prisma.statusListEntry.deleteMany();
-    await prisma.auditEvent.deleteMany();
-    await prisma.auditEvidence.deleteMany();
     await prisma.didUpdate.deleteMany();
     await prisma.did.deleteMany();
     mockHedera.reset();

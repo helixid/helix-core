@@ -5,8 +5,9 @@
 //    http://www.apache.org/licenses/LICENSE-2.0
 import Fastify from 'fastify';
 import { describe, expect, it } from 'vitest';
-import { AuditTrail, pairwiseDid, publicDid, type AuditProducerEvent } from '../../src/core/index.js';
-import { MemoryAuditStore } from '../../src/audit/index.js';
+import { MemoryRecorderWitness, pairwiseDid, type AuditProducerEvent } from '../../src/core/index.js';
+import { createApiAudit, createApiAuditStorage, type ApiAudit, type ApiAuditConfig } from '../../src/audit/index.js';
+import { testRecorderSigner } from '../utils/auditLedger.js';
 import { errorHandler } from '../../src/middleware/errorHandler.js';
 import auditLogRoutes from '../../src/routes/audit-log/index.js';
 import { fixture } from '../unit/core/audit/fixture.js';
@@ -14,12 +15,36 @@ import { fixture } from '../unit/core/audit/fixture.js';
 const ADMIN = 'test-admin-key-0001';
 const admin = { 'x-admin-api-key': ADMIN };
 
-async function makeApp(store = new MemoryAuditStore()) {
+const config: ApiAuditConfig = {
+  NODE_ENV: 'test',
+  AUDIT_LOG_DESTINATION: 'none',
+  AUDIT_LOG_PATH: undefined,
+  AUDIT_SOURCE_ID: 'helix-api',
+  AUDIT_INCLUDE_TOOL_NAMES: false,
+  AUDIT_EVIDENCE_KEY: undefined,
+  AUDIT_EVIDENCE_KEY_ID: 'evidence-key-v1',
+  HELIX_ISSUER_DID: 'did:web:issuer.example',
+  HELIX_SIGNING_KEY: 'a'.repeat(64),
+  AUDIT_RECORDER_SIGNING_KEY: undefined,
+  AUDIT_RECORDER_DID: undefined,
+  AUDIT_RECORDER_KID: undefined,
+  AUDIT_RECORDER_MODE: 'managed',
+  AUDIT_RECORDER_TENANTS: undefined,
+  AUDIT_RECORDER_WITNESS_PATH: undefined,
+  AUDIT_RETENTION_MIN_DAYS: 0,
+};
+
+function makeAudit(): ApiAudit {
+  return createApiAudit(config, createApiAuditStorage({}), { signer: testRecorderSigner(), witness: new MemoryRecorderWitness() });
+}
+
+async function makeApp(audit = makeAudit()) {
   const app = Fastify({ logger: false });
   app.setErrorHandler(errorHandler);
-  await app.register(auditLogRoutes, { prefix: '/v1/audit-log', auditStore: store, adminApiKey: ADMIN });
+  await app.register(auditLogRoutes, { prefix: '/v1/audit-log', audit, adminApiKey: ADMIN });
   await app.ready();
-  return { app, store };
+  const store = { list: (filters: { limit: number }) => audit.storage.journal.listEntries(filters) };
+  return { app, store, audit };
 }
 
 /** A producer event as the middleware would post it: its own source sequence and predecessor. */
@@ -33,20 +58,27 @@ describe('audit log routes (KYA-OS A-1)', () => {
     const event = producerEvent();
     const posted = await app.inject({ method: 'POST', url: '/v1/audit-log/events', headers: admin, payload: event });
     expect(posted.statusCode, posted.body).toBe(201);
-    expect(posted.json()).toEqual({ recorded: true, eventId: event.eventId, eventDigest: fixture.chain.entries[1]!.digest });
+    const recorded = posted.json() as { recorded: boolean; eventId: string; eventDigest: string; entry: { core: { sequence: string; ledgerEpochId: string; event: AuditProducerEvent } } };
+    expect(recorded).toMatchObject({ recorded: true, eventId: event.eventId, eventDigest: fixture.chain.entries[1]!.digest });
+    expect(recorded.entry.core).toMatchObject({ sequence: '1', event });
     const again = await app.inject({ method: 'POST', url: '/v1/audit-log/events', headers: admin, payload: event });
     expect(again.statusCode).toBe(201);
-    expect(await store.list({ limit: 10 })).toHaveLength(1);
+    // A redelivery gets the original entry back; the ledger holds its genesis and the one event.
+    expect(again.json()).toEqual(recorded);
+    expect(await store.list({ limit: 10 })).toHaveLength(2);
 
     const list = await app.inject({ method: 'GET', url: '/v1/audit-log?eventType=tool.call.completed&limit=10', headers: admin });
     expect(list.statusCode).toBe(200);
-    const rows = list.json() as Array<{ id: string; recordedAt: string; eventDigest: string; event: AuditProducerEvent }>;
+    const rows = list.json() as Array<{ id: string; recordedAt: string; eventDigest: string; event: AuditProducerEvent; sequence: string; ledgerId: string }>;
     expect(rows).toHaveLength(1);
-    expect(rows[0]).toMatchObject({ id: '1', eventDigest: fixture.chain.entries[1]!.digest, event });
+    expect(rows[0]).toMatchObject({ id: `${rows[0]!.ledgerId}:${recorded.entry.core.ledgerEpochId}:1`, sequence: '1', eventDigest: fixture.chain.entries[1]!.digest, event });
     expect(new Date(rows[0]!.recordedAt).getTime()).toBeGreaterThan(0);
     expect(rows[0]!.event.source).toMatchObject({ sourceSequence: '2', previousSourceEventDigest: fixture.chain.entries[0]!.digest });
     expect((await app.inject({ method: 'GET', url: '/v1/audit-log?family=session', headers: admin })).json()).toEqual([]);
     expect((await app.inject({ method: 'GET', url: '/v1/audit-log?correlationId=call-0001&since=2020-01-01T00:00:00Z', headers: admin })).json()).toHaveLength(1);
+    expect((await app.inject({ method: 'GET', url: `/v1/audit-log?ledgerId=${rows[0]!.ledgerId}`, headers: admin })).json()).toHaveLength(2);
+    // The same key as a bearer token is accepted (the middleware reporter sends it that way).
+    expect((await app.inject({ method: 'GET', url: '/v1/audit-log', headers: { authorization: `Bearer ${ADMIN}` } })).statusCode).toBe(200);
   });
 
   it('refuses an event with an unknown member, a wrong family, or a secret-shaped extra, with the path', async () => {
@@ -77,6 +109,7 @@ describe('audit log routes (KYA-OS A-1)', () => {
     expect((await app.inject({ method: 'POST', url: '/v1/audit-log/events', headers: admin, payload: event })).statusCode).toBe(201);
     const res = await app.inject({ method: 'POST', url: '/v1/audit-log/events', headers: admin, payload: { ...event, outcome: 'failed' } });
     expect(res.statusCode).toBe(409);
+    expect((res.json() as { error: { code: string } }).error.code).toBe('AUDIT_EVENT_ID_CONFLICT');
   });
 
   it('is admin-gated on every route', async () => {
@@ -92,7 +125,7 @@ describe('audit log routes (KYA-OS A-1)', () => {
     }
     const noKey = Fastify({ logger: false });
     noKey.setErrorHandler(errorHandler);
-    await noKey.register(auditLogRoutes, { prefix: '/v1/audit-log', auditStore: new MemoryAuditStore() });
+    await noKey.register(auditLogRoutes, { prefix: '/v1/audit-log', audit: makeAudit() });
     await noKey.ready();
     expect((await noKey.inject({ method: 'GET', url: '/v1/audit-log', headers: admin })).statusCode).toBe(403);
   });
@@ -132,11 +165,10 @@ describe('audit log routes (KYA-OS A-1)', () => {
     }
   });
 
-  it('records what the API trail produces through the same store', async () => {
-    const store = new MemoryAuditStore();
-    const { app } = await makeApp(store);
-    const trail = new AuditTrail({ sink: store, sourceId: 'helix-api', producer: publicDid('did:web:issuer.example'), tenantRef: publicDid('did:web:issuer.example') });
-    await trail.record({
+  it('records what the API trail produces through the same recorder', async () => {
+    const audit = makeAudit();
+    const { app } = await makeApp(audit);
+    await audit.trail.record({
       eventType: 'proof.verified',
       actor: pairwiseDid('did:key:zAgent'),
       action: { category: 'presentation' },

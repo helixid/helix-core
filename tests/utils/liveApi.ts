@@ -56,9 +56,8 @@ export async function resetLiveTestDatabase(): Promise<void> {
   if (usingSqliteAdapter()) return;
   assertTestDatabaseUrl(process.env['DATABASE_URL']);
   const prisma = createTestPrisma();
-  // Test-only reset: the API itself has no delete path for audit rows.
-  await prisma.auditEvent.deleteMany();
-  await prisma.auditEvidence.deleteMany();
+  // The audit journal and vault are not reset: they are append-only, and the
+  // database refuses deletes (story A-2). Ledgers simply carry on across tests.
   // services and agents came with the service-provider revamp; a service name
   // is unique per server, so a stale 'amazon' would 409 the next file.
   await prisma.service.deleteMany();

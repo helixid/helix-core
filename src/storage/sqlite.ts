@@ -1,6 +1,7 @@
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import Database from 'better-sqlite3';
+import { AUDIT_EVIDENCE_SQLITE_TRIGGERS, AUDIT_JOURNAL_SQLITE_DDL } from '../audit/sqlite-schema.js';
 import { vcLookupColumns } from '../core/vc-lookup.js';
 
 function shellQuote(value: string): string {
@@ -166,28 +167,6 @@ CREATE INDEX IF NOT EXISTS idx_agents_credential_vc_id ON agents(credential_vc_i
 
 DROP TABLE IF EXISTS audit_log;
 
-CREATE TABLE IF NOT EXISTS audit_events (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  event_id TEXT NOT NULL,
-  event_type TEXT NOT NULL,
-  family TEXT NOT NULL,
-  source_id TEXT NOT NULL,
-  source_sequence INTEGER,
-  previous_source_event_digest TEXT,
-  event_digest TEXT NOT NULL UNIQUE,
-  occurred_at TEXT NOT NULL,
-  recorded_at TEXT NOT NULL,
-  correlation_id TEXT,
-  actor_ref TEXT,
-  canonical TEXT NOT NULL,
-  event_json TEXT NOT NULL,
-  UNIQUE (source_id, event_id)
-);
-CREATE INDEX IF NOT EXISTS idx_audit_events_type_recorded ON audit_events(event_type, recorded_at);
-CREATE INDEX IF NOT EXISTS idx_audit_events_family_recorded ON audit_events(family, recorded_at);
-CREATE INDEX IF NOT EXISTS idx_audit_events_correlation ON audit_events(correlation_id);
-CREATE INDEX IF NOT EXISTS idx_audit_events_actor ON audit_events(actor_ref);
-
 CREATE TABLE IF NOT EXISTS audit_evidence (
   object_id TEXT PRIMARY KEY,
   ciphertext_digest TEXT NOT NULL,
@@ -202,10 +181,23 @@ CREATE TABLE IF NOT EXISTS audit_evidence (
     );
     this.migrateAgentKeysToDidKeys();
     this.migrateVcLookupColumns();
+    this.migrateAuditJournal();
 
     if (this.extraDdl) {
       this.db.exec(this.extraDdl);
     }
+  }
+
+  /**
+   * Story A-2: the recorder's journal, holds and evidence disposal columns.
+   * Idempotent; on a file from A-1 it drops the capture table it replaces.
+   */
+  private migrateAuditJournal(): void {
+    this.db.exec(AUDIT_JOURNAL_SQLITE_DDL);
+    const columns = new Set((this.db.prepare(`PRAGMA table_info(audit_evidence)`).all() as Array<{ name: string }>).map((c) => c.name));
+    if (!columns.has('disposed_at')) this.db.exec(`ALTER TABLE audit_evidence ADD COLUMN disposed_at TEXT`);
+    if (!columns.has('disposal_reason')) this.db.exec(`ALTER TABLE audit_evidence ADD COLUMN disposal_reason TEXT`);
+    this.db.exec(AUDIT_EVIDENCE_SQLITE_TRIGGERS);
   }
 
   /**
@@ -273,5 +265,21 @@ CREATE TABLE IF NOT EXISTS audit_evidence (
 
   query<T = Record<string, unknown>>(sql: string): T[] {
     return this.db.prepare(sql).all() as T[];
+  }
+
+  /** A parameterised query (`?` placeholders). */
+  select<T = Record<string, unknown>>(sql: string, ...params: unknown[]): T[] {
+    return this.db.prepare(sql).all(...params) as T[];
+  }
+
+  /** A parameterised statement; how many rows it changed. */
+  write(sql: string, ...params: unknown[]): { changes: number } {
+    const result = this.db.prepare(sql).run(...params);
+    return { changes: result.changes };
+  }
+
+  /** Runs `fn` in one `BEGIN IMMEDIATE` transaction: committed if it returns, rolled back if it throws. */
+  transaction<T>(fn: () => T): T {
+    return this.db.transaction(fn).immediate();
   }
 }
