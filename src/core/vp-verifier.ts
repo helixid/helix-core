@@ -1,6 +1,7 @@
 import { getBit, type StatusListCredential } from './status-list/index.js';
 import { StatusListCredentialSchema } from './status-list/schema.js';
 import { resolveDID, applyLoopbackResolveOverride } from './did-resolver.js';
+import { getOutboundFetch } from './net/outbound.js';
 import { verifyEd25519Proof } from './proof.js';
 import {
   ConsentGrantInvalidError,
@@ -161,7 +162,8 @@ function verifyValidityWindow(vc: SignedVC): void {
  * own.
  */
 export async function fetchStatusList(statusListUrl: string): Promise<StatusListCredential> {
-  const response = await fetch(applyLoopbackResolveOverride(statusListUrl), {
+  // KYA-OS story C-A: status lists are read through SafeFetch (net/outbound.ts).
+  const response = await getOutboundFetch()(applyLoopbackResolveOverride(statusListUrl), {
     headers: { accept: 'application/vc+json, application/json' },
   });
   if (!response.ok) {

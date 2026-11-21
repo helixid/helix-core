@@ -7,6 +7,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+  setOutboundFetch,
   EnvSigner,
   buildDidDocument,
   clearDIDCache,
@@ -29,7 +30,7 @@ const fixtures = JSON.parse(checkedIn) as DidFixtures;
 
 describe('fixtures/kya-os-helix/did.json', () => {
   afterEach(() => {
-    vi.unstubAllGlobals();
+    setOutboundFetch(undefined);
     clearDIDCache();
   });
 
@@ -65,7 +66,7 @@ describe('fixtures/kya-os-helix/did.json', () => {
     });
 
     it(`key ${name}: did:web and did:key resolve to the same raw key and JWK, and a JWS with kid <did>#<fragment> verifies by kid`, async () => {
-      vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify(key.did_web_document), { status: 200 })));
+      setOutboundFetch(vi.fn(async () => new Response(JSON.stringify(key.did_web_document), { status: 200 })));
       const viaWeb = await resolveDid(key.did_web);
       const viaKey = await resolveDid(key.did_key);
       expect(Buffer.from(viaWeb.rawKey).toString('hex')).toBe(key.resolved.raw_key_hex);

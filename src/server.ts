@@ -42,6 +42,8 @@ import statusListRoutes from './routes/status-list/index.js';
 import vpRoutes from './routes/vp/index.js';
 import agentRoutes from './routes/agent/index.js';
 import agentKeyRoutes from './routes/agent-keys/index.js';
+import entityCardRoutes from './routes/entity-card/index.js';
+import { createEntityCardSource } from './services/entity-card/entity-card.source.js';
 import auditLogRoutes from './routes/audit-log/index.js';
 import sessionRoutes from './routes/sessions/index.js';
 import serviceProviderRoutes from './routes/service-provider/index.js';
@@ -264,6 +266,8 @@ await app.register(serviceProviderRoutes, {
   serviceProviderService,
   adminApiKey: config.HELIX_ADMIN_API_KEY,
 });
+// KYA-OS story C-A: /{path}/did.json, /{path}/card.json and /.well-known/kya-os-card.json; after the static routes, so the wildcard never shadows them.
+await app.register(entityCardRoutes, { source: createEntityCardSource({ host: config.DID_DOMAIN, didRepository, services: serviceRepository }) });
 
 const shutdown = async (): Promise<void> => {
   app.log.info('Helix ID API shutting down...');

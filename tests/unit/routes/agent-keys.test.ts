@@ -9,6 +9,7 @@ import {
   didKeyFromPublicKey,
   publicKeyBytesToJwk,
   resolveDid,
+  setOutboundFetch,
 } from '../../../src/core/index.js';
 import { errorHandler } from '../../../src/middleware/errorHandler.js';
 import agentKeyRoutes, { AGENT_KEY_UPDATE_TYPE, readRegisterAgentKeyBody, type AgentKeyRouteOptions } from '../../../src/routes/agent-keys/index.js';
@@ -91,7 +92,7 @@ describe('POST /v1/agents/:did/keys', () => {
 
     // What was stored resolves (through the did:web route's serving of it) to the same key did:key gives.
     const served = (await h.repository.findDidById(AGENT_DID)) as { didDocument: unknown };
-    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify(served.didDocument), { status: 200 })));
+    setOutboundFetch(vi.fn(async () => new Response(JSON.stringify(served.didDocument), { status: 200 })));
     try {
       const viaWeb = await resolveDid(AGENT_DID);
       const viaKey = await resolveDid(body.didKey);
@@ -99,7 +100,7 @@ describe('POST /v1/agents/:did/keys', () => {
       expect(viaWeb.jwk.x).toBe(viaKey.jwk.x);
       expect(viaWeb.kid).toBe(body.kid);
     } finally {
-      vi.unstubAllGlobals();
+      setOutboundFetch(undefined);
       clearDIDCache();
     }
     await h.app.close();

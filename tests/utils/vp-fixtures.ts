@@ -6,6 +6,7 @@
 
 import { vi } from 'vitest';
 import {
+  setOutboundFetch,
   buildStatusListCredential,
   createEd25519Proof,
   createStatusList,
@@ -137,14 +138,22 @@ export function makeVcServiceStub(lists: Record<string, StatusListCredential>): 
   } as unknown as IVCService;
 }
 
-export function stubFetch(bodies: Record<string, unknown>): ReturnType<typeof vi.spyOn> {
-  return vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
+/**
+ * Serves canned bodies to the verify path's outbound read (KYA-OS story C-A:
+ * status lists and DID documents go through the SafeFetch seam in
+ * src/core/net/outbound.ts, not globalThis.fetch). Reset with
+ * `setOutboundFetch(undefined)` (vi.restoreAllMocks does not do it).
+ */
+export function stubFetch(bodies: Record<string, unknown>): ReturnType<typeof vi.fn> {
+  const spy = vi.fn(async (url: string) => {
     const body = bodies[String(url)];
     if (body === undefined) {
       return { ok: false, status: 404, json: async () => ({}) } as Response;
     }
     return { ok: true, status: 200, json: async () => body } as Response;
   });
+  setOutboundFetch(spy);
+  return spy;
 }
 
 export function decodeJwtPayload(token: string): Record<string, unknown> {

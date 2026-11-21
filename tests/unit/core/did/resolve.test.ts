@@ -4,6 +4,8 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  getOutboundFetch,
+  setOutboundFetch,
   InvalidJWSError,
   UnsupportedDIDMethodError,
   ValidationError,
@@ -34,7 +36,7 @@ function servedJson(body: unknown, status = 200): typeof fetch {
 
 describe('resolveDid', () => {
   beforeEach(() => clearDIDCache());
-  afterEach(() => vi.unstubAllGlobals());
+  afterEach(() => setOutboundFetch(undefined));
 
   it('decodes did:key locally into the same raw key and JWK the did:web document publishes', async () => {
     const fromKey = await resolveDid(DID_KEY);
@@ -44,14 +46,14 @@ describe('resolveDid', () => {
     expect(fromKey.document).toEqual(didKeyDocument(DID_KEY));
     expect(resolveDidKey(DID_KEY)).toEqual(fromKey);
 
-    vi.stubGlobal('fetch', servedJson(DOCUMENT));
+    setOutboundFetch(servedJson(DOCUMENT));
     const fromWeb = await resolveDid(DID_WEB);
     expect(fromWeb.rawKey).toEqual(fromKey.rawKey);
     expect(fromWeb.jwk.x).toBe(fromKey.jwk.x);
     expect(fromWeb.jwk).toEqual({ ...JWK, kid: KID });
     expect(fromWeb.kid).toBe(KID);
     expect(fromWeb.document).toEqual(DOCUMENT);
-    expect(fetch).toHaveBeenCalledWith('https://agents.example.com/agents/abc/did.json', expect.anything());
+    expect(getOutboundFetch()).toHaveBeenCalledWith('https://agents.example.com/agents/abc/did.json', expect.anything());
   });
 
   it('the did:key document has the reference shape: <did>#<multibase> with both key forms (L1.6)', () => {
@@ -66,7 +68,7 @@ describe('resolveDid', () => {
   });
 
   it('selects the method a kid names, as fragment, #fragment or full id', async () => {
-    vi.stubGlobal('fetch', servedJson(DOCUMENT));
+    setOutboundFetch(servedJson(DOCUMENT));
     expect((await resolveDidWeb(DID_WEB, { kid: 'key-1' })).kid).toBe(KID);
     expect((await resolveDid(DID_WEB, { kid: '#key-1' })).kid).toBe(KID);
     expect((await resolveDid(DID_WEB, { kid: KID })).kid).toBe(KID);
@@ -95,10 +97,10 @@ describe('resolveDid', () => {
   });
 
   it('refuses a did:web document served under another id, and fails closed when the document is not served', async () => {
-    vi.stubGlobal('fetch', servedJson({ ...DOCUMENT, id: 'did:web:evil.example.com' }));
+    setOutboundFetch(servedJson({ ...DOCUMENT, id: 'did:web:evil.example.com' }));
     await expect(resolveDid(DID_WEB)).rejects.toThrow(ValidationError);
     clearDIDCache();
-    vi.stubGlobal('fetch', servedJson({ error: 'not found' }, 404));
+    setOutboundFetch(servedJson({ error: 'not found' }, 404));
     await expect(resolveDid(DID_WEB)).rejects.toThrow(/HTTP 404/);
   });
 
@@ -109,7 +111,7 @@ describe('resolveDid', () => {
       expect(imports.filter((i) => /prisma|repositor|services|storage|sqlite|\.\.\/\.\.\/src/.test(i)), name).toEqual([]);
     }
     const fetchSpy = servedJson(DOCUMENT);
-    vi.stubGlobal('fetch', fetchSpy);
+    setOutboundFetch(fetchSpy);
     await resolveDid(DID_WEB);
     expect(fetchSpy).toHaveBeenCalledTimes(1);
     expect(resolveDidKey(DID_KEY).rawKey).toEqual(PUBLIC_KEY);

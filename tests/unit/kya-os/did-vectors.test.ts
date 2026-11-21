@@ -24,6 +24,7 @@ import {
   publicKeyFromDidKey,
   resolveDid,
   resolveDidKey,
+  setOutboundFetch,
   verifyJws,
 } from '../../../src/core/index.js';
 
@@ -115,7 +116,7 @@ describe('did-key-resolution.json (L1.6, L1.7)', () => {
 describe('did-web-resolution.json', () => {
   const file = load<DidWebInput>('did-web-resolution.json');
   beforeEach(() => clearDIDCache());
-  afterEach(() => vi.unstubAllGlobals());
+  afterEach(() => setOutboundFetch(undefined));
 
   it('has the three pinned vectors', () => {
     expect(file.vectors.map((v) => v.id)).toEqual(['did-web/valid', 'did-web/id-mismatch', 'did-web/not-found']);
@@ -130,7 +131,7 @@ describe('did-web-resolution.json', () => {
           ? new Response('not found', { status: 404 })
           : new Response(JSON.stringify(document), { status: 200, headers: { 'content-type': 'application/did+json' } });
       });
-      vi.stubGlobal('fetch', fetchSpy);
+      setOutboundFetch(fetchSpy);
       if (vector.expected === 'pass') {
         const resolved = await resolveDid(vector.input.did);
         const method = (document!['verificationMethod'] as { id: string; publicKeyJwk: { x: string }; publicKeyMultibase: string }[])[0]!;
