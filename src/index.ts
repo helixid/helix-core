@@ -120,7 +120,7 @@ export { default as statusListRoutes } from './routes/status-list/index.js';
 export { default as vpRoutes } from './routes/vp/index.js';
 export { default as agentRoutes } from './routes/agent/index.js';
 export { default as auditLogRoutes, type AuditLogRouteOptions } from './routes/audit-log/index.js';
-export { default as auditRoutes, requireAuditOperator, type AuditRouteOptions } from './routes/audit/index.js';
+export { default as auditRoutes, requireAuditOperator, type AuditRouteOptions, type AuditSubmissionAuthorizer } from './routes/audit/index.js';
 export { runAuditCli, verifyAuditLedgerExport, type AuditCliIo, type AuditLedgerExport } from './cli/audit.js';
 export { default as sessionRoutes } from './routes/sessions/index.js';
 export { default as serviceProviderRoutes } from './routes/service-provider/index.js';

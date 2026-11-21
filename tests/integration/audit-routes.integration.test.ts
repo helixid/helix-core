@@ -24,7 +24,8 @@ import {
   type ApiAuditConfig,
 } from '../../src/audit/index.js';
 import { errorHandler } from '../../src/middleware/errorHandler.js';
-import auditRoutes from '../../src/routes/audit/index.js';
+import auditRoutes, { type AuditSubmissionAuthorizer } from '../../src/routes/audit/index.js';
+import { HelixError } from '../../src/core/index.js';
 import { runAuditCli } from '../../src/cli/audit.js';
 import { TENANT, producerEvent, testRecorderSigner } from '../utils/auditLedger.js';
 
@@ -50,11 +51,14 @@ const config: ApiAuditConfig = {
   AUDIT_RETENTION_MIN_DAYS: 0,
 };
 
-async function makeApp(adminApiKey: string | null = ADMIN): Promise<{ app: ReturnType<typeof Fastify>; audit: ApiAudit }> {
+async function makeApp(
+  adminApiKey: string | null = ADMIN,
+  authorizeSubmission?: AuditSubmissionAuthorizer,
+): Promise<{ app: ReturnType<typeof Fastify>; audit: ApiAudit }> {
   const audit = createApiAudit(config, createApiAuditStorage({}), { signer: testRecorderSigner(), witness: new MemoryRecorderWitness() });
   const app = Fastify({ logger: false });
   app.setErrorHandler(errorHandler);
-  await app.register(auditRoutes, { prefix: '/v1/audit', audit, adminApiKey: adminApiKey ?? undefined });
+  await app.register(auditRoutes, { prefix: '/v1/audit', audit, adminApiKey: adminApiKey ?? undefined, authorizeSubmission });
   await app.ready();
   return { app, audit };
 }
@@ -193,5 +197,32 @@ describe('recorder routes (A-2)', () => {
     expect(partyAuthority({ kind: 'keyed_commitment', value: `sha256:${'1'.repeat(64)}`, keyId: 'k' })).toBe(`{"keyId":"k","kind":"keyed_commitment","value":"sha256:${'1'.repeat(64)}"}`);
     const { entry } = await handleAuditSubmission(audit.recorder, { producerEvent: event });
     expect(entry.core.event).toEqual(event);
+  });
+
+  it('lets a principal submit through the authorizer, for the producers it owns only', async () => {
+    const authorize: AuditSubmissionAuthorizer = async (request) => {
+      if (request.headers.authorization !== 'Bearer principal-key') throw new HelixError('ACCOUNT_AUTH_REQUIRED', 'no principal', 401);
+      return async (submission) => {
+        const context = operatorSubmissionContext(submission);
+        if (context.producerAuthority !== 'did:web:orders.example.com') throw new HelixError('AUDIT_UNAUTHORIZED_SUBMISSION', 'not your producer', 403);
+        return context;
+      };
+    };
+    const { app } = await makeApp(ADMIN, authorize);
+    const principal = { authorization: 'Bearer principal-key' };
+    const ok = await app.inject({ method: 'POST', url: '/v1/audit/submissions', headers: principal, payload: { producerEvent: producerEvent('principal-1') } });
+    expect(ok.statusCode, ok.body).toBe(201);
+    const operator = await app.inject({ method: 'POST', url: '/v1/audit/submissions', headers: admin, payload: { producerEvent: producerEvent('principal-2') } });
+    expect(operator.statusCode, operator.body).toBe(201);
+    // Unauthenticated: refused before the body is read, so a malformed body is still a 401.
+    const anonymous = await app.inject({ method: 'POST', url: '/v1/audit/submissions', payload: { nonsense: true } });
+    expect(anonymous.statusCode).toBe(401);
+    const foreign = producerEvent('principal-3');
+    const otherProducer = { ...foreign, source: { ...foreign.source, producer: { kind: 'public_did' as const, did: 'did:web:other.example.com' } } };
+    const forbidden = await app.inject({ method: 'POST', url: '/v1/audit/submissions', headers: principal, payload: { producerEvent: otherProducer } });
+    expect(forbidden.statusCode).toBe(403);
+    // The authorizer opens submissions only: every other route stays operator-only.
+    const ledgers = await app.inject({ method: 'GET', url: '/v1/audit/ledgers', headers: principal });
+    expect(ledgers.statusCode).toBe(403);
   });
 });

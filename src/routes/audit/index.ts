@@ -15,7 +15,9 @@
  * (`x-admin-api-key`, or the same key as a bearer token):
  *
  * - `POST /submissions`: one producer submission (`submission.ts`), answered
- *   with the signed entry; a redelivery gets the original entry back.
+ *   with the signed entry; a redelivery gets the original entry back. With
+ *   `authorizeSubmission`, a caller without the operator key may submit for
+ *   the producers and tenant that authorizer grants it.
  * - `GET /ledgers`, `GET /ledgers/:ledgerId/epochs`: ledgers and their epochs.
  * - `GET /ledgers/:ledgerId/epochs/:epochId/entries`: the stored entries of
  *   one epoch, exactly as stored (an export for offline verification).
@@ -36,14 +38,30 @@ import {
   HelixError,
   verifyAuditLedger,
   type AuditEpochTransitionReason,
+  type AuditRecorderSubmission,
+  type AuthenticatedAuditSubmissionContext,
   type StoredAuditEntry,
 } from '../../core/index.js';
 import type { ApiAudit } from '../../audit/api-audit.js';
-import { handleAuditSubmission } from '../../audit/submission.js';
+import { operatorSubmissionContext, parseAuditSubmissionWire } from '../../audit/submission.js';
+
+/**
+ * Authorizes a submission from a caller that is not the operator, in two
+ * steps: it authenticates the request (throwing 401 before the body is
+ * read), then answers, for the parsed submission, the context the caller is
+ * trusted for (throwing 403 for a producer or tenant it does not own). A
+ * deployment with its own principals (an account-scoped API key, say)
+ * passes one, so producers submit with their own credential.
+ */
+export type AuditSubmissionAuthorizer = (
+  request: FastifyRequest,
+) => Promise<(submission: AuditRecorderSubmission) => Promise<AuthenticatedAuditSubmissionContext>>;
 
 export interface AuditRouteOptions {
   audit: ApiAudit;
   adminApiKey?: string | undefined;
+  /** Submissions without the operator key go here; without it they are refused like every other route. */
+  authorizeSubmission?: AuditSubmissionAuthorizer | undefined;
 }
 
 const OPERATOR = 'admin-api-key';
@@ -84,11 +102,24 @@ const disposalBody = z
 
 const auditRoutes: FastifyPluginAsync<AuditRouteOptions> = async (fastify, options) => {
   const { recorder, retention, storage } = options.audit;
-  fastify.addHook('preHandler', async (request) => requireAuditOperator(options.adminApiKey, request));
+  const isOperator = (request: FastifyRequest): boolean => {
+    try {
+      requireAuditOperator(options.adminApiKey, request);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+  fastify.addHook('preHandler', async (request) => {
+    const submissionByPrincipal = options.authorizeSubmission !== undefined && request.routeOptions.url === `${fastify.prefix}/submissions`;
+    if (!submissionByPrincipal) requireAuditOperator(options.adminApiKey, request);
+  });
 
   fastify.post('/submissions', async (request, reply) => {
-    const result = await handleAuditSubmission(recorder, request.body);
-    return reply.status(201).send(result);
+    const authorize = isOperator(request) ? async (parsed: AuditRecorderSubmission): Promise<AuthenticatedAuditSubmissionContext> => operatorSubmissionContext(parsed) : await options.authorizeSubmission!(request);
+    const submission = parseAuditSubmissionWire(request.body);
+    const context = await authorize(submission);
+    return reply.status(201).send({ entry: await recorder.submit(submission, context) });
   });
 
   fastify.get('/ledgers', async () => {
