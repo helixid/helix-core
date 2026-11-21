@@ -5,10 +5,10 @@
 import { describe, expect, it } from 'vitest';
 import * as errors from '../../../src/core/errors/HelixError.js';
 
+type ErrorClass = new (...args: unknown[]) => errors.HelixError;
 const classes = Object.entries(errors).filter(
-  (entry): entry is [string, new (...args: unknown[]) => errors.HelixError] =>
-    typeof entry[1] === 'function' && entry[1] !== errors.HelixError && entry[1].prototype instanceof errors.HelixError,
-);
+  ([, value]) => typeof value === 'function' && value !== errors.HelixError && (value as { prototype?: unknown }).prototype instanceof errors.HelixError,
+) as unknown as [string, ErrorClass][];
 
 describe('HelixError subclasses', () => {
   it('finds the classes', () => {

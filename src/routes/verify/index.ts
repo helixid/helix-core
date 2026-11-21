@@ -76,7 +76,7 @@ interface VerifyBody {
 export function memoryNonceStore(clock: () => number): VerifyNonceStore {
   const entries = new Map<string, number>();
   return {
-    insert: async (nonce, agentDid, expiresAt) => {
+    insert: async (nonce, agentDid, expiresAt): Promise<boolean> => {
       const now = clock();
       for (const [key, expiry] of entries) if (expiry <= now) entries.delete(key);
       const key = `${agentDid ?? ''}|${nonce}`;
@@ -109,7 +109,7 @@ const verifyRoutes: FastifyPluginAsync<VerifyRouteOptions> = async (fastify, opt
   const clock = options.clock ?? Date.now;
   const nonceStore = options.nonceStore ?? memoryNonceStore(clock);
   const allowLoopbackHttp = options.allowLoopbackHttp ?? false;
-  const doFetch = options.fetch ?? ((url: string) => fetch(url));
+  const doFetch = options.fetch ?? ((url: string): Promise<Response> => fetch(url));
   const fetchJson = async (url: string): Promise<unknown> => {
     const target = readableUrl(url, allowLoopbackHttp);
     if (target === undefined) throw new Error(`refusing to fetch ${url}: only https: URLs are read`);
@@ -130,10 +130,10 @@ const verifyRoutes: FastifyPluginAsync<VerifyRouteOptions> = async (fastify, opt
   const seams: kyaos.verifier.VerifierSeams = {
     resolveDid,
     resolveDidKeys: options.resolveDidKeys ?? verifier.createDidKeysResolver(resolveDid),
-    fetchStatusList: options.fetchStatusList ?? (async (url) => verifier.decodeStatusListCredential(await fetchJson(url))),
+    fetchStatusList: options.fetchStatusList ?? (async (url): Promise<kyaos.verifier.StatusListRead> => verifier.decodeStatusListCredential(await fetchJson(url))),
     resolveCard:
       options.resolveCard ??
-      (async (did) => {
+      (async (did): Promise<unknown> => {
         const endpoint = cardEndpointOf(await resolveDid(did));
         return endpoint === undefined ? undefined : fetchJson(endpoint);
       }),

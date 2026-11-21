@@ -177,11 +177,6 @@ export function fixtureSeams(env: FixtureEnvironment, setting: SeamSetting, used
   };
 }
 
-interface Builders {
-  keys: Record<KeyLabel, FixtureKey>;
-  signers: Record<KeyLabel, EnvSigner>;
-}
-
 /** A copy of `value` without `member`. */
 function withoutMember(value: object, member: string): Record<string, unknown> {
   const copy: Record<string, unknown> = { ...(value as Record<string, unknown>) };
@@ -194,7 +189,6 @@ export async function buildVerifierFixtures(): Promise<{ environment: FixtureEnv
   const signers = Object.fromEntries(
     KEY_LABELS.map((label) => [label, new EnvSigner({ did: keys[label].did, envVar: 'FIXTURE_KEY', env: { FIXTURE_KEY: keys[label].private_key_hex } })]),
   ) as Record<KeyLabel, EnvSigner>;
-  const builders: Builders = { keys, signers };
   const didDocuments = Object.fromEntries(KEY_LABELS.map((label) => [keys[label].did, keys[label].did_document]));
   const SERVICE = keys.service.did;
   const AGENT = keys.agent.did;
@@ -311,7 +305,7 @@ export async function buildVerifierFixtures(): Promise<{ environment: FixtureEnv
   const request = { method: 'tools/call', params: { name: 'lookup_order', arguments: { orderId: 'ORD-1001' }, _meta: { 'org.kya-os/request-proof': 'stripped before hashing' } } };
   let nonceCounter = 0;
   const nonce = (): string => Buffer.from(`f-2-nonce-${String(++nonceCounter).padStart(4, '0')}`).toString('base64url');
-  const proofBy = (signer: KeyLabel, options: Partial<Parameters<typeof verifier.signRequestProof>[2]> = {}, req: typeof request = request): Promise<verifier.RequestProof> =>
+  const proofBy = (signer: KeyLabel, options: Partial<Parameters<typeof verifier.signRequestProof>[2]> = {}, req: typeof request = request): Promise<kyaos.verifier.RequestProof> =>
     verifier.signRequestProof(req, signers[signer], { audience: SERVICE, now: NOW_MS, nonce: nonce(), ...options });
   const agentJkt = verifier.jwkThumbprint({ kty: 'OKP', crv: 'Ed25519', x: Buffer.from(keys.agent.public_key_hex, 'hex').toString('base64url') });
 
@@ -329,8 +323,8 @@ export async function buildVerifierFixtures(): Promise<{ environment: FixtureEnv
     const options = { ...baseOptions, ...settings.options };
     const now = settings.now ?? NOW_MS;
     const environment: FixtureEnvironment = { generated_from: '', generator: '', note: '', now: NOW, keys, did_documents: didDocuments, status_lists: lists, cards };
-    const result = await verifier.verify(input as never, { ...fixtureSeams(environment, seams, new Set()), ...(seams.clock === 'missing' ? {} : { clock: () => now }) } as never, options as never);
-    files[file].push({
+    const result = await verifier.verify(input as never, { ...fixtureSeams(environment, seams, new Set()), ...(seams.clock === 'missing' ? {} : { clock: (): number => now }) } as never, options as never);
+    files[file]!.push({
       name,
       description,
       input,

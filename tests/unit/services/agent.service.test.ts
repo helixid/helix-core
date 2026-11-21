@@ -1,10 +1,6 @@
 // Copyright 2026 DgVerse LLP
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import { AgentService } from '../../../src/services/agent/agent.service.js';
-import {
-  AgentKeyNotFoundError,
-  AgentActiveCredentialNotFoundError,
-} from '../../../src/core/index.js';
 
 const TEST_PRIVATE_KEY_HEX = '00'.repeat(32);
 

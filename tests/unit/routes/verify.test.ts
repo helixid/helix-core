@@ -3,7 +3,7 @@
 import { readFileSync } from 'node:fs';
 import Fastify, { type FastifyInstance } from 'fastify';
 import { gzipSync } from 'node:zlib';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { kyaos } from '@helixid/sdk-js';
 import { EnvSigner, buildDIDDocument, generateKeyPair } from '../../../src/core/index.js';
 import verifyRoutes, { cardEndpointOf, memoryNonceStore, readableUrl, type VerifyRouteOptions } from '../../../src/routes/verify/index.js';
@@ -131,6 +131,47 @@ describe('POST /v1/verify', () => {
     const refused = await strict.inject({ method: 'POST', url: '/v1/verify', payload: { proof: await kyaos.verifier.signRequestProof(request, signer, { audience: SERVICE, now: NOW }), request, expectedAudience: SERVICE } });
     expect(refused.json().reasons).toEqual(['did_unresolved']);
     expect(asked).toEqual(['https://127.0.0.1:4100/agents/a1/did.json']);
+  });
+});
+
+describe('POST /v1/verify default status and card seams', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  /** The fixture lists as their issuers publish them, served by a stubbed global fetch. */
+  const servedLists = (missing: string[] = []) => {
+    const asked: string[] = [];
+    vi.stubGlobal('fetch', async (url: string) => {
+      asked.push(url);
+      const list = missing.includes(url) ? undefined : env.status_lists[url];
+      const body = list && {
+        id: list.id,
+        issuer: list.issuer,
+        validFrom: list.valid_from,
+        validUntil: list.valid_until,
+        credentialSubject: { statusPurpose: list.status_purpose, encodedList: list.encoded_list },
+      };
+      return { ok: body !== undefined, status: body ? 200 : 404, json: async () => body };
+    });
+    return asked;
+  };
+
+  it('fetches each status list over https with the global fetch; a DID document with no card service means no card', async () => {
+    const asked = servedLists();
+    const server = await start({ clock: () => NOW, resolveDid: fixtureSeams.resolveDid });
+    const chain = valid.find((c) => c.name === 'two_hop_chain')!.input.chain;
+    const res = await server.inject({ method: 'POST', url: '/v1/verify', payload: { proof: await proofFor(), chain, request, expectedAudience: SERVICE } });
+    expect(res.json()).toMatchObject({ ok: true, proofDid: AGENT, chainSummary: { depth: 2 } });
+    expect(asked.length).toBeGreaterThan(0);
+    for (const url of asked) expect(url).toMatch(/^https:\/\/[a-z]+\.example\/status\//);
+  });
+
+  it('refuses the chain when a status list answers an error', async () => {
+    const chain = valid.find((c) => c.name === 'two_hop_chain')!.input.chain as { credentialStatus: { statusListCredential: string } }[];
+    servedLists([chain[0]!.credentialStatus.statusListCredential]);
+    const server = await start({ clock: () => NOW, resolveDid: fixtureSeams.resolveDid });
+    const res = await server.inject({ method: 'POST', url: '/v1/verify', payload: { proof: await proofFor(), chain, request, expectedAudience: SERVICE } });
+    expect(res.json().ok).toBe(false);
+    expect(res.json().reasons[0]).toMatch(/^status_/);
   });
 });
 
