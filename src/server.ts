@@ -19,7 +19,7 @@ import {
 } from './core/index.js';
 
 import { errorHandler } from './middleware/errorHandler.js';
-import { createApiAudit, createApiAuditStore } from './audit/index.js';
+import { createApiAudit, createApiAuditStorage } from './audit/index.js';
 import { createHederaClient } from './hedera/createHederaClient.js';
 import { DidRepository } from './repositories/did.repository.js';
 import { VcRepository } from './repositories/vc.repository.js';
@@ -41,6 +41,7 @@ import statusListRoutes from './routes/status-list/index.js';
 import vpRoutes from './routes/vp/index.js';
 import agentRoutes from './routes/agent/index.js';
 import auditLogRoutes from './routes/audit-log/index.js';
+import auditRoutes from './routes/audit/index.js';
 import sessionRoutes from './routes/sessions/index.js';
 import serviceProviderRoutes from './routes/service-provider/index.js';
 import type { RedisLike } from './cache/RedisCache.js';
@@ -80,8 +81,13 @@ const redis: RedisLike | null =
     ? new Redis(config.REDIS_URL)
     : null;
 
-const auditStore = createApiAuditStore({ prisma, sqlite });
-const { trail: auditTrail } = createApiAudit(config, auditStore);
+// A-2: every audit event enters through the authoritative recorder.
+const auditDeps = { pool, sqlite };
+const audit = createApiAudit(config, createApiAuditStorage(auditDeps), { deps: auditDeps, baseDir: apiPackageDir });
+// Opens every known ledger: a journal behind the restore witness, or a new
+// recorder key, opens a successor epoch here, before any request is served.
+await audit.recorder.start();
+const auditTrail = audit.trail;
 const didRepository = new DidRepository(prisma, sqlite);
 const vcRepository = new VcRepository(prisma, sqlite);
 const agentRepository = new AgentRepository(prisma, sqlite);
@@ -247,7 +253,12 @@ await app.register(sessionRoutes, {
 });
 await app.register(auditLogRoutes, {
   prefix: '/v1/audit-log',
-  auditStore,
+  audit,
+  adminApiKey: config.HELIX_ADMIN_API_KEY,
+});
+await app.register(auditRoutes, {
+  prefix: '/v1/audit',
+  audit,
   adminApiKey: config.HELIX_ADMIN_API_KEY,
 });
 await app.register(agentRoutes, {

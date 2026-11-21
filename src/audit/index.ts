@@ -10,11 +10,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// The API side of KYA-OS auditability (story A-1): stores behind the core
-// `AuditSink` seam, the operator's stream echo, and the factory server.ts wires.
+// The API side of KYA-OS auditability: the recorder's journal and vault on
+// PostgreSQL, SQLite or memory (A-2), the operator's stream echo, the
+// submission wire format, and the factory server.ts wires.
 export * from './store.js';
-export { PrismaAuditSink } from './prisma-sink.js';
-export { SqliteAuditSink } from './sqlite-sink.js';
-export { MemoryAuditStore } from './memory-store.js';
+export { PostgresAuditJournal } from './postgres-journal.js';
+export { PostgresAuditEvidenceStore } from './postgres-evidence.js';
+export { SqliteAuditJournal } from './sqlite-journal.js';
+export { SqliteAuditEvidenceStore } from './sqlite-evidence.js';
+export { MemoryAuditEvidenceStore } from './memory-evidence.js';
 export { StreamAuditSink, type StreamAuditSinkOptions } from './stream-sink.js';
-export { createApiAudit, createApiAuditStore, apiPartyRef, type ApiAudit, type ApiAuditConfig } from './api-audit.js';
+export {
+  createApiAudit,
+  createApiAuditStorage,
+  createRecorderSigner,
+  delegationRetentionFloor,
+  apiPartyRef,
+  type ApiAudit,
+  type ApiAuditConfig,
+  type ApiAuditStorageDeps,
+  type CreateApiAuditOptions,
+} from './api-audit.js';
+export * from './submission.js';
