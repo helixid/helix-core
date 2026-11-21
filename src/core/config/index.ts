@@ -77,6 +77,16 @@ export const ConfigSchema = z.object({
   AUDIT_LOG_DESTINATION: z.enum(['stdout', 'file', 'both']).default('stdout'),
   AUDIT_LOG_PATH: z.string().optional(),
 
+  // KYA-OS story F-3: the KeyStore's key-encryption key (AES-256-GCM, 64 hex
+  // chars) and its id. Unset, HOSTED_KEY_ENCRYPTION_KEY is used; outside
+  // production a random per-process key (Helix-held keys then do not survive
+  // a restart). Production refuses to start without one.
+  HELIX_KEY_STORE_KEK: z
+    .string()
+    .regex(/^[0-9a-fA-F]{64}$/, 'must be 64 hex chars (32 bytes) for AES-256-GCM')
+    .optional(),
+  HELIX_KEY_STORE_KEK_ID: z.string().min(1).optional(),
+
   // Hosted accounts & auth (Item #1, see the hosted-instance design).
   // All optional/defaulted so self-hosted deployments (which don't use
   // accounts at all — HELIX_ADMIN_API_KEY covers the single operator) never

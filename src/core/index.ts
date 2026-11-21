@@ -19,6 +19,8 @@ export * from './did/web.js';
 export * from './net/safe-fetch.js';
 export * from './net/outbound.js';
 export * from './card/index.js';
+export * from './custody/index.js';
+export * from './conformance/index.js';
 export { createEd25519Proof, verifyEd25519Proof } from './proof.js';
 export type { LinkedDataProof } from './proof.js';
 export { VPBuilder } from './vp-builder.js';

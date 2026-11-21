@@ -49,6 +49,10 @@ import sessionRoutes from './routes/sessions/index.js';
 import serviceProviderRoutes from './routes/service-provider/index.js';
 import type { RedisLike } from './cache/RedisCache.js';
 import { SqliteStore } from './storage/sqlite.js';
+import { CustodyRepository, WrappedKeyRepository } from './repositories/custody.repository.js';
+import { DbKeyStore, resolveKeyEncryptionKey } from './services/custody/db-key-store.js';
+import { CustodyService } from './services/custody/custody.service.js';
+import custodyRoutes from './routes/custody/index.js';
 
 const config = loadConfigFromEnv();
 const storageAdapter =
@@ -149,6 +153,26 @@ const serviceProviderService = new ServiceProviderService(
   keyCustody,
   auditLogger,
 );
+
+// KYA-OS story F-3: custody preference. Helix-held keys live in the DbKeyStore
+// (wrapped_keys, AES-256-GCM under HELIX_KEY_STORE_KEK); self-custody keys
+// never reach Helix.
+const keyEncryption = resolveKeyEncryptionKey(config);
+const keyStore = new DbKeyStore({
+  table: new WrappedKeyRepository(prisma, sqlite),
+  keyEncryptionKey: keyEncryption.keyEncryptionKey,
+  keyEncryptionKeyId: keyEncryption.keyEncryptionKeyId,
+});
+const custodyService = new CustodyService({
+  records: new CustodyRepository(prisma, sqlite),
+  keyStore,
+  didRepository,
+  credentials: vcService,
+  services: serviceRepository,
+  auditLogger,
+  host: config.DID_DOMAIN,
+  didCache,
+});
 
 const app = Fastify({
   logger: {
@@ -265,9 +289,11 @@ await app.register(serviceProviderRoutes, {
   prefix: '/v1',
   serviceProviderService,
   adminApiKey: config.HELIX_ADMIN_API_KEY,
+  custody: { service: custodyService },
 });
+await app.register(custodyRoutes, { prefix: '/v1', custodyService, adminApiKey: config.HELIX_ADMIN_API_KEY });
 // KYA-OS story C-A: /{path}/did.json, /{path}/card.json and /.well-known/kya-os-card.json; after the static routes, so the wildcard never shadows them.
-await app.register(entityCardRoutes, { source: createEntityCardSource({ host: config.DID_DOMAIN, didRepository, services: serviceRepository }) });
+await app.register(entityCardRoutes, { source: createEntityCardSource({ host: config.DID_DOMAIN, didRepository, services: serviceRepository, details: (did) => custodyService.cardDetails(did) }) });
 
 const shutdown = async (): Promise<void> => {
   app.log.info('Helix ID API shutting down...');

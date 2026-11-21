@@ -11,7 +11,8 @@
 // decided here.
 
 import type { FastifyPluginAsync, FastifyRequest } from 'fastify';
-import { AdminAuthRequiredError } from '../../core/index.js';
+import { AdminAuthRequiredError, ValidationError, findPrivateKeyMaterial, type CustodyDefaults } from '../../core/index.js';
+import type { CustodyService } from '../../services/custody/custody.service.js';
 import { mapAgentError } from '../../services/agent/agent.service.js';
 import type {
   EnrollServiceInput,
@@ -32,6 +33,19 @@ export interface ServiceProviderRouteOptions {
    */
   authorize?: (request: FastifyRequest, action: ServiceProviderAction) => Promise<void> | void;
   adminApiKey?: string | undefined;
+  /**
+   * KYA-OS story F-3: the per-service custody choice. When given, a
+   * `POST /services` that names `keyCustody` or `didHosting`, or whose caller
+   * has an account preference, is created by the custody service (its key in
+   * the KeyStore or held by the service itself, its did:web on Helix or its
+   * own domain); any other keeps the enrollment below.
+   */
+  custody?: {
+    service: Pick<CustodyService, 'createService'>;
+    defaultsOf?: ((request: FastifyRequest) => Promise<CustodyDefaults | undefined> | CustodyDefaults | undefined) | undefined;
+    actorOf?: ((request: FastifyRequest) => string) | undefined;
+    orgOf?: ((request: FastifyRequest) => Promise<string | undefined> | string | undefined) | undefined;
+  } | undefined;
 }
 
 const serviceProviderRoutes: FastifyPluginAsync<ServiceProviderRouteOptions> = async (fastify, options) => {
@@ -50,6 +64,20 @@ const serviceProviderRoutes: FastifyPluginAsync<ServiceProviderRouteOptions> = a
   fastify.post('/services', async (request, reply) => {
     try {
       await authorize(request, { action: 'enroll' });
+      const custody = options.custody;
+      const input = (request.body ?? {}) as Record<string, unknown>;
+      const defaults = await custody?.defaultsOf?.(request);
+      if (custody && (input['keyCustody'] !== undefined || input['didHosting'] !== undefined || defaults)) {
+        const found = findPrivateKeyMaterial(input);
+        if (found !== undefined) throw new ValidationError(`Request carries private key material (${found}); only the public JWK is accepted`);
+        const { service, ...custodyResult } = await custody.service.createService(input as never, {
+          requestId: request.id,
+          actor: custody.actorOf?.(request) ?? 'admin',
+          defaults,
+          org: await custody.orgOf?.(request),
+        });
+        return reply.code(201).send({ ...service, ...custodyResult });
+      }
       const result = await options.serviceProviderService.enroll(
         request.body as EnrollServiceInput,
         request.id,

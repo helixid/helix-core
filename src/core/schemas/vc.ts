@@ -61,6 +61,9 @@ export const AgentCredentialSubjectSchema = z.object({
   delegationDepth: z.number().int().min(0).optional(),
   maxDelegationDepth: z.number().int().min(0).optional(),
   parentVcId: z.string().optional(),
+  // KYA-OS story F-3: who holds the key and who serves the DID, as Helix recorded them at onboarding.
+  keyCustody: z.enum(['self', 'helix']).optional(),
+  didHosting: z.enum(['own', 'helix']).optional(),
 });
 
 /**
