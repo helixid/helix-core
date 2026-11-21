@@ -22,6 +22,8 @@ import {
   FileRecorderWitness,
   MemoryAuditJournal,
   inPositionOrder,
+  auditListCursorOf,
+  compareAuditListOrder,
   MemoryAuditSink,
   MemoryRecorderWitness,
   assertAuditProviderContract,
@@ -205,6 +207,9 @@ describe('SQLite audit storage', () => {
     const all = await journal.listEntries({ ledgerId, limit: 10 });
     expect(all.map((entry) => entry.core.sequence)).toEqual(['2', '1', '0']);
     expect(await journal.listEntries({ eventType: 'tool.call.completed', family: 'tool', correlationId: 'call-a', since: new Date(0), limit: 10 })).toHaveLength(1);
+    // A page's cursor: strictly after the given entry in the listing order.
+    expect((await journal.listEntries({ ledgerId, before: auditListCursorOf(all[0]!), limit: 10 })).map((entry) => entry.core.sequence)).toEqual(['1', '0']);
+    expect((await journal.listEntries({ ledgerId, before: auditListCursorOf(all[2]!), limit: 10 }))).toEqual([]);
     // By position, in the order asked, a missing one left out; the memory journal answers the same.
     const positions = [all[2]!.core, { ...all[0]!.core, sequence: '99' }, all[0]!.core];
     expect((await journal.getEntries(positions)).map((entry) => entry.core.sequence)).toEqual(['0', '2']);
@@ -213,6 +218,17 @@ describe('SQLite audit storage', () => {
     const recorded = await memoryAudit.recorder.submit(submission(producerEvent('m')), contextFor(producerEvent('m')));
     expect(await memory.getEntries([recorded.core, { ...recorded.core, ledgerEpochId: 'none' }])).toEqual([recorded]);
     expect(inPositionOrder([recorded.core], [])).toEqual([]);
+    expect((await memory.listEntries({ before: auditListCursorOf(recorded), limit: 5 })).map((entry) => entry.core.sequence)).toEqual(['0']);
+    // The listing order is total: time, then ledger, epoch and sequence, all descending.
+    const at = (recordedAt: number, ledgerId: string, ledgerEpochId: string, sequence: string) => ({ recordedAt, ledgerId, ledgerEpochId, sequence });
+    expect(compareAuditListOrder(at(2, 'a', 'e', '1'), at(1, 'z', 'z', '9'))).toBeLessThan(0);
+    expect(compareAuditListOrder(at(1, 'b', 'e', '1'), at(1, 'a', 'e', '9'))).toBeLessThan(0);
+    expect(compareAuditListOrder(at(1, 'a', 'f', '1'), at(1, 'a', 'e', '9'))).toBeLessThan(0);
+    expect(compareAuditListOrder(at(1, 'a', 'e', '10'), at(1, 'a', 'e', '9'))).toBeLessThan(0);
+    expect(compareAuditListOrder(at(1, 'a', 'e', '9'), at(1, 'a', 'e', '10'))).toBeGreaterThan(0);
+    expect(compareAuditListOrder(at(1, 'a', 'e', '9'), at(1, 'a', 'e', '9'))).toBe(0);
+    expect(compareAuditListOrder(at(1, 'a', 'e', '9'), at(1, 'b', 'e', '9'))).toBeGreaterThan(0);
+    expect(compareAuditListOrder(at(1, 'a', 'e', '9'), at(1, 'a', 'f', '9'))).toBeGreaterThan(0);
     expect(await journal.findLedgerByTenant(all[0]!.core.event.tenantRef)).toMatchObject({ ledgerId });
     expect(await journal.findLedgerByTenant(publicDid('did:web:nobody'))).toBeNull();
     expect(await journal.getLedger('nope')).toBeNull();

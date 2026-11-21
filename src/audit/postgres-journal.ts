@@ -327,10 +327,16 @@ export class PostgresAuditJournal implements AuditLedgerStore {
     if (filters.family !== undefined) add('family', filters.family);
     if (filters.correlationId !== undefined) add('correlationId', filters.correlationId);
     if (filters.since !== undefined) add('recordedAt', filters.since.getTime(), '>=');
+    if (filters.before !== undefined) {
+      const { recordedAt, ledgerId, ledgerEpochId, sequence } = filters.before;
+      values.push(recordedAt, ledgerId, ledgerEpochId, sequence);
+      const n = values.length;
+      conditions.push(`("recordedAt", "ledgerId", "ledgerEpochId", "sequence") < ($${n - 3}::bigint, $${n - 2}, $${n - 1}, $${n}::bigint)`);
+    }
     values.push(Math.trunc(filters.limit));
     const { rows } = await this.pool.query<{ entry: string }>(
       `SELECT "entry" FROM "audit_journal_entries" ${conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : ''}
-        ORDER BY "recordedAt" DESC, "id" DESC LIMIT $${values.length}`,
+        ORDER BY "recordedAt" DESC, "ledgerId" DESC, "ledgerEpochId" DESC, "sequence" DESC LIMIT $${values.length}`,
       values,
     );
     return rows.map((row) => parseStored(row.entry));

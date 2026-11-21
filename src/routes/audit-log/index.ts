@@ -17,7 +17,10 @@
  * authoritative recorder, which answers with the signed entry (the original
  * one for a redelivery). Every event is validated strictly: an unknown member
  * anywhere is a 400, never dropped. Evidence objects travel separately from
- * the events that reference them. `GET` lists journal entries newest first.
+ * the events that reference them. `GET` lists journal entries newest first,
+ * one page at a time: `{ items, nextCursor }`, the cursor opaque (the last
+ * entry's service time and position), the same shape as a hosted deployment's
+ * account audit view.
  */
 
 import type { FastifyPluginAsync } from 'fastify';
@@ -27,11 +30,12 @@ import {
   AuditEvidenceError,
   ErrorCode,
   HelixError,
+  auditListCursorOf,
   evidenceRefSchema,
   type EvidenceRef,
 } from '../../core/index.js';
 import type { ApiAudit } from '../../audit/api-audit.js';
-import { auditLogRow } from '../../audit/store.js';
+import { auditLogRow, decodeAuditCursor, encodeAuditCursor, type AuditLogPage, type AuditLogRow } from '../../audit/store.js';
 import { handleAuditSubmission } from '../../audit/submission.js';
 import { requireAuditOperator } from '../audit/index.js';
 
@@ -46,6 +50,7 @@ interface ListAuditLogQuery {
   since?: string;
   correlationId?: string;
   ledgerId?: string;
+  cursor?: string;
   limit?: string;
 }
 
@@ -122,15 +127,24 @@ const auditLogRoutes: FastifyPluginAsync<AuditLogRouteOptions> = async (fastify,
     const query = request.query as ListAuditLogQuery;
     // Read-your-writes for the API's own events, which services record without awaiting.
     await options.audit.trail.settled();
+    const limit = normalizeLimit(query.limit);
+    // One more than asked: whether there is a next page.
     const entries = await storage.journal.listEntries({
       eventType: normalizeOneOf('eventType', query.eventType, AUDIT_EVENT_TYPES),
       family: normalizeOneOf('family', query.family, AUDIT_EVENT_FAMILIES),
       correlationId: query.correlationId || undefined,
       ledgerId: query.ledgerId || undefined,
       since: normalizeSince(query.since),
-      limit: normalizeLimit(query.limit),
+      before: decodeAuditCursor(query.cursor),
+      limit: limit + 1,
     });
-    return reply.send(entries.map(auditLogRow));
+    const shown = entries.slice(0, limit);
+    const last = shown[shown.length - 1];
+    const page: AuditLogPage<AuditLogRow> = {
+      items: shown.map(auditLogRow),
+      nextCursor: entries.length > limit && last !== undefined ? encodeAuditCursor(auditListCursorOf(last)) : null,
+    };
+    return reply.send(page);
   });
 };
 

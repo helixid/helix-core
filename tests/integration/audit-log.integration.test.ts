@@ -6,7 +6,7 @@
 import Fastify from 'fastify';
 import { describe, expect, it } from 'vitest';
 import { MemoryRecorderWitness, pairwiseDid, type AuditProducerEvent } from '../../src/core/index.js';
-import { createApiAudit, createApiAuditStorage, type ApiAudit, type ApiAuditConfig } from '../../src/audit/index.js';
+import { createApiAudit, createApiAuditStorage, decodeAuditCursor, encodeAuditCursor, type ApiAudit, type ApiAuditConfig } from '../../src/audit/index.js';
 import { testRecorderSigner } from '../utils/auditLedger.js';
 import { errorHandler } from '../../src/middleware/errorHandler.js';
 import auditLogRoutes from '../../src/routes/audit-log/index.js';
@@ -69,14 +69,17 @@ describe('audit log routes (KYA-OS A-1)', () => {
 
     const list = await app.inject({ method: 'GET', url: '/v1/audit-log?eventType=tool.call.completed&limit=10', headers: admin });
     expect(list.statusCode).toBe(200);
-    const rows = list.json() as Array<{ id: string; recordedAt: string; eventDigest: string; event: AuditProducerEvent; sequence: string; ledgerId: string }>;
+    const page = list.json() as { items: Array<{ id: string; recordedAt: string; eventDigest: string; event: AuditProducerEvent; sequence: string; ledgerId: string }>; nextCursor: string | null };
+    expect(page.nextCursor).toBeNull();
+    const rows = page.items;
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({ id: `${rows[0]!.ledgerId}:${recorded.entry.core.ledgerEpochId}:1`, sequence: '1', eventDigest: fixture.chain.entries[1]!.digest, event });
     expect(new Date(rows[0]!.recordedAt).getTime()).toBeGreaterThan(0);
     expect(rows[0]!.event.source).toMatchObject({ sourceSequence: '2', previousSourceEventDigest: fixture.chain.entries[0]!.digest });
-    expect((await app.inject({ method: 'GET', url: '/v1/audit-log?family=session', headers: admin })).json()).toEqual([]);
-    expect((await app.inject({ method: 'GET', url: '/v1/audit-log?correlationId=call-0001&since=2020-01-01T00:00:00Z', headers: admin })).json()).toHaveLength(1);
-    expect((await app.inject({ method: 'GET', url: `/v1/audit-log?ledgerId=${rows[0]!.ledgerId}`, headers: admin })).json()).toHaveLength(2);
+    const items = async (query: string): Promise<unknown[]> => ((await app.inject({ method: 'GET', url: `/v1/audit-log${query}`, headers: admin })).json() as { items: unknown[] }).items;
+    expect(await items('?family=session')).toEqual([]);
+    expect(await items('?correlationId=call-0001&since=2020-01-01T00:00:00Z')).toHaveLength(1);
+    expect(await items(`?ledgerId=${rows[0]!.ledgerId}`)).toHaveLength(2);
     // The same key as a bearer token is accepted (the middleware reporter sends it that way).
     expect((await app.inject({ method: 'GET', url: '/v1/audit-log', headers: { authorization: `Bearer ${ADMIN}` } })).statusCode).toBe(200);
   });
@@ -176,6 +179,32 @@ describe('audit log routes (KYA-OS A-1)', () => {
       details: { family: 'proof', phase: 'verified' },
     });
     const list = await app.inject({ method: 'GET', url: '/v1/audit-log?family=proof', headers: admin });
-    expect((list.json() as Array<{ event: AuditProducerEvent }>)[0]!.event.source).toMatchObject({ sourceId: 'helix-api', sourceSequence: '1' });
+    expect((list.json() as { items: Array<{ event: AuditProducerEvent }> }).items[0]!.event.source).toMatchObject({ sourceId: 'helix-api', sourceSequence: '1' });
+  });
+
+  it('pages newest first with an opaque cursor that neither skips nor repeats an entry', async () => {
+    const { app } = await makeApp();
+    for (let i = 0; i < 5; i += 1) {
+      const event = { ...producerEvent(), eventId: `page-${i}`, correlationId: `page-${i}` };
+      expect((await app.inject({ method: 'POST', url: '/v1/audit-log/events', headers: admin, payload: event })).statusCode).toBe(201);
+    }
+    const seen: string[] = [];
+    let cursor = '';
+    let pages = 0;
+    do {
+      const res = await app.inject({ method: 'GET', url: `/v1/audit-log?limit=2&cursor=${cursor}`, headers: admin });
+      const page = res.json() as { items: Array<{ sequence: string }>; nextCursor: string | null };
+      seen.push(...page.items.map((item) => item.sequence));
+      cursor = page.nextCursor ?? '';
+      pages += 1;
+    } while (cursor !== '');
+    // Genesis (0) and five events, newest first, three pages.
+    expect(seen).toEqual(['5', '4', '3', '2', '1', '0']);
+    expect(pages).toBe(3);
+    expect(decodeAuditCursor(encodeAuditCursor({ recordedAt: 1, ledgerId: 'l', ledgerEpochId: 'e', sequence: '9' }))).toEqual({ recordedAt: 1, ledgerId: 'l', ledgerEpochId: 'e', sequence: '9' });
+    for (const bad of ['not-a-cursor', Buffer.from('[1,"l","e","x"]').toString('base64url'), Buffer.from('{}').toString('base64url')]) {
+      const res = await app.inject({ method: 'GET', url: `/v1/audit-log?cursor=${bad}`, headers: admin });
+      expect([res.statusCode, (res.json() as { error: { code: string } }).error.code], bad).toEqual([400, 'VALIDATION_ERROR']);
+    }
   });
 });

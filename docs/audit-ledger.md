@@ -19,6 +19,11 @@ send a frozen event and never choose any of those.
 | Verify walk and CLI | `src/core/audit/ledger-verify.ts`, `src/cli/audit.ts` (`helix-audit`) |
 | HTTP | `src/routes/audit/index.ts` (`/v1/audit`), `src/routes/audit-log/index.ts` (`/v1/audit-log`) |
 
+## Ledgers and listing
+
+- **One ledger per tenant DID**, the same rule on a Helix-hosted and a self-hosted deployment: the API's own events go to the ledger of its issuer DID; a producer's go to the ledger of the tenant its event names (by default the producer's own DID). Which tenants a caller may name is the deployment's authorizer's call (the operator key: any; a hosted account: its own DIDs or the deployment's).
+- **`GET /v1/audit-log`** answers one page, `{ items, nextCursor }`, newest first by the recorder's service time, ties by ledger, epoch and sequence (all descending). `nextCursor` is opaque (base64url of the last entry's service time and position, `encodeAuditCursor`); pass it back as `cursor`. A hosted deployment's account audit view pages with the same shape and cursor.
+
 ## Configuration
 
 | Variable | Meaning |

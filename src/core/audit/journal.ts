@@ -135,7 +135,35 @@ export interface ListAuditEntriesFilters {
   family?: string | undefined;
   correlationId?: string | undefined;
   since?: Date | undefined;
+  /** Only entries strictly after this one in the listing order (a page's cursor). */
+  before?: AuditListCursor | undefined;
   limit: number;
+}
+
+/**
+ * Where a listing resumes: the last entry of the previous page. Listings
+ * are newest first by service time, ties broken by position, all descending
+ * (`compareAuditListOrder`), so the order is total and a cursor never skips
+ * or repeats an entry.
+ */
+export interface AuditListCursor extends AuditEntryPosition {
+  recordedAt: number;
+}
+
+/** Negative when `a` lists before `b`: newest first, then ledger, epoch and sequence, descending. */
+export function compareAuditListOrder(a: AuditListCursor, b: AuditListCursor): number {
+  if (a.recordedAt !== b.recordedAt) return b.recordedAt - a.recordedAt;
+  if (a.ledgerId !== b.ledgerId) return a.ledgerId < b.ledgerId ? 1 : -1;
+  if (a.ledgerEpochId !== b.ledgerEpochId) return a.ledgerEpochId < b.ledgerEpochId ? 1 : -1;
+  const left = BigInt(a.sequence);
+  const right = BigInt(b.sequence);
+  return left === right ? 0 : left < right ? 1 : -1;
+}
+
+/** The cursor of an entry: its service time and position. */
+export function auditListCursorOf(entry: SignedAuditEntry): AuditListCursor {
+  const { recordedAt, ledgerId, ledgerEpochId, sequence } = entry.core;
+  return { recordedAt, ledgerId, ledgerEpochId, sequence };
 }
 
 export interface AuditJournalReader {
@@ -213,7 +241,8 @@ export function matchesListFilters(entry: SignedAuditEntry, filters: ListAuditEn
     (filters.eventType === undefined || event.eventType === filters.eventType) &&
     (filters.family === undefined || auditEventFamily(event.eventType) === filters.family) &&
     (filters.correlationId === undefined || event.correlationId === filters.correlationId) &&
-    (filters.since === undefined || entry.core.recordedAt >= filters.since.getTime())
+    (filters.since === undefined || entry.core.recordedAt >= filters.since.getTime()) &&
+    (filters.before === undefined || compareAuditListOrder(filters.before, auditListCursorOf(entry)) < 0)
   );
 }
 
@@ -385,7 +414,7 @@ export class MemoryAuditJournal implements AuditLedgerStore {
     for (const epoch of this.epochs.values()) for (const { entry } of epoch.entries) all.push(entry);
     return all
       .filter((entry) => matchesListFilters(entry, filters))
-      .sort((a, b) => b.core.recordedAt - a.core.recordedAt)
+      .sort((a, b) => compareAuditListOrder(auditListCursorOf(a), auditListCursorOf(b)))
       .slice(0, filters.limit);
   }
 

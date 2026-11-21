@@ -76,6 +76,7 @@ describe.skipIf(!url)('PostgreSQL adapters at their edges', () => {
     const ledger = { ledgerId: entry.core.ledgerId, ledgerEpochId: entry.core.ledgerEpochId };
     expect(await journal.listEntries({ ledgerId: ledger.ledgerId, eventType: 'tool.call.completed', family: 'tool', correlationId: 'call-x', since: new Date(0), limit: 5 })).toHaveLength(1);
     expect(await journal.listEntries({ limit: 5 })).toHaveLength(2);
+    expect((await journal.listEntries({ ledgerId: ledger.ledgerId, before: { recordedAt: entry.core.recordedAt, ...ledger, sequence: '1' }, limit: 5 })).map((found) => found.core.sequence)).toEqual(['0']);
     expect((await journal.getEntries([entry.core, { ...entry.core, sequence: '0' }, { ...entry.core, sequence: '7' }])).map((found) => found.core.sequence)).toEqual(['1', '0']);
     expect(await journal.getEntries([])).toEqual([]);
     expect(await journal.getLedger('none')).toBeNull();

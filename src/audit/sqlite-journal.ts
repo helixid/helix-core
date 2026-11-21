@@ -278,9 +278,14 @@ export class SqliteAuditJournal implements AuditLedgerStore {
     if (filters.family !== undefined) add('family = ?', filters.family);
     if (filters.correlationId !== undefined) add('correlation_id = ?', filters.correlationId);
     if (filters.since !== undefined) add('recorded_at >= ?', filters.since.getTime());
+    if (filters.before !== undefined) {
+      const { recordedAt, ledgerId, ledgerEpochId, sequence } = filters.before;
+      conditions.push('(recorded_at, ledger_id, ledger_epoch_id, sequence) < (?, ?, ?, ?)');
+      values.push(recordedAt, ledgerId, ledgerEpochId, Number(sequence));
+    }
     const rows = this.sqlite.select<{ entry: string }>(
       `SELECT entry FROM audit_journal_entries ${conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : ''}
-        ORDER BY recorded_at DESC, id DESC LIMIT ?`,
+        ORDER BY recorded_at DESC, ledger_id DESC, ledger_epoch_id DESC, sequence DESC LIMIT ?`,
       ...values,
       Math.trunc(filters.limit),
     );
