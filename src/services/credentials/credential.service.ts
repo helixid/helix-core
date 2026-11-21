@@ -108,8 +108,20 @@ export interface CredentialStatusStore {
 
 export type CredentialVcRepository = Pick<
   VcRepository,
-  'createVc' | 'findByVcId' | 'findMany' | 'findActiveBySubjectDid' | 'findActiveChildren'
+  'createVc' | 'findByVcId' | 'findMany' | 'findActiveBySubjectDid' | 'findActiveChildren' | 'markAsRenewed'
 >;
+
+export interface RenewIdentityInput {
+  expiresInSeconds?: number | undefined;
+}
+
+export interface RenewedIdentity {
+  vcId: string;
+  vc: SignedIdentityCredential;
+  previousVcId: string;
+  expiresAt: string | null;
+  statusListIndex: number;
+}
 
 function statusOf(record: VCRecord): CredentialStatus {
   if (record.revokedAt) return 'revoked';
@@ -238,6 +250,47 @@ export class CredentialService {
     );
     await this.store(identity, input.agentDid, undefined, undefined, requestId, { event: AuditEvents.VC_ISSUED });
     return identity;
+  }
+
+  /**
+   * Re-issue an identity credential: same agent, name and responsible party,
+   * a fresh id and validity. The old record stays active and points at the
+   * new one through `renewedByVcId`. Returns null when `vcId` is not an
+   * identity credential, so the caller can fall back to the legacy VC path.
+   */
+  async renewIdentity(vcId: string, input: RenewIdentityInput, requestId: string): Promise<RenewedIdentity | null> {
+    const record = await this.vcRepo.findByVcId(vcId);
+    if (!record || record.vcType !== IDENTITY_CREDENTIAL_TYPE) return null;
+    if (record.revokedAt) {
+      throw new HelixError(ErrorCode.VC_ALREADY_REVOKED, 'Cannot renew a revoked credential', 409);
+    }
+    const previous = stored<SignedIdentityCredential>(record).credential;
+    const validUntil = input.expiresInSeconds
+      ? new Date(Date.now() + input.expiresInSeconds * 1000)
+      : (record.expiresAt ?? null);
+    const identity = await this.issueIdentity(
+      {
+        agentDid: previous.credentialSubject.id,
+        name: previous.credentialSubject.name,
+        ownerDid: previous.credentialSubject.responsibleParty,
+        validUntil,
+      },
+      requestId,
+    );
+    await this.vcRepo.markAsRenewed(vcId, identity.id);
+    this.auditLogger.log(AuditEvents.VC_RENEWED, {
+      requestId,
+      oldVcId: vcId,
+      newVcId: identity.id,
+      subjectDid: previous.credentialSubject.id,
+    });
+    return {
+      vcId: identity.id,
+      vc: identity,
+      previousVcId: vcId,
+      expiresAt: identity.validUntil ?? null,
+      statusListIndex: Number(identity.credentialStatus.statusListIndex),
+    };
   }
 
   /** One attestation per capability, signed by `signer` (default the Helix issuer). */
@@ -395,18 +448,19 @@ export class CredentialService {
     return revoked;
   }
 
-  /** Everything Helix keeps for one agent, in issuance order; the active identity, else the latest. */
+  /** Everything Helix keeps for one agent, in issuance order; the active identity not yet renewed, else the latest. */
   async listAgentCredentials(agentDid: string): Promise<AgentCredentials> {
     const records = [...(await this.vcRepo.findMany({ subjectDid: agentDid }))].sort(
       (a, b) => (a.createdAt?.getTime() ?? 0) - (b.createdAt?.getTime() ?? 0) || a.vcId.localeCompare(b.vcId),
     );
-    const identities = records
-      .filter((record) => record.vcType === IDENTITY_CREDENTIAL_TYPE)
-      .map((record) => stored<SignedIdentityCredential>(record));
-    const activeIdentity = identities.find((identity) => identity.status === 'active');
+    const identityRecords = records.filter((record) => record.vcType === IDENTITY_CREDENTIAL_TYPE);
+    const identities = identityRecords.map((record) => stored<SignedIdentityCredential>(record));
+    // A renewed identity points at its successor, so the head of the lineage is the active one nobody renewed.
+    const current = identities.find((identity, index) => identity.status === 'active' && !identityRecords[index]!.renewedByVcId);
+    const activeIdentities = identities.filter((identity) => identity.status === 'active');
     return {
       agentDid,
-      identity: activeIdentity ?? identities[identities.length - 1] ?? null,
+      identity: current ?? activeIdentities[activeIdentities.length - 1] ?? identities[identities.length - 1] ?? null,
       attestations: records
         .filter((record) => record.vcType === CAPABILITY_ATTESTATION_TYPE)
         .map((record) => stored<SignedCapabilityAttestation>(record)),
