@@ -5,8 +5,6 @@ import {
   LIVE_HEDERA_TIMEOUT_MS,
   onboardLiveAgent,
   resetLiveTestDatabase,
-  enrollLiveService,
-  signLiveVP,
   startLiveApi,
   type LiveApi,
 } from '../utils/liveApi.js';
@@ -57,14 +55,6 @@ describe('Onboarding Live Integration', () => {
       `${api.issuerDid}#key-1`,
     );
 
-    // No wallet file, no client-held key — the server generated and holds
-    // the agent's private key itself (AgentKey table). The only way to act
-    // as this agent afterward is the server-side sign API.
-    const service = await enrollLiveService(api);
-    const signedVP = await signLiveVP(api, agent.did, { targetService: service.did });
-    expect(signedVP.holder).toBe(agent.did);
-    expect(signedVP.proof).toBeTruthy();
-
     const auditLog = await client.getAuditLog({ limit: 100 });
     const auditTypes = auditLog.map((entry) => entry.eventType);
     expect(auditTypes).toEqual(expect.arrayContaining([
@@ -75,7 +65,6 @@ describe('Onboarding Live Integration', () => {
       'DID_CREATED',
       'VC_ISSUED',
       'AGENT_ONBOARDED',
-      'AGENT_VP_SIGNED',
     ]));
   }, LIVE_HEDERA_TIMEOUT_MS);
 });

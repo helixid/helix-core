@@ -16,8 +16,6 @@ export * from './credentials/index.js';
 export { resolveDID, clearDIDCache, evictDIDCache } from './did-resolver.js';
 export { createEd25519Proof, verifyEd25519Proof } from './proof.js';
 export type { LinkedDataProof } from './proof.js';
-export { VPBuilder } from './vp-builder.js';
-export { verifyVP, fetchStatusList } from './vp-verifier.js';
 export { issueGrant, ACCEPT_TERMS_SCOPE } from './grant.js';
 export { normalizeScopes, scopeKey, vcLookupColumns } from './vc-lookup.js';
 export type { VcLookupColumns } from './vc-lookup.js';
@@ -25,6 +23,4 @@ export type {
   IssueGrantOptions,
   IssuerKeyMaterial,
 } from './grant.js';
-export type { VPBuilderOptions, VPBuilderSignOverrides } from './vp-builder.js';
-export type { StatusListResolver, VerifyVPOptions, VerifyVPResult } from './vp-verifier.js';
 export type { DelegationLink } from './delegation.js';

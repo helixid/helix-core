@@ -1,4 +1,4 @@
-import type { SignedCapabilityAttestation, SignedIdentityCredential, SignedVP } from '../../core/index.js';
+import type { SignedCapabilityAttestation, SignedIdentityCredential } from '../../core/index.js';
 
 export interface EnrollmentTokenResult {
   token: string;
@@ -34,10 +34,6 @@ export interface OnboardWithCustodyResult {
   attestations: SignedCapabilityAttestation[];
 }
 
-export interface SignVPResult {
-  signedVP: SignedVP;
-}
-
 export interface UserChallengeVerifyResult {
   did: string;
   verified: true;
@@ -67,10 +63,6 @@ export interface IAgentService {
     input: { enrollmentToken: string; domains?: string[]; expiry?: number; ownerDid?: string },
     requestId: string,
   ): Promise<OnboardWithCustodyResult>;
-  signVP(
-    input: { did: string; targetService: string; userDid?: string },
-    requestId: string,
-  ): Promise<SignVPResult>;
   issueUserChallenge(
     input: { did: string; purpose: 'user_verification' },
     requestId: string,
