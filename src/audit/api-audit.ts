@@ -36,6 +36,7 @@ import {
   type AuditSigner,
   type AuditSink,
   type Config,
+  type ManagedAuditRecorderOptions,
   type PartyRef,
 } from '../core/index.js';
 import { normalizeEd25519PrivateKeyHex } from '../core/crypto/keys.js';
@@ -183,6 +184,8 @@ export interface CreateApiAuditOptions {
   baseDir?: string;
   extraSinks?: AuditSink[];
   clock?: () => number;
+  /** See `ManagedAuditRecorderOptions.onRecorded`. */
+  onRecorded?: ManagedAuditRecorderOptions['onRecorded'];
 }
 
 /**
@@ -208,6 +211,7 @@ export function createApiAudit(config: ApiAuditConfig, storage: ApiAuditStorage,
     witness,
     mode: config.AUDIT_RECORDER_MODE,
     ...(config.AUDIT_RECORDER_MODE === 'self-hosted' ? { tenants: selfHostedTenants(config) } : {}),
+    ...(options.onRecorded !== undefined ? { onRecorded: options.onRecorded } : {}),
   });
   const retention = new AuditRetentionService({
     recorder,

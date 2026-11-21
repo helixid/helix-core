@@ -161,6 +161,25 @@ describe('ManagedAuditRecorder', () => {
     expect((await refusal(recorder.recorderFor('no-such-ledger'))).code).toBe('AUDIT_LEDGER_MISMATCH');
   });
 
+  it('tells an observer of every producer entry, a redelivery too, and survives a throwing one', async () => {
+    const seen: string[] = [];
+    const recorder = managed(new MemoryAuditJournal(), { onRecorded: (entry, context) => seen.push(`${entry.core.sequence}:${context.producerAuthority}`) });
+    const event = producerEvent('observed');
+    const first = await recorder.submit(submission(event), contextFor(event));
+    await recorder.submit(submission(event), contextFor(event));
+    expect(seen).toEqual([`${first.core.sequence}:${contextFor(event).producerAuthority}`, `${first.core.sequence}:${contextFor(event).producerAuthority}`]);
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const throwing = managed(new MemoryAuditJournal(), {
+      onRecorded: () => {
+        throw new Error('index down');
+      },
+    });
+    const recorded = await throwing.submit(submission(event), contextFor(event));
+    expect(recorded.core.event.eventId).toBe('observed');
+    expect(errors).toHaveBeenCalledWith('audit recorder: onRecorded observer failed', expect.any(Error));
+    errors.mockRestore();
+  });
+
   it('records administration events and starts every known ledger', async () => {
     const journal = new MemoryAuditJournal();
     const recorder = managed(journal);

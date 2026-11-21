@@ -88,6 +88,14 @@ export interface ManagedAuditRecorderOptions {
   onEpochTransition?: (transition: AuditEpochTransitionResult) => void;
   /** A witness write failed after a commit; the commit stands. Default: logged to stderr. */
   onWitnessFailure?: (error: unknown) => void;
+  /**
+   * Told of every producer submission's signed entry (a redelivery's
+   * original one too), in the submitter's async context, after the receipt
+   * exists: the seam for an index a deployment keeps beside the journal
+   * (account attribution, say). It cannot fail or delay the submission; a
+   * throw is reported through `onWitnessFailure`'s logger.
+   */
+  onRecorded?: (entry: SignedAuditEntry, context: AuthenticatedAuditSubmissionContext) => void;
 }
 
 /** The default ledger id of a tenant: opaque, stable, derived from its reference. */
@@ -175,7 +183,13 @@ export class ManagedAuditRecorder {
     if (submission.ledgerId !== undefined && submission.ledgerId !== ledger.ledgerId) {
       throw new AuditProtocolError(AUDIT_ERROR_CODES.LEDGER_MISMATCH, 'Wrong audit ledger for this tenant', { ledgerId: submission.ledgerId });
     }
-    return this.withActive(ledger.ledgerId, (recorder) => recorder.submitAuthenticated({ ...submission, producerEvent: event }, context));
+    const entry = await this.withActive(ledger.ledgerId, (recorder) => recorder.submitAuthenticated({ ...submission, producerEvent: event }, context));
+    try {
+      this.options.onRecorded?.(entry, context);
+    } catch (error) {
+      console.error('audit recorder: onRecorded observer failed', error);
+    }
+    return entry;
   }
 
   /** Records an administration event the recorder itself authors (retention, legal hold). */
