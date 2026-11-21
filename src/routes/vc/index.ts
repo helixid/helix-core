@@ -14,12 +14,15 @@ import { FastifyPluginAsync } from 'fastify';
 import { AdminAuthRequiredError, ErrorCode, HelixError } from '../../core/index.js';
 import type { SignedVC } from '../../core/index.js';
 import type { IVCService, IssueVCParams, RenewVCOptions } from '../../services/vc/vc.service.js';
+import type { CredentialService } from '../../services/credentials/credential.service.js';
 
 const VC_STATUSES = ['active', 'revoked', 'expired'] as const;
 type VCStatus = (typeof VC_STATUSES)[number];
 
 export interface VcRouteOptions {
   vcService: IVCService;
+  /** Renews F-1 identity credentials; other VC ids fall back to `vcService.renewVC`. */
+  credentialService?: Pick<CredentialService, 'renewIdentity'> | undefined;
   adminApiKey?: string | undefined;
 }
 
@@ -37,7 +40,7 @@ interface ListVCQuery {
  * VC API Route Definitions (Boundary 2).
  */
 const vcRoutes: FastifyPluginAsync<VcRouteOptions> = async (fastify, options) => {
-  const { vcService, adminApiKey } = options;
+  const { vcService, adminApiKey, credentialService } = options;
 
   function requireAdmin(request: { headers: Record<string, string | string[] | undefined> }): void {
     const submitted = request.headers['x-admin-api-key'];
@@ -126,7 +129,11 @@ const vcRoutes: FastifyPluginAsync<VcRouteOptions> = async (fastify, options) =>
   fastify.post('/:vcId/renew', async (request, reply) => {
     requireAdmin(request);
     const { vcId } = request.params as VCParams;
-    const overrides = request.body as RenewVCOptions;
+    const overrides = (request.body ?? {}) as RenewVCOptions;
+    const renewedIdentity = await credentialService?.renewIdentity(vcId, overrides, request.id);
+    if (renewedIdentity) {
+      return reply.status(201).send(renewedIdentity);
+    }
     const result = await vcService.renewVC(vcId, overrides, request.id);
     return reply.status(201).send(result);
   });

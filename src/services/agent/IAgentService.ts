@@ -1,5 +1,4 @@
-import type { SignedVC, SignedVP } from '../../core/index.js';
-import type { ReconcileResult } from '../vc/IVCService.js';
+import type { SignedCapabilityAttestation, SignedIdentityCredential, SignedVP } from '../../core/index.js';
 
 export interface EnrollmentTokenResult {
   token: string;
@@ -14,25 +13,29 @@ export interface ChallengeResult {
   didCreateSigningPayloadHex?: string;
 }
 
+/**
+ * KYA-OS story F-1: onboarding issues the split credential set. `vc` and
+ * `vcId` are the identity credential; `attestations` one per scope.
+ */
 export interface OnboardVerifyResult {
   agentDid: string;
   vc: Record<string, unknown>;
   hederaTransactionId: string;
   vcId: string;
+  identity: SignedIdentityCredential;
+  attestations: SignedCapabilityAttestation[];
 }
 
 export interface OnboardWithCustodyResult {
   agentDid: string;
+  /** The identity credential's id. */
   vcId: string;
+  identity: SignedIdentityCredential;
+  attestations: SignedCapabilityAttestation[];
 }
 
 export interface SignVPResult {
   signedVP: SignedVP;
-}
-
-/** The delegated VC, plus what storing it did to earlier delegations from the same delegator to the same DID. */
-export interface DelegateAuthorityResult extends Partial<ReconcileResult> {
-  delegatedVC: SignedVC;
 }
 
 export interface UserChallengeVerifyResult {
@@ -47,7 +50,6 @@ export interface IAgentService {
       agentName: string;
       requestedScopes: string[];
       requestedDomains?: string[];
-      maxDelegationDepth?: number;
       expiry?: number | null;
     },
     requestId: string,
@@ -59,20 +61,16 @@ export interface IAgentService {
   processOnboardVerify(
     input: { challengeId: string; signature: string; didCreateSignature?: string },
     requestId: string,
+    options?: { ownerDid?: string },
   ): Promise<OnboardVerifyResult>;
   onboardWithCustody(
-    input: { enrollmentToken: string; domains?: string[]; expiry?: number },
+    input: { enrollmentToken: string; domains?: string[]; expiry?: number; ownerDid?: string },
     requestId: string,
   ): Promise<OnboardWithCustodyResult>;
   signVP(
     input: { did: string; targetService: string; userDid?: string },
     requestId: string,
   ): Promise<SignVPResult>;
-  delegateAuthority(
-    input: { did: string; to: string; scopes: string[]; expiresIn: number; vcId?: string; revokeExisting?: boolean },
-    requestId: string,
-    options?: DelegateAuthorityOptions,
-  ): Promise<DelegateAuthorityResult>;
   issueUserChallenge(
     input: { did: string; purpose: 'user_verification' },
     requestId: string,
@@ -82,15 +80,4 @@ export interface IAgentService {
     input: { signature: string },
     requestId: string,
   ): Promise<UserChallengeVerifyResult>;
-}
-
-export interface DelegateAuthorityOptions {
-  /**
-   * A deployment's own say over who may receive a delegation, given the
-   * delegatee and the credential being delegated from (its chain shows where
-   * the authority started). Called once both are known and the delegatee is
-   * confirmed registered, before anything is reserved or signed; throwing
-   * refuses the delegation.
-   */
-  authorizeDelegatee?: (context: { to: string; fromVC: SignedVC }) => Promise<void>;
 }
