@@ -132,6 +132,8 @@ export { default as agentRoutes } from './routes/agent/index.js';
 export { default as agentKeyRoutes, readRegisterAgentKeyBody, AGENT_KEY_UPDATE_TYPE } from './routes/agent-keys/index.js';
 export type { AgentKeyRouteOptions, RegisterAgentKeyBody, RegisterAgentKeyResult } from './routes/agent-keys/index.js';
 export { default as auditLogRoutes, type AuditLogRouteOptions } from './routes/audit-log/index.js';
+export { default as auditRoutes, requireAuditOperator, type AuditRouteOptions, type AuditSubmissionAuthorizer } from './routes/audit/index.js';
+export { runAuditCli, verifyAuditLedgerExport, type AuditCliIo, type AuditLedgerExport } from './cli/audit.js';
 export { default as sessionRoutes } from './routes/sessions/index.js';
 export { default as serviceProviderRoutes } from './routes/service-provider/index.js';
 export type { ServiceProviderAction, ServiceProviderRouteOptions } from './routes/service-provider/index.js';

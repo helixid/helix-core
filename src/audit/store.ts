@@ -11,87 +11,94 @@
 // limitations under the License.
 
 /**
- * Where the API keeps recorded events and evidence. An `AuditEventStore` is
- * the `AuditSink` the API's own trail writes to, the sink remote producers'
- * events (`POST /v1/audit-log/events`) land in, the evidence vault, and the
- * reader behind `GET /v1/audit-log`. Append-only: there is no update or
- * delete method, and nothing in this package ever issues one. Story A-2's
- * recorder replaces the sink half (sequence, epoch, receipt) behind the same
- * `AuditSink` seam.
+ * Where the API keeps the audit ledger (story A-2): a journal (PostgreSQL,
+ * SQLite, or memory) behind the authoritative recorder, and the evidence
+ * vault with its legal holds. A-1's capture sinks are replaced: every event,
+ * the API's own and every producer's, now enters through the recorder.
  */
 
-import type { AuditProducerEvent, AuditSink, AuditTrailEntry, Digest, EvidenceStore, PartyRef } from '../core/index.js';
-import { HelixError, auditEventFamily } from '../core/index.js';
+import type {
+  AuditLedgerStore,
+  AuditRecorderEvidenceStore,
+  AuditRetentionStore,
+  Digest,
+  EvidenceStore,
+  SignedAuditEntry,
+} from '../core/index.js';
+import { ErrorCode, HelixError, type AuditListCursor } from '../core/index.js';
 
-export interface StoredAuditEvent {
+/** The vault the recorder writes submitted ciphertext to, and the retention store over it. */
+export interface ApiAuditEvidenceStore extends EvidenceStore, AuditRetentionStore {
+  has: AuditRecorderEvidenceStore['has'];
+  discardUncommitted: NonNullable<AuditRecorderEvidenceStore['discardUncommitted']>;
+}
+
+export interface ApiAuditStorage {
+  journal: AuditLedgerStore;
+  evidence: ApiAuditEvidenceStore;
+}
+
+/**
+ * The opaque cursor of a listing page: the last entry's service time and
+ * position (`AuditListCursor`), as base64url JSON. Every Helix audit-log
+ * listing (core's, a hosted deployment's) pages with this one cursor.
+ */
+export function encodeAuditCursor(cursor: AuditListCursor): string {
+  return Buffer.from(JSON.stringify([cursor.recordedAt, cursor.ledgerId, cursor.ledgerEpochId, cursor.sequence]), 'utf8').toString('base64url');
+}
+
+/** The cursor a page handed out; a value it could not have handed out is a 400. Empty or absent: the first page. */
+export function decodeAuditCursor(value: string | undefined): AuditListCursor | undefined {
+  if (value === undefined || value === '') return undefined;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(Buffer.from(value, 'base64url').toString('utf8'));
+  } catch {
+    parsed = undefined;
+  }
+  if (
+    Array.isArray(parsed) &&
+    parsed.length === 4 &&
+    Number.isSafeInteger(parsed[0]) &&
+    typeof parsed[1] === 'string' &&
+    typeof parsed[2] === 'string' &&
+    typeof parsed[3] === 'string' &&
+    /^(0|[1-9][0-9]*)$/.test(parsed[3])
+  ) {
+    return { recordedAt: parsed[0] as number, ledgerId: parsed[1], ledgerEpochId: parsed[2], sequence: parsed[3] };
+  }
+  throw new HelixError(ErrorCode.VALIDATION_ERROR, 'cursor is not one this API issued', 400);
+}
+
+/** One page of an audit-log listing: newest first, and the cursor of the next page (null on the last). */
+export interface AuditLogPage<Item> {
+  items: Item[];
+  nextCursor: string | null;
+}
+
+/** One `GET /v1/audit-log` row: A-1's members, plus where the recorder placed the event and its receipt. */
+export interface AuditLogRow {
   id: string;
-  recordedAt: Date;
+  recordedAt: string;
   eventDigest: Digest;
-  event: AuditProducerEvent;
+  event: SignedAuditEntry['core']['event'];
+  ledgerId: string;
+  ledgerEpochId: string;
+  sequence: string;
+  entryDigest: Digest;
+  receipt: SignedAuditEntry['recorderReceipt'];
 }
 
-export interface ListAuditEventFilters {
-  eventType?: string | undefined;
-  family?: string | undefined;
-  since?: Date | undefined;
-  correlationId?: string | undefined;
-  limit: number;
-}
-
-export interface AuditEventStore extends AuditSink, EvidenceStore {
-  /** Newest first. */
-  list(filters: ListAuditEventFilters): Promise<StoredAuditEvent[]>;
-}
-
-/** An event id reused by its source for different content (AUDITABILITY.md: same id, different content is rejected). */
-export class AuditEventConflictError extends HelixError {
-  constructor(sourceId: string, eventId: string) {
-    super('AUDIT_EVENT_INVALID', 'An event with this id and source was already recorded with different content', 409, {
-      sourceId,
-      eventId,
-    });
-    this.name = 'AuditEventConflictError';
-  }
-}
-
-/** The indexable key of a party reference: its kind and its did or commitment value. */
-export function partyRefKey(ref: PartyRef | undefined): string | undefined {
-  if (ref === undefined) return undefined;
-  switch (ref.kind) {
-    case 'public_did':
-    case 'pairwise_did':
-      return `${ref.kind}:${ref.did}`;
-    case 'keyed_commitment':
-      return `${ref.kind}:${ref.keyId}:${ref.value}`;
-    default:
-      return `evidence_ref:${ref.ref.objectId}`;
-  }
-}
-
-/** The columns every store derives from an entry. */
-export function entryColumns(entry: AuditTrailEntry): {
-  eventId: string;
-  eventType: string;
-  family: string;
-  sourceId: string;
-  sourceSequence: bigint | null;
-  previousSourceEventDigest: string | null;
-  eventDigest: string;
-  occurredAt: Date;
-  correlationId: string | null;
-  actorRef: string | null;
-} {
-  const { event } = entry;
+export function auditLogRow(entry: SignedAuditEntry): AuditLogRow {
   return {
-    eventId: event.eventId,
-    eventType: event.eventType,
-    family: auditEventFamily(event.eventType),
-    sourceId: event.source.sourceId,
-    sourceSequence: event.source.sourceSequence === undefined ? null : BigInt(event.source.sourceSequence),
-    previousSourceEventDigest: event.source.previousSourceEventDigest ?? null,
+    id: `${entry.core.ledgerId}:${entry.core.ledgerEpochId}:${entry.core.sequence}`,
+    recordedAt: new Date(entry.core.recordedAt).toISOString(),
     eventDigest: entry.eventDigest,
-    occurredAt: new Date(event.occurredAt),
-    correlationId: event.correlationId ?? null,
-    actorRef: partyRefKey(event.actor) ?? null,
+    event: entry.core.event,
+    ledgerId: entry.core.ledgerId,
+    ledgerEpochId: entry.core.ledgerEpochId,
+    sequence: entry.core.sequence,
+    entryDigest: entry.entryDigest,
+    receipt: entry.recorderReceipt,
   };
 }

@@ -69,8 +69,6 @@ describe('DID API Security', () => {
 
   afterEach(async () => {
     auditLogger.clear();
-    await prisma.auditEvent.deleteMany();
-    await prisma.auditEvidence.deleteMany();
     await prisma.vc.deleteMany();
     await prisma.statusListEntry.deleteMany();
     await prisma.didUpdate.deleteMany();

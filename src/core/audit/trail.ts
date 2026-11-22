@@ -25,6 +25,7 @@ import { auditEventDigest } from './digest.js';
 import { AuditEvidenceError, type EvidenceEncryptor, type EvidenceStore, evidenceAad } from './evidence.js';
 import { sanitizeReference } from './references.js';
 import { parseAuditEvent } from './schema.js';
+import type { SignedAuditEntry } from './ledger.js';
 import type { AuditSink } from './sink.js';
 import {
   AUDIT_BINDING_HELIX,
@@ -67,6 +68,9 @@ export interface AuditTrailOptions {
   /** Enables `evidence()`; without it an exact payload cannot be kept and no event carries one. */
   evidence?: AuditTrailEvidenceOptions;
 }
+
+/** A recorded entry; `receipt` is the recorder's signed entry when the sink is recorder-backed (A-2). */
+export type RecordedAuditEntry = AuditTrailEntry & { receipt?: SignedAuditEntry };
 
 export const DEFAULT_AUDIT_PRIVACY: AuditPrivacy = { classification: 'internal', retentionClass: 'audit-indefinite' };
 
@@ -186,7 +190,7 @@ export class AuditTrail {
    * consumes a sequence; a sink failure consumes one and leaves the
    * predecessor link on the last appended event.
    */
-  async record(input: AuditEventInput): Promise<AuditTrailEntry> {
+  async record(input: AuditEventInput): Promise<RecordedAuditEntry> {
     const built = this.build(input);
     const run = this.queue.then(async () => {
       const sequence = this.nextSequence;
@@ -200,12 +204,17 @@ export class AuditTrail {
         },
       };
       const entry: AuditTrailEntry = { event, canonical: canonicalize(event), eventDigest: auditEventDigest(event) };
-      await this.sink.append(entry);
+      const receipt = await this.sink.append(entry);
       this.lastDigest = entry.eventDigest;
-      return entry;
+      return receipt === undefined ? entry : { ...entry, receipt };
     });
     this.queue = run.catch(() => undefined);
     return run;
+  }
+
+  /** Resolves once every `record()` issued so far has settled (delivered or failed). */
+  async settled(): Promise<void> {
+    await this.queue;
   }
 
   /**

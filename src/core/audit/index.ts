@@ -13,3 +13,15 @@ export * from './references.js';
 export * from './evidence.js';
 export * from './sink.js';
 export * from './trail.js';
+// Story A-2 (AAP-2 Chained): the authoritative recorder, the atomic journal
+// contract, epochs, retention administration and the ledger verifier.
+export * from './ledger.js';
+export * from './ledger-errors.js';
+export * from './journal.js';
+export * from './recorder.js';
+export * from './recorder-sink.js';
+export * from './epochs.js';
+export * from './managed-recorder.js';
+export * from './retention.js';
+export * from './ledger-verify.js';
+export * from './contract.js';
