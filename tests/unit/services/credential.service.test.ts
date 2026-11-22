@@ -280,6 +280,21 @@ describe('CredentialService', () => {
       await expect(service.revokeHop('urn:zcap:missing', 'req')).rejects.toMatchObject({ code: ErrorCode.VC_NOT_FOUND });
     });
 
+    it('revokes the whole cascade in one call when the status store can (story L3-C: one transaction)', async () => {
+      const grandchildDid = await custodialAgent();
+      const root = await service.issueRootHop({ issuer: helixDid, invoker: parentDid, invocationTarget: RESOURCE, allowedAction: ['read:orders'] }, 'req');
+      const { hop } = await service.issueHop(root.id, { invoker: childDid, allowedAction: ['read:orders'] }, 'req');
+      const grand = await service.issueHop(hop.id, { invoker: grandchildDid, allowedAction: ['read:orders'] }, 'req');
+      const revokeMany = vi.fn(async (ids: readonly string[]) => ids.map((vcId) => ({ vcId })));
+      (statusStore as unknown as { revokeMany: typeof revokeMany }).revokeMany = revokeMany;
+      statusStore.revokeVC.mockClear();
+
+      expect(await service.revokeHop(hop.id, 'req-many')).toEqual([hop.id, grand.hop.id]);
+      expect(revokeMany).toHaveBeenCalledTimes(1);
+      expect(revokeMany).toHaveBeenCalledWith([hop.id, grand.hop.id], { requestId: 'req-many' });
+      expect(statusStore.revokeVC).not.toHaveBeenCalled();
+    });
+
     it('refuses to walk a stored chain deeper than the maximum', async () => {
       const findByVcId = vi.spyOn(vcRepo, 'findByVcId').mockImplementation(async (vcId: string) => ({
         vcId,
