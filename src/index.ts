@@ -14,7 +14,7 @@ export * from './core/index.js';
 export { errorHandler } from './middleware/errorHandler.js';
 export { registerRequestLogger } from './middleware/requestLogger.js';
 
-export { ApiAuditLogger } from './audit/index.js';
+export * from './audit/index.js';
 
 export type { ICache } from './cache/ICache.js';
 export { NoopCache } from './cache/NoopCache.js';
@@ -43,8 +43,6 @@ export type {
   CreateVcParams,
   StatusListEntryRecord,
 } from './repositories/vc.repository.js';
-export { AuditLogRepository } from './repositories/audit-log.repository.js';
-export type { AuditLogRecord, ListAuditLogFilters } from './repositories/audit-log.repository.js';
 export { AgentRepository } from './repositories/agent.repository.js';
 export type {
   EnrollmentTokenRecord,
@@ -145,12 +143,15 @@ export type { CustodialKeys } from './services/custody/custodial-keys.js';
 export { DbKeyStore, resolveKeyEncryptionKey, DB_KEY_STORE_ALGORITHM } from './services/custody/db-key-store.js';
 export type { DbKeyStoreOptions, WrappedKeyTable, KeyEncryptionKeyConfig } from './services/custody/db-key-store.js';
 export { CustodyAudit, payloadDigest } from './services/custody/custody-audit.js';
-export type { CustodyActor } from './services/custody/custody-audit.js';
+export { CUSTODY_AUDIT_CATEGORY } from './services/custody/custody-audit.js';
+export type { CustodyActor, CustodialSigningRefusal } from './services/custody/custody-audit.js';
 export { pendingHopReissuer, HOP_REISSUE_PENDING_NOTE } from './services/custody/hop-reissue.js';
 export type { HopReissuer, HopReissueInput, HopReissueResult } from './services/custody/hop-reissue.js';
 export { CustodyRepository, WrappedKeyRepository, CUSTODY_STATUSES } from './repositories/custody.repository.js';
 export type { CustodyRecordRow, CustodyKeyRow, CustodyStatus, CustodyKeyLocation, CustodyKeyStatus, WrappedKeyRow } from './repositories/custody.repository.js';
-export { default as auditLogRoutes } from './routes/audit-log/index.js';
+export { default as auditLogRoutes, type AuditLogRouteOptions } from './routes/audit-log/index.js';
+export { default as auditRoutes, requireAuditOperator, type AuditRouteOptions, type AuditSubmissionAuthorizer } from './routes/audit/index.js';
+export { runAuditCli, verifyAuditLedgerExport, type AuditCliIo, type AuditLedgerExport } from './cli/audit.js';
 export { default as sessionRoutes } from './routes/sessions/index.js';
 export { default as serviceProviderRoutes } from './routes/service-provider/index.js';
 export type { ServiceProviderAction, ServiceProviderRouteOptions } from './routes/service-provider/index.js';

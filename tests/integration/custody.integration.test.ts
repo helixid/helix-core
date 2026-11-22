@@ -8,7 +8,7 @@ import { DidRepository } from '../../src/repositories/did.repository.js';
 import { ServiceRepository } from '../../src/repositories/service.repository.js';
 import { DbKeyStore } from '../../src/services/custody/db-key-store.js';
 import { CustodyService } from '../../src/services/custody/custody.service.js';
-import { TestAuditLogger } from '../utils/TestAuditLogger.js';
+import { TestAuditTrail } from '../utils/TestAuditTrail.js';
 import { clientKey, enrollmentSignature, rotationProof } from '../unit/services/custody/harness.js';
 
 let prisma: PrismaClient;
@@ -37,7 +37,7 @@ function service(): { custody: CustodyService; wrapped: WrappedKeyRepository; re
     didRepository: new DidRepository(prisma),
     credentials: { issuerDid: 'did:web:helix.example', issueIdentity: async () => ({ id: `vc:${suffix}` }), issueAttestations: async () => [] },
     services: new ServiceRepository(prisma),
-    auditLogger: new TestAuditLogger(),
+    auditTrail: new TestAuditTrail(),
     host: `helix-${suffix}.example`,
   });
   return { custody, wrapped, records };

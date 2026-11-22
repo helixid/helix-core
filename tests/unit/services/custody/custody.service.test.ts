@@ -3,7 +3,6 @@
 import * as ed25519 from '@noble/ed25519';
 import { describe, expect, it } from 'vitest';
 import {
-  AuditEvents,
   CustodialSigningRefusedError,
   CustodyStateInvalidError,
   CustodySubjectNotFoundError,
@@ -21,7 +20,7 @@ import {
   type PublicKeyJwk,
 } from '../../../../src/core/index.js';
 import { pendingHopReissuer } from '../../../../src/services/custody/hop-reissue.js';
-import { HOST, clientKey, enrollmentSignature, events, harness, rotationProof, type ClientKey, type Harness } from './harness.js';
+import { HOST, clientKey, enrollmentSignature, CustodyEvents, events, harness, rotationProof, type ClientKey, type Harness } from './harness.js';
 
 async function documentOf(h: Harness, did: string): Promise<AgentDidDocument> {
   return (await h.dids.findDidById(did))!.didDocument as AgentDidDocument;
@@ -79,10 +78,10 @@ describe('full custodial onboarding (point 3)', () => {
     expect(h.issued[0]!.input).toEqual({ agentDid: result.did, name: 'Serverless Bot', ownerDid: 'did:web:helix.example' });
     expect(h.attested).toEqual([{ agentDid: result.did, capability: 'read:orders', vcId: 'att:test:1' }]);
     expect(await h.records.findRecord(result.did)).toMatchObject({ keyCustody: 'helix', didHosting: 'helix', credentialVcId: 'vc:test:1' });
-    expect(events(h, AuditEvents.CUSTODY_CHOSEN)).toEqual([
+    expect(events(h, CustodyEvents.CUSTODY_CHOSEN)).toEqual([
       expect.objectContaining({ actor: 'admin', did: result.did, subjectType: 'agent', keyCustody: 'helix', didHosting: 'helix', source: { keyCustody: 'override', didHosting: 'override' } }),
     ]);
-    expect(events(h, AuditEvents.CUSTODY_ACTIVATED)).toEqual([expect.objectContaining({ did: result.did, resolution: 'helix-hosted' })]);
+    expect(events(h, CustodyEvents.CUSTODY_ACTIVATED)).toEqual([expect.objectContaining({ did: result.did, resolution: 'helix-hosted' })]);
   });
 
   it('signs through the KeyStore, audits each signature by digest, and the signature verifies against the published key', async () => {
@@ -94,7 +93,7 @@ describe('full custodial onboarding (point 3)', () => {
     const published = keyIn(await documentOf(h, agent.did), signed.kid)!;
     expect(await ed25519.verifyAsync(base64UrlDecodeStrict(signed.signature)!, payload, publicKeyJwkBytes(published))).toBe(true);
     await h.service.sign(agent.did, { payload: base64UrlEncode(payload), kid: 'key-1' }, h.context(), 'agent');
-    const audited = events(h, AuditEvents.CUSTODIAL_SIGNATURE);
+    const audited = events(h, CustodyEvents.CUSTODIAL_SIGNATURE);
     expect(audited).toHaveLength(2);
     expect(audited[0]).toMatchObject({ actor: 'account:acc_1', did: agent.did, subjectType: 'agent', kid: signed.kid, payloadBytes: payload.length });
     expect(audited[0]!['payloadDigest']).toMatch(/^sha256:[0-9a-f]{64}$/);
@@ -147,15 +146,15 @@ describe('self-custody onboarding (point 2) and the self-custody invariant', () 
     for (const form of key.forms) expect(stored).not.toContain(form);
     // The token is stored as its hash only.
     expect(stored).not.toContain(created.enrollmentToken);
-    expect(events(h, AuditEvents.CUSTODY_ACTIVATED)).toEqual([expect.objectContaining({ actor: 'enrollment-token', did: created.did })]);
+    expect(events(h, CustodyEvents.CUSTODY_ACTIVATED)).toEqual([expect.objectContaining({ actor: 'enrollment-token', did: created.did })]);
   });
 
   it('refuses custodial signing for a self-custody agent and audits the refusal', async () => {
     const h = harness();
     const { enrolled } = await onboardSelf(h);
     await expect(h.service.sign(enrolled.did, { payload: 'AQ' }, h.context(), 'agent')).rejects.toThrow(CustodialSigningRefusedError);
-    expect(events(h, AuditEvents.CUSTODIAL_SIGNING_REFUSED)).toEqual([expect.objectContaining({ did: enrolled.did, reason: expect.stringMatching(/key custody is self/) })]);
-    expect(events(h, AuditEvents.CUSTODIAL_SIGNATURE)).toEqual([]);
+    expect(events(h, CustodyEvents.CUSTODIAL_SIGNING_REFUSED)).toEqual([expect.objectContaining({ did: enrolled.did, code: 'custody_self' })]);
+    expect(events(h, CustodyEvents.CUSTODIAL_SIGNATURE)).toEqual([]);
   });
 
   it('helix init on the owner domain: pending until the documents resolve from there, then active', async () => {
@@ -169,7 +168,7 @@ describe('self-custody onboarding (point 2) and the self-custody invariant', () 
     publishOwnDomain(h, enrolled.documents!);
     const active = await h.service.activate(did, h.context());
     expect(active.status).toBe('active');
-    expect(events(h, AuditEvents.CUSTODY_ACTIVATED)).toEqual([expect.objectContaining({ did, resolution: 'verified' })]);
+    expect(events(h, CustodyEvents.CUSTODY_ACTIVATED)).toEqual([expect.objectContaining({ did, resolution: 'verified' })]);
     await expect(h.service.activate(did, h.context())).rejects.toThrow(CustodyStateInvalidError);
     expect(h.wrapped.dump()).toEqual([]);
     for (const form of key.forms) expect(await everythingStored(h)).not.toContain(form);
@@ -265,7 +264,7 @@ describe('mixed custody per agent (point 4)', () => {
       ['helix', 'custody: helix', 'active'],
       ['self', 'custody: self', 'pending_key'],
     ]);
-    expect(events(h, AuditEvents.CUSTODY_CHOSEN).map((event) => event['source'])).toEqual([
+    expect(events(h, CustodyEvents.CUSTODY_CHOSEN).map((event) => event['source'])).toEqual([
       { keyCustody: 'account', didHosting: 'account' },
       { keyCustody: 'override', didHosting: 'account' },
       { keyCustody: 'account', didHosting: 'account' },
@@ -432,7 +431,7 @@ describe('services and owners (points 1 and 7)', () => {
       const published = keyIn(await documentOf(h, owner.did), owner.kid!)!;
       expect(verifyJws(jws, published, { expectedKid: owner.kid! }).payload).toMatchObject({ iss: owner.did, capability: 'read:orders' });
     }
-    expect(events(h, AuditEvents.CUSTODIAL_SIGNATURE).map((event) => event['subjectType'])).toEqual(['owner']);
+    expect(events(h, CustodyEvents.CUSTODIAL_SIGNATURE).map((event) => event['subjectType'])).toEqual(['owner']);
   });
 
   it('validates owner input', async () => {
@@ -479,10 +478,10 @@ describe('changing custody is a rotation (point 6)', () => {
     // The identity credential carries no custody facts (F-1), so it is kept; nothing is reissued.
     expect(h.issued).toHaveLength(1);
     expect(changed).not.toHaveProperty('vcId');
-    expect(events(h, AuditEvents.CUSTODY_CHANGED)).toEqual([
+    expect(events(h, CustodyEvents.CUSTODY_CHANGED)).toEqual([
       expect.objectContaining({ actor: 'account:acc_1', did: agent.did, from: 'helix', to: 'self', oldKid, newKid, hopReissue: expect.objectContaining({ pending: true }) }),
     ]);
-    expect(events(h, AuditEvents.CUSTODY_KEY_SHREDDED)).toEqual([expect.objectContaining({ did: agent.did, kid: oldKid })]);
+    expect(events(h, CustodyEvents.CUSTODY_KEY_SHREDDED)).toEqual([expect.objectContaining({ did: agent.did, kid: oldKid })]);
     expect(h.didCacheDeleted).toContain(agent.did);
 
     // The overlap ends: the old key is revoked and leaves the document.
@@ -491,7 +490,7 @@ describe('changing custody is a rotation (point 6)', () => {
     expect(finalized.revoked).toEqual([oldKid]);
     expect(finalized.keys.find((key) => key.kid === oldKid)).toMatchObject({ status: 'revoked', revokedAt: h.now.value.toISOString() });
     expect((await documentOf(h, agent.did)).verificationMethod.map((method) => method.id)).toEqual([newKid]);
-    expect(events(h, AuditEvents.CUSTODY_KEY_REVOKED)).toEqual([expect.objectContaining({ kid: oldKid, location: 'helix' })]);
+    expect(events(h, CustodyEvents.CUSTODY_KEY_REVOKED)).toEqual([expect.objectContaining({ kid: oldKid, location: 'helix' })]);
     expect((await h.service.finalizeRotation(agent.did, h.context())).revoked).toEqual([]);
   });
 
@@ -503,8 +502,8 @@ describe('changing custody is a rotation (point 6)', () => {
     expect(changed.keys.map((key) => [key.location, key.status])).toEqual([['self', 'revoked'], ['helix', 'active']]);
     expect((await documentOf(h, enrolled.did)).verificationMethod.map((method) => method.id)).toEqual([`${enrolled.did}#key-2`]);
     expect((await h.service.sign(enrolled.did, { payload: 'AQ' }, h.context(), 'agent')).kid).toBe(`${enrolled.did}#key-2`);
-    expect(events(h, AuditEvents.CUSTODY_KEY_REVOKED)).toEqual([expect.objectContaining({ location: 'self' })]);
-    expect(events(h, AuditEvents.CUSTODY_KEY_SHREDDED)).toEqual([]);
+    expect(events(h, CustodyEvents.CUSTODY_KEY_REVOKED)).toEqual([expect.objectContaining({ location: 'self' })]);
+    expect(events(h, CustodyEvents.CUSTODY_KEY_SHREDDED)).toEqual([]);
   });
 
   it('a due overlap ends on the next signature, and finalize can force it', async () => {

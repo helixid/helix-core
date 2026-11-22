@@ -18,7 +18,7 @@ import { createTestPrisma } from '../utils/prisma.js';
 
 import { DIDService } from '../../src/services/did/did.service.js';
 import { DidRepository } from '../../src/repositories/did.repository.js';
-import { ApiAuditLogger } from '../../src/audit/index.js';
+import { TestAuditTrail } from '../utils/TestAuditTrail.js';
 import { MockHederaClient } from '../../src/hedera/mock/MockHederaClient.js';
 import { errorHandler } from '../../src/middleware/errorHandler.js';
 import didRoutes from '../../src/routes/did/index.js';
@@ -31,11 +31,12 @@ describe('DID API Security', () => {
   let app: any;
   let prisma: PrismaClient;
   let mockHedera: MockHederaClient;
+  let auditLogger: TestAuditTrail;
 
   beforeAll(async () => {
     prisma = createTestPrisma();
     mockHedera = new MockHederaClient();
-    const auditLogger = new ApiAuditLogger(prisma);
+    auditLogger = new TestAuditTrail();
     const didRepository = new DidRepository(prisma);
     const didService = new DIDService(didRepository, mockHedera, auditLogger);
 
@@ -67,7 +68,7 @@ describe('DID API Security', () => {
   });
 
   afterEach(async () => {
-    await prisma.auditLog.deleteMany();
+    auditLogger.clear();
     await prisma.vc.deleteMany();
     await prisma.statusListEntry.deleteMany();
     await prisma.didUpdate.deleteMany();
@@ -152,12 +153,15 @@ describe('DID API Security', () => {
       payload: { publicKeyHex: publicKey, subjectType: 'agent' },
     });
 
-    const logs = await prisma.auditLog.findMany();
-    for (const log of logs) {
-      const content = JSON.stringify(log);
+    await auditLogger.flush();
+    expect(auditLogger.eventTypes).toContain('configuration.changed');
+    for (const event of auditLogger.events) {
+      const content = JSON.stringify(event);
       expect(content.toLowerCase()).not.toContain('privatekey');
       // Assert no 64-char hex string that matches our private key
       expect(content).not.toContain(privateKey);
+      // The public key is recorded only through the document digest.
+      expect(content).not.toContain(publicKey);
     }
   });
 

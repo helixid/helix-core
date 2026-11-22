@@ -11,6 +11,9 @@
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "bin": {
+    "helix-audit": "./dist/cli/audit-bin.js"
+  },
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -55,11 +58,14 @@
     "generate:golden-vectors": "tsx scripts/generate-golden-vectors.ts",
     "generate:kya-os-helix": "tsx scripts/generate-kya-os-helix-fixtures.ts",
     "generate:jws-fixtures": "tsx scripts/generate-jws-fixtures.ts",
+    "generate:audit-fixtures": "tsx scripts/generate-audit-fixtures.ts",
     "generate:did-fixtures": "tsx scripts/generate-did-fixtures.ts",
     "generate:credential-fixtures": "tsx scripts/generate-credential-fixtures.ts",
     "generate:entity-card-fixtures": "tsx scripts/generate-entity-card-fixtures.ts",
     "generate:custody-fixtures": "tsx scripts/generate-custody-fixtures.ts",
     "generate:verifier-fixtures": "tsx scripts/gen-fixtures.ts",
+    "audit": "tsx src/cli/audit-bin.ts",
+    "audit:verify": "tsx src/cli/audit-bin.ts verify",
     "setup": "tsx scripts/setup.ts",
     "setup:hedera": "tsx scripts/setup-hedera.ts",
     "changeset": "changeset",

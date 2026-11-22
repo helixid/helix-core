@@ -21,6 +21,7 @@ import { DidKeyRepository } from '../../../src/repositories/did-key.repository.j
 import { AesGcmKeyCustody } from '../../../src/services/key-custody/key-custody.js';
 import { CredentialService } from '../../../src/services/credentials/credential.service.js';
 import { CustodySigner } from '../../../src/services/credentials/custody-signer.js';
+import { TestAuditTrail } from '../../utils/TestAuditTrail.js';
 import type { DidResolver } from '../../../src/core/credentials/index.js';
 import type { CredentialStatusStore } from '../../../src/services/credentials/credential.service.js';
 
@@ -37,9 +38,9 @@ describe('CredentialService', () => {
   let vcRepo: VcRepository;
   let keyRepo: DidKeyRepository;
   let custody: AesGcmKeyCustody;
-  let didService: { resolveDID: ReturnType<typeof vi.fn>; registerResolvedDID: ReturnType<typeof vi.fn> };
   let statusStore: { claimStatusListEntry: ReturnType<typeof vi.fn>; revokeVC: ReturnType<typeof vi.fn> };
-  let audit: { log: ReturnType<typeof vi.fn> };
+  let didService: { resolveDID: ReturnType<typeof vi.fn>; registerResolvedDID: ReturnType<typeof vi.fn> };
+  let audit: TestAuditTrail;
   let service: CredentialService;
   let parentDid: string;
   let childDid: string;
@@ -68,7 +69,7 @@ describe('CredentialService', () => {
       }),
     };
     didService = { resolveDID: vi.fn(async () => ({})), registerResolvedDID: vi.fn(async () => undefined) };
-    audit = { log: vi.fn() };
+    audit = new TestAuditTrail();
     service = new CredentialService(
       vcRepo,
       statusStore as unknown as CredentialStatusStore,
@@ -103,7 +104,15 @@ describe('CredentialService', () => {
       expect(identity.credentialStatus).toMatchObject({ statusListIndex: '1', statusListCredential: LIST_URL, id: `${LIST_URL}#1` });
       const record = await vcRepo.findByVcId(identity.id);
       expect(record).toMatchObject({ subjectDid: childDid, vcType: 'AgentIdentityCredential', issuerDid: helixDid, statusListIndex: 1, expiresAt: null, scopeKey: null });
-      expect(audit.log).toHaveBeenCalledWith('VC_ISSUED', expect.objectContaining({ requestId: 'req-1', vcId: identity.id, credentialType: 'AgentIdentityCredential' }));
+      await audit.flush();
+      expect(audit.ofType('delegation.issued')[0]).toMatchObject({
+        correlationId: 'req-1',
+        action: { category: 'credential', name: 'issued' },
+        actor: { kind: 'public_did', did: helixDid },
+        resource: { kind: 'public_did', did: childDid },
+        details: { family: 'delegation', phase: 'issued', delegationRef: identity.id },
+      });
+      expect(JSON.stringify(audit.events)).not.toContain('orders-agent');
       expect((await verifyIdentityCredential(identity, resolve)).ok).toBe(true);
       const bounded = await service.issueIdentity({ agentDid: childDid, name: 'x', ownerDid, validUntil: new Date('2027-01-01T00:00:00Z') }, 'req-2');
       expect(bounded.validUntil).toBe('2027-01-01T00:00:00.000Z');
@@ -137,7 +146,11 @@ describe('CredentialService', () => {
       expect(renewed!.expiresAt).toBe('2027-01-01T00:00:00.000Z');
       expect(renewed!.statusListIndex).toBe(Number(renewed!.vc.credentialStatus.statusListIndex));
       expect((await vcRepo.findByVcId(first.id))!.renewedByVcId).toBe(renewed!.vcId);
-      expect(audit.log).toHaveBeenCalledWith('VC_RENEWED', expect.objectContaining({ oldVcId: first.id, newVcId: renewed!.vcId, subjectDid: childDid }));
+      await audit.flush();
+      expect(audit.ofType('delegation.issued').find((event) => event.action.name === 'renewed')).toMatchObject({
+        resource: { kind: 'public_did', did: childDid },
+        details: { delegationRef: renewed!.vcId, parentRef: first.id },
+      });
       // The listing now leads with the renewed identity; the old one stays active.
       expect((await service.listAgentCredentials(childDid)).identity).toMatchObject({ vcId: renewed!.vcId, status: 'active' });
       expect((await vcRepo.findByVcId(first.id))!.revokedAt).toBeNull();
@@ -193,7 +206,12 @@ describe('CredentialService', () => {
       const kept = await service.registerAttestation(childDid, attestation, 'req');
       expect(kept).toEqual(attestation);
       expect(await vcRepo.findByVcId(attestation.id)).toMatchObject({ issuerDid: ownerDid, statusListIndex: 9 });
-      expect(audit.log).toHaveBeenCalledWith('VC_ISSUED', expect.objectContaining({ ownerSigned: true, capability: 'read:catalog' }));
+      await audit.flush();
+      expect(audit.ofType('delegation.issued').at(-1)).toMatchObject({
+        action: { category: 'credential', name: 'registered' },
+        actor: { kind: 'public_did', did: ownerDid },
+        details: { delegationRef: attestation.id },
+      });
       await expect(service.registerAttestation(childDid, attestation, 'req')).rejects.toMatchObject({ httpStatus: 409 });
       await expect(service.registerAttestation(parentDid, attestation, 'req')).rejects.toMatchObject({ code: ErrorCode.VALIDATION_ERROR, message: expect.stringContaining('subject_mismatch') });
       await expect(service.registerAttestation(childDid, { ...attestation, issuer: helixDid }, 'req')).rejects.toMatchObject({ message: expect.stringContaining('proof_issuer_mismatch') });
@@ -304,6 +322,58 @@ describe('CredentialService', () => {
       expect((await service.listAgentCredentials(childDid)).identity).toMatchObject({ vcId: first.id, status: 'expired' });
       const second = await service.issueIdentity({ agentDid: childDid, name: 'x', ownerDid }, 'req');
       expect((await service.listAgentCredentials(childDid)).identity).toMatchObject({ vcId: second.id, status: 'active' });
+    });
+
+    it('orders credentials stored in the same millisecond by id', async () => {
+      vi.useFakeTimers({ toFake: ['Date'] });
+      try {
+        vi.setSystemTime(new Date('2026-11-22T00:00:00.000Z'));
+        await service.issueAttestations({ agentDid: childDid, capabilities: ['read:a', 'read:b', 'read:c'] }, 'req');
+      } finally {
+        vi.useRealTimers();
+      }
+      const ids = (await service.listAgentCredentials(childDid)).attestations.map((entry) => entry.vcId);
+      expect(ids).toHaveLength(3);
+      expect(ids).toEqual([...ids].sort((a, b) => a.localeCompare(b)));
+    });
+  });
+  describe('audit (KYA-OS A-1)', () => {
+    function withTrail(trail: { record: (input: unknown) => Promise<unknown> }) {
+      return new CredentialService(
+        vcRepo,
+        statusStore as unknown as CredentialStatusStore,
+        didService as unknown as ConstructorParameters<typeof CredentialService>[2],
+        helixSigner,
+        keyRepo,
+        custody,
+        trail as unknown as ConstructorParameters<typeof CredentialService>[6],
+      );
+    }
+
+    it('never fails an issuance because the event could not be recorded, rejected or thrown', async () => {
+      const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+      try {
+        const rejecting = withTrail({ record: async () => { throw new Error('sink down'); } });
+        expect((await rejecting.issueIdentity({ agentDid: childDid, name: 'a', ownerDid }, 'req-r')).id).toMatch(/^urn:uuid:/);
+        const throwing = withTrail({ record: () => { throw 'not an error'; } });
+        expect((await throwing.issueIdentity({ agentDid: childDid, name: 'b', ownerDid }, 'req-t')).id).toMatch(/^urn:uuid:/);
+        await vi.waitFor(() => expect(errors).toHaveBeenCalledWith('AUDIT_RECORD_FAILED', 'sink down'));
+        expect(errors).toHaveBeenCalledWith('AUDIT_RECORD_FAILED', 'not an error');
+      } finally {
+        errors.mockRestore();
+      }
+    });
+
+    it('names no party that is not a DID, and a credential that shows no id as unknown, with no digest', async () => {
+      const unsigned = { issuer: 'not a did' };
+      (service as unknown as { auditIssued(c: unknown, s: string, n: string, r: string): void }).auditIssued(unsigned, 'not a did either', 'issued', 'req-u');
+      await audit.flush();
+      const [event] = audit.ofType('delegation.issued');
+      expect(event).toBeDefined();
+      expect(event).not.toHaveProperty('actor');
+      expect(event).not.toHaveProperty('resource');
+      expect(event!.authorization).not.toHaveProperty('delegationCredentialDigest');
+      expect(event!.details).toMatchObject({ delegationRef: 'unknown' });
     });
   });
 });

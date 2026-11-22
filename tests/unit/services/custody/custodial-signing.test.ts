@@ -4,7 +4,6 @@
 import * as ed25519 from '@noble/ed25519';
 import { describe, expect, it } from 'vitest';
 import {
-  AuditEvents,
   CustodialSigningRefusedError,
   DelegateeNotAnAgentError,
   ServiceKeyNotFoundError,
@@ -25,7 +24,7 @@ import { DidKeyRepository } from '../../../../src/repositories/did-key.repositor
 import { AesGcmKeyCustody } from '../../../../src/services/key-custody/key-custody.js';
 import { ServiceProviderService } from '../../../../src/services/service-provider/service-provider.service.js';
 import { MockVCService } from '../../../mocks/MockVCService.js';
-import { clientKey, enrollmentSignature, events, harness, type Harness } from './harness.js';
+import { clientKey, enrollmentSignature, CustodyEvents, events, harness, type Harness } from './harness.js';
 
 const MASTER = 'b'.repeat(64);
 
@@ -88,7 +87,7 @@ describe('KYA-OS delegation for custodial agents: signed through the generic /si
     expect(hop.issuer).toBe(delegator.did);
     const verified = await verifyDelegationHop(hop, async (did) => (await documentOf(h, did)) as never);
     expect(verified).toMatchObject({ ok: true, issuer: delegator.did, invoker: delegatee.did });
-    expect(events(h, AuditEvents.CUSTODIAL_SIGNATURE)).toEqual([expect.objectContaining({ actor: 'account:acc_1', did: delegator.did, kid: `${delegator.did}#key-1` })]);
+    expect(events(h, CustodyEvents.CUSTODIAL_SIGNATURE)).toEqual([expect.objectContaining({ actor: 'account:acc_1', did: delegator.did, kid: `${delegator.did}#key-1` })]);
   });
 
   it('after a change to self custody, Helix no longer signs for the agent, through /sign or for a grant', async () => {
@@ -123,7 +122,7 @@ describe('consent grants for services and agents created through the custody rou
     expect(grantVC.proof.verificationMethod).toBe(`${svc.did}#key-1`);
     const { proof, ...payload } = grantVC as unknown as Record<string, unknown> & { proof: { proofValue: string } };
     expect(await verifyEd25519Proof(payload, proof, await documentOf(h, svc.did))).toBe(true);
-    expect(events(h, AuditEvents.CUSTODIAL_SIGNATURE)).toEqual([expect.objectContaining({ actor: 'custodial-grant', subjectType: 'service', did: svc.did })]);
+    expect(events(h, CustodyEvents.CUSTODIAL_SIGNATURE)).toEqual([expect.objectContaining({ actor: 'custodial-grant', subjectType: 'service', did: svc.did })]);
   });
 
   it('a self-custody service has no Helix key to sign with; a pending agent or a did_keys key of another kind is refused', async () => {
@@ -151,13 +150,13 @@ describe('the enrollment event', () => {
     const custodial = await h.service.createAgent({ name: 'Custodial', keyCustody: 'helix' }, h.context());
     const key = clientKey();
     const created = await h.service.createAgent({ name: 'Own keys', keyCustody: 'self' }, h.context());
-    expect(events(h, AuditEvents.AGENT_ONBOARDED).map((event) => event['agentDid'])).toEqual([custodial.did]);
+    expect(events(h, CustodyEvents.AGENT_ONBOARDED).map((event) => event['agentDid'])).toEqual([custodial.did]);
     const challenge = await h.service.enrollmentChallenge(created.enrollmentToken);
     await h.service.enroll({ enrollmentToken: created.enrollmentToken, publicKeyJwk: key.publicKeyJwk, signature: enrollmentSignature(key, challenge.did, challenge.kid, challenge.nonce) }, h.context({ actor: 'enrollment-token' }));
     await h.service.createService({ name: 'svc', domain: 'svc.example', requiredScopes: ['a'], keyCustody: 'helix' }, h.context());
-    expect(events(h, AuditEvents.AGENT_ONBOARDED)).toEqual([
-      expect.objectContaining({ agentDid: custodial.did, agentName: 'Custodial', keyCustody: 'helix', didHosting: 'helix' }),
-      expect.objectContaining({ agentDid: created.did, agentName: 'Own keys', keyCustody: 'self' }),
+    expect(events(h, CustodyEvents.AGENT_ONBOARDED)).toEqual([
+      expect.objectContaining({ agentDid: custodial.did, credentialId: 'vc:test:1' }),
+      expect.objectContaining({ agentDid: created.did, credentialId: 'vc:test:2' }),
     ]);
   });
 });

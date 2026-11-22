@@ -15,7 +15,57 @@ import { CustodyRepository } from '../../../../src/repositories/custody.reposito
 import { InMemoryWrappedKeyStorageDriver } from '../../../../src/repositories/drivers/custody.drivers.js';
 import { DbKeyStore } from '../../../../src/services/custody/db-key-store.js';
 import { CustodyService, type CustodyContext, type CustodyServiceOptions } from '../../../../src/services/custody/custody.service.js';
-import { TestAuditLogger } from '../../../utils/TestAuditLogger.js';
+import { CustodyAudit, payloadDigest } from '../../../../src/services/custody/custody-audit.js';
+import { TestAuditTrail } from '../../../utils/TestAuditTrail.js';
+
+/**
+ * The custody facts each CustodyAudit call carried, by the event names F-3
+ * used before story A-1. The typed events those calls record are tested in
+ * custody-audit.test.ts; the service tests assert the facts.
+ */
+export const CustodyEvents = {
+  CUSTODY_CHOSEN: 'CUSTODY_CHOSEN',
+  CUSTODY_ACTIVATED: 'CUSTODY_ACTIVATED',
+  AGENT_ONBOARDED: 'AGENT_ONBOARDED',
+  CUSTODY_CHANGED: 'CUSTODY_CHANGED',
+  CUSTODY_KEY_REVOKED: 'CUSTODY_KEY_REVOKED',
+  CUSTODY_KEY_SHREDDED: 'CUSTODY_KEY_SHREDDED',
+  CUSTODIAL_SIGNATURE: 'CUSTODIAL_SIGNATURE',
+  CUSTODIAL_SIGNING_REFUSED: 'CUSTODIAL_SIGNING_REFUSED',
+} as const;
+
+const METHOD_EVENTS: Record<string, string> = {
+  chosen: CustodyEvents.CUSTODY_CHOSEN,
+  activated: CustodyEvents.CUSTODY_ACTIVATED,
+  agentOnboarded: CustodyEvents.AGENT_ONBOARDED,
+  changed: CustodyEvents.CUSTODY_CHANGED,
+  keyRevoked: CustodyEvents.CUSTODY_KEY_REVOKED,
+  keyShredded: CustodyEvents.CUSTODY_KEY_SHREDDED,
+  signature: CustodyEvents.CUSTODIAL_SIGNATURE,
+  signingRefused: CustodyEvents.CUSTODIAL_SIGNING_REFUSED,
+};
+
+/** The custody facts recorded, oldest first, plus the typed trail they went to. */
+export interface CustodyAuditCapture {
+  events: { event: { event: string }; payload: Record<string, unknown> }[];
+  trail: TestAuditTrail;
+}
+
+/** Wraps the service's CustodyAudit so each call's facts are kept; a signature's payload is kept by digest and length. */
+function captureCustodyAudit(service: CustodyService, trail: TestAuditTrail): CustodyAuditCapture {
+  const capture: CustodyAuditCapture = { events: [], trail };
+  const audit = (service as unknown as { audit: CustodyAudit }).audit;
+  for (const [method, event] of Object.entries(METHOD_EVENTS)) {
+    const original = (audit as unknown as Record<string, (input: Record<string, unknown>) => void>)[method]!.bind(audit);
+    (audit as unknown as Record<string, (input: Record<string, unknown>) => void>)[method] = (input) => {
+      const { payload, ...rest } = input;
+      const facts = payload instanceof Uint8Array ? { ...rest, payloadDigest: payloadDigest(payload), payloadBytes: payload.length } : input;
+      capture.events.push({ event: { event }, payload: facts });
+      original(input);
+    };
+  }
+  return capture;
+}
 
 export const HOST = 'helix.example';
 export const KEK = '5a'.repeat(32);
@@ -56,7 +106,7 @@ export interface Harness {
   keyStore: DbKeyStore;
   dids: DidRepository;
   services: ServiceRepository;
-  audit: TestAuditLogger;
+  audit: CustodyAuditCapture;
   /** Identity credentials issued (story F-1), in order; `vcId` is `vc:test:<n>`. */
   issued: { input: Record<string, unknown>; vcId: string }[];
   /** Capability attestations issued, one per scope. */
@@ -75,7 +125,7 @@ export function harness(overrides: Partial<CustodyServiceOptions> = {}): Harness
   const keyStore = new DbKeyStore({ table: wrapped, keyEncryptionKey: KEK });
   const dids = new DidRepository();
   const services = new ServiceRepository();
-  const audit = new TestAuditLogger();
+  const trail = new TestAuditTrail();
   const issued: Harness['issued'] = [];
   const attested: Harness['attested'] = [];
   const web = new Map<string, unknown>();
@@ -110,13 +160,14 @@ export function harness(overrides: Partial<CustodyServiceOptions> = {}): Harness
         }),
     },
     services,
-    auditLogger: audit,
+    auditTrail: trail,
     host: HOST,
     didCache: { delete: (did: string) => void didCacheDeleted.push(did) },
     outboundFetch: () => outbound,
     clock: () => now.value,
     ...overrides,
   });
+  const audit = captureCustodyAudit(service, trail);
   return {
     service,
     records,

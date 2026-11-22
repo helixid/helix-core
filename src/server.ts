@@ -20,11 +20,10 @@ import {
 } from './core/index.js';
 
 import { errorHandler } from './middleware/errorHandler.js';
-import { ApiAuditLogger } from './audit/index.js';
+import { createApiAudit, createApiAuditStorage } from './audit/index.js';
 import { createHederaClient } from './hedera/createHederaClient.js';
 import { DidRepository } from './repositories/did.repository.js';
 import { VcRepository } from './repositories/vc.repository.js';
-import { AuditLogRepository } from './repositories/audit-log.repository.js';
 import { AgentRepository } from './repositories/agent.repository.js';
 import { DidKeyRepository } from './repositories/did-key.repository.js';
 import { ServiceRepository } from './repositories/service.repository.js';
@@ -45,6 +44,7 @@ import agentRoutes, { enrollmentOnboardingHandler } from './routes/agent/index.j
 import entityCardRoutes from './routes/entity-card/index.js';
 import { createEntityCardSource } from './services/entity-card/entity-card.source.js';
 import auditLogRoutes from './routes/audit-log/index.js';
+import auditRoutes from './routes/audit/index.js';
 import sessionRoutes from './routes/sessions/index.js';
 import serviceProviderRoutes from './routes/service-provider/index.js';
 import type { RedisLike } from './cache/RedisCache.js';
@@ -89,10 +89,15 @@ const redis: RedisLike | null =
     ? new Redis(config.REDIS_URL)
     : null;
 
-const auditLogger = new ApiAuditLogger(prisma, config, sqlite);
+// A-2: every audit event enters through the authoritative recorder.
+const auditDeps = { pool, sqlite };
+const audit = createApiAudit(config, createApiAuditStorage(auditDeps), { deps: auditDeps, baseDir: apiPackageDir });
+// Opens every known ledger: a journal behind the restore witness, or a new
+// recorder key, opens a successor epoch here, before any request is served.
+await audit.recorder.start();
+const auditTrail = audit.trail;
 const didRepository = new DidRepository(prisma, sqlite);
 const vcRepository = new VcRepository(prisma, sqlite);
-const auditLogRepository = new AuditLogRepository(prisma, sqlite);
 const agentRepository = new AgentRepository(prisma, sqlite);
 const didKeyRepository = new DidKeyRepository(prisma, sqlite);
 const serviceRepository = new ServiceRepository(prisma, sqlite);
@@ -108,7 +113,7 @@ const jwtSessionKeyPair = generateKeyPair();
 const didService = new DIDService(
   didRepository,
   hederaClient,
-  auditLogger,
+  auditTrail,
   didCache,
   config.DID_CACHE_L1_TTL_SECONDS,
   didMethod,
@@ -117,7 +122,7 @@ const didService = new DIDService(
 const vcService = new VCService(
   vcRepository,
   didService,
-  auditLogger,
+  auditTrail,
   config.HELIX_SIGNING_KEY,
   config.HELIX_ISSUER_DID,
   config.API_BASE_URL,
@@ -141,13 +146,13 @@ const credentialService = new CredentialService(
   new EnvSigner({ did: config.HELIX_ISSUER_DID }),
   didKeyRepository,
   keyCustody,
-  auditLogger,
+  auditTrail,
 );
 const agentService = new AgentService(
   agentRepository,
   didService,
   vcService,
-  auditLogger,
+  auditTrail,
   didKeyRepository,
   keyCustody,
   credentialService,
@@ -160,7 +165,7 @@ const serviceProviderService = new ServiceProviderService(
   serviceRepository,
   didKeyRepository,
   keyCustody,
-  auditLogger,
+  auditTrail,
 );
 
 // KYA-OS story F-3: custody preference. Helix-held keys live in the DbKeyStore
@@ -178,7 +183,7 @@ const custodyService = new CustodyService({
   didRepository,
   credentials: credentialService,
   services: serviceRepository,
-  auditLogger,
+  auditTrail,
   host: config.DID_DOMAIN,
   didCache,
   recheck: custodyRecheckSettings(config),
@@ -293,8 +298,12 @@ await app.register(sessionRoutes, {
 });
 await app.register(auditLogRoutes, {
   prefix: '/v1/audit-log',
-  auditLogRepository,
-  auditLogger,
+  audit,
+  adminApiKey: config.HELIX_ADMIN_API_KEY,
+});
+await app.register(auditRoutes, {
+  prefix: '/v1/audit',
+  audit,
   adminApiKey: config.HELIX_ADMIN_API_KEY,
 });
 await app.register(agentRoutes, {

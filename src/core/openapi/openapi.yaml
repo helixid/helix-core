@@ -329,9 +329,10 @@ paths:
       description: >
         Redeems an enrollment token in a single call: the server generates
         and holds the agent's keypair, creates its DID, and issues its
-        HelixAgentCredential. Agent self-custody is retired, so there is no
-        separate challenge/verify step any more -- just this one call after
-        POST /v1/enrollment-tokens.
+        AgentIdentityCredential plus one CapabilityAttestationCredential per
+        requested scope (story F-1). The response's vcId is the identity
+        credential. There is no separate challenge/verify step -- just this
+        one call after POST /v1/enrollment-tokens.
       requestBody:
         required: true
         content:
@@ -372,11 +373,31 @@ paths:
           description: Challenge verified
   /v1/audit-log:
     get:
-      summary: List audit events
-      description: Admin-only audit operation. Requires x-admin-api-key.
+      summary: List audit journal entries, one page at a time
+      description: >-
+        Admin-only audit operation. Requires x-admin-api-key. Newest first by
+        the recorder's service time, ties by ledger, epoch and sequence. Answers
+        `{ items, nextCursor }`; pass `nextCursor` back as `cursor` for the next
+        page (null on the last). A hosted deployment's account audit view pages
+        the same way with the same cursor.
       parameters:
         - in: query
           name: eventType
+          required: false
+          schema:
+            type: string
+        - in: query
+          name: family
+          required: false
+          schema:
+            type: string
+        - in: query
+          name: correlationId
+          required: false
+          schema:
+            type: string
+        - in: query
+          name: ledgerId
           required: false
           schema:
             type: string
@@ -386,6 +407,11 @@ paths:
           schema:
             type: string
             format: date-time
+        - in: query
+          name: cursor
+          required: false
+          schema:
+            type: string
         - in: query
           name: limit
           required: false
@@ -401,7 +427,43 @@ paths:
             type: string
       responses:
         "200":
-          description: Audit event summaries
+          description: One page of journal entries
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, nextCursor]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      required: [id, recordedAt, eventDigest, event, ledgerId, ledgerEpochId, sequence, entryDigest, receipt]
+                      properties:
+                        id:
+                          type: string
+                        recordedAt:
+                          type: string
+                          format: date-time
+                        eventDigest:
+                          type: string
+                        event:
+                          type: object
+                        ledgerId:
+                          type: string
+                        ledgerEpochId:
+                          type: string
+                        sequence:
+                          type: string
+                        entryDigest:
+                          type: string
+                        receipt:
+                          type: object
+                  nextCursor:
+                    type: string
+                    nullable: true
+        "400":
+          description: Invalid query or cursor
         "403":
           description: Admin authorization required
   /v1/audit-log/vp-verification:
@@ -467,19 +529,18 @@ components:
             type: string
     IssueVCRequest:
       type: object
-      required: [subjectDid, subjectType, expiresInSeconds]
+      description: >
+        A user credential (HelixUserCredential). Agents are not issued
+        credentials here: onboarding gives them an AgentIdentityCredential and
+        one CapabilityAttestationCredential per scope (story F-1).
+      required: [subjectDid, subjectType, userId, expiresInSeconds]
+      additionalProperties: false
       properties:
         subjectDid:
           type: string
         subjectType:
           type: string
-          enum: [agent, user]
-        privilegeScopes:
-          type: array
-          items:
-            type: string
-        agentName:
-          type: string
+          enum: [user]
         userId:
           type: string
         expiresInSeconds:

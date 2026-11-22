@@ -28,12 +28,18 @@ import {
   findScopeProblem,
   normalizeScopes,
   parseScopes,
-  AuditEvents,
+  CAPABILITY_ATTESTATION_TYPE,
+  IDENTITY_CREDENTIAL_TYPE,
+  attestedCapabilities,
+  jsonDigest,
+  publicDid,
+  type AuditEventInput,
+  type AuditTrail,
+  type Digest,
   type SignedVC,
   type SigningKeyMaterial,
 } from '../../core/index.js';
 import type { CustodialKeys } from '../custody/custodial-keys.js';
-import type { IAuditLogger } from '../../core/audit/index.js';
 import type { DidKeyRepository } from '../../repositories/did-key.repository.js';
 import type { ServiceRecord, ServiceRepository } from '../../repositories/service.repository.js';
 import type { IDIDService } from '../did/IDIDService.js';
@@ -91,7 +97,7 @@ export interface IServiceProviderService {
   getAgentScopes(agentDid: string): Promise<AgentScopesResult>;
 }
 
-/** The scopes an agent holds as itself, which bound what any consent to it may grant. */
+/** The scopes an agent is attested for (story F-1), which bound what any consent to it may grant. */
 export interface AgentScopesResult {
   agentDid: string;
   scopes: string[];
@@ -105,6 +111,10 @@ export function generateServiceId(): string {
   return `svc:${randomBytes(6).toString('hex')}`;
 }
 
+function reportAuditFailure(error: unknown): void {
+  console.error('AUDIT_RECORD_FAILED', error instanceof Error ? error.message : String(error));
+}
+
 export class ServiceProviderService implements IServiceProviderService {
   private custodialKeys: CustodialKeys | undefined;
 
@@ -114,7 +124,7 @@ export class ServiceProviderService implements IServiceProviderService {
     private readonly serviceRepository: ServiceRepository,
     private readonly didKeyRepository: DidKeyRepository,
     private readonly keyCustody: IKeyCustody,
-    private readonly auditLogger: IAuditLogger,
+    private readonly auditTrail: AuditTrail,
   ) {}
 
   /**
@@ -137,6 +147,15 @@ export class ServiceProviderService implements IServiceProviderService {
     const signer = await this.custodialKeys?.signerFor(serviceDid, 'service', { requestId, purpose: 'grant' });
     if (signer) return async (use) => use({ did: serviceDid, signer });
     throw new ServiceKeyNotFoundError(serviceDid);
+  }
+
+  /** Records one typed audit event; a failure to record never breaks the request. */
+  private audit(input: AuditEventInput): void {
+    try {
+      this.auditTrail.record(input).catch(reportAuditFailure);
+    } catch (error) {
+      reportAuditFailure(error);
+    }
   }
 
   async enroll(input: EnrollServiceInput, requestId: string): Promise<ServiceRecord> {
@@ -168,11 +187,17 @@ export class ServiceProviderService implements IServiceProviderService {
       framework: input.framework?.trim() || null,
     });
 
-    this.auditLogger.log(AuditEvents.SERVICE_ENROLLED, {
-      requestId,
-      serviceId: record.id,
-      serviceDid: created.did,
-      serviceName: name,
+    this.audit({
+      eventType: 'configuration.changed',
+      action: { category: 'service', name: 'enrolled' },
+      outcome: 'succeeded',
+      correlationId: requestId,
+      resource: publicDid(created.did),
+      details: {
+        family: 'key',
+        phase: 'configuration_changed',
+        configurationDigest: jsonDigest({ serviceId: record.id, serviceDid: created.did }) as Digest,
+      },
     });
 
     return record;
@@ -225,9 +250,10 @@ export class ServiceProviderService implements IServiceProviderService {
     }
     const withKey = await this.serviceKey(input.serviceDid, requestId);
 
-    // The delegatee must be an onboarded agent with an active credential of
-    // its own, and the grant may only carry scopes that credential holds:
-    // consent cannot hand an agent authority it was never onboarded with.
+    // The delegatee must be an onboarded agent with an active identity
+    // credential, and the grant may only carry scopes it holds an active
+    // capability attestation for: consent cannot hand an agent authority it
+    // is not attested for.
     const { scopes: agentScopes } = await this.getAgentScopes(input.agentDid);
     const scopes = normalizeScopes(input.scopes);
     const held = new Set(agentScopes);
@@ -265,10 +291,12 @@ export class ServiceProviderService implements IServiceProviderService {
   }
 
   /**
-   * The agent's own scopes: the union over its active, non-delegated
-   * HelixAgentCredentials. Credentials delegated to it are left out, since
-   * those are authority held on another agent's behalf, which that agent can
-   * withdraw; consent given to this agent directly must not rest on them.
+   * The agent's scopes (story F-1): the capabilities named by its active
+   * CapabilityAttestationCredentials, Helix-issued at onboarding or
+   * owner-signed and registered since, each once in issuance order. The agent
+   * must also hold an active AgentIdentityCredential: a grant to an agent
+   * whose identity is revoked or expired could never be honoured. "Active"
+   * is per the database (not revoked, not expired).
    */
   async getAgentScopes(agentDid: string): Promise<AgentScopesResult> {
     if (typeof agentDid !== 'string' || !agentDid.startsWith('did:')) {
@@ -276,26 +304,21 @@ export class ServiceProviderService implements IServiceProviderService {
     }
     // An agent this server onboarded: one whose key it holds in did_keys
     // (onboarded before F-3), or an active agent created through the custody
-    // routes, whose VP is signed through the KeyStore or by its own signer.
+    // routes (KYA-OS story F-3), whose key is in the KeyStore or with its owner.
     const agentKey = await this.didKeyRepository.findByDid(agentDid);
     const onboarded = agentKey ? agentKey.subjectType === 'agent' : ((await this.custodialKeys?.isActiveAgent(agentDid)) ?? false);
     if (!onboarded) {
       throw new DelegateeNotAnAgentError(agentDid);
     }
-    // ...and that still holds an active credential of its own per the DB: a
-    // grant to a revoked or expired agent could never be presented anyway.
-    const agentVCs = await this.vcService.listActiveBySubjectDid(agentDid, 'HelixAgentCredential');
-    const ownVCs = agentVCs.filter(
-      (vc) => !(vc.credentialSubject as { delegatedFrom?: unknown }).delegatedFrom,
-    );
-    if (ownVCs.length === 0) {
+    const identities = await this.vcService.listActiveBySubjectDid(agentDid, IDENTITY_CREDENTIAL_TYPE);
+    if (identities.length === 0) {
       throw new AgentActiveCredentialNotFoundError(agentDid);
     }
-    const scopes = new Set<string>();
-    for (const vc of ownVCs) {
-      const held = (vc.credentialSubject as { privilegeScopes?: unknown }).privilegeScopes;
-      if (Array.isArray(held)) for (const scope of held) if (typeof scope === 'string') scopes.add(scope);
-    }
-    return { agentDid, scopes: [...scopes] };
+    const attestations = await this.vcService.listActiveBySubjectDid(agentDid, CAPABILITY_ATTESTATION_TYPE);
+    const named = attestations.filter(
+      (vc): vc is { credentialSubject: { capability: string } } & Record<string, unknown> =>
+        typeof (vc['credentialSubject'] as { capability?: unknown } | undefined)?.capability === 'string',
+    );
+    return { agentDid, scopes: attestedCapabilities(named) };
   }
 }

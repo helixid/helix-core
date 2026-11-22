@@ -93,7 +93,7 @@ import {
   type ConformanceSubject,
   type Signer,
 } from '../../core/index.js';
-import type { IAuditLogger } from '../../core/audit/index.js';
+import type { AuditTrail } from '../../core/index.js';
 import type {
   CustodyKeyRow,
   CustodyRecordFilter,
@@ -176,7 +176,8 @@ export interface CustodyServiceOptions {
   didRepository: CustodyDidRecords;
   credentials: CustodyCredentials;
   services?: CustodyServices | undefined;
-  auditLogger: IAuditLogger;
+  /** Story A-1's typed audit trail; custody events are recorded through `CustodyAudit`. */
+  auditTrail: AuditTrail;
   hopReissuer?: HopReissuer | undefined;
   /** The Helix did:web host (`DID_DOMAIN`), with its port when it has one. Needed for `helix` hosting. */
   host: string;
@@ -438,7 +439,7 @@ export class CustodyService implements CustodialKeys {
 
   constructor(private readonly options: CustodyServiceOptions) {
     this.recheckSettings = { ...DEFAULT_RECHECK_SETTINGS, ...definedOnly(options.recheck ?? {}) };
-    this.audit = new CustodyAudit(options.auditLogger);
+    this.audit = new CustodyAudit(options.auditTrail);
     this.hopReissuer = options.hopReissuer ?? pendingHopReissuer;
     this.clock = options.clock ?? ((): Date => new Date());
     this.outboundFetch = options.outboundFetch ?? getOutboundFetch;
@@ -711,7 +712,7 @@ export class CustodyService implements CustodialKeys {
     const record = await this.requireRecord(did, expectedSubjectType);
     if (record.keyCustody !== 'helix') {
       const reason = 'its key custody is self: the private key is held by the owner and never reaches Helix';
-      this.audit.signingRefused({ requestId: context.requestId, actor: context.actor, subjectType: record.subjectType, did, reason });
+      this.audit.signingRefused({ requestId: context.requestId, actor: context.actor, subjectType: record.subjectType, did, code: 'custody_self' });
       throw new CustodialSigningRefusedError(did, reason);
     }
     if (record.status !== 'active') {
@@ -727,7 +728,7 @@ export class CustodyService implements CustodialKeys {
     const key = (await this.options.records.listKeys(did)).find((candidate) => candidate.kid === kid);
     if (!key || key.status !== 'active' || key.location !== 'helix') {
       const reason = `${kid} is not an active Helix-held key of this subject`;
-      this.audit.signingRefused({ requestId: context.requestId, actor: context.actor, subjectType: record.subjectType, did, reason });
+      this.audit.signingRefused({ requestId: context.requestId, actor: context.actor, subjectType: record.subjectType, did, code: 'key_not_active' });
       throw new CustodialSigningRefusedError(did, reason);
     }
     const signature = await this.options.keyStore.sign({ did, kid }, payload);
@@ -1059,7 +1060,7 @@ export class CustodyService implements CustodialKeys {
     });
     if (record.subjectType === 'agent') {
       // The same enrollment event the agent service logs when an agent is onboarded.
-      this.audit.agentOnboarded({ requestId: context.requestId, agentDid: record.did, agentName: record.name ?? record.did, keyCustody: record.keyCustody, didHosting: record.didHosting });
+      this.audit.agentOnboarded({ requestId: context.requestId, agentDid: record.did, credentialId: vcId });
     }
     return { ...(await this.view(active)), ...(vcId ? { vcId } : {}) };
   }

@@ -3,10 +3,10 @@
 // (pending_resolution) are re-checked in the background, with backoff, for a
 // bounded time, safely across several API instances.
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { AuditEvents, ConfigSchema, CustodyStateInvalidError } from '../../../../src/core/index.js';
+import { ConfigSchema, CustodyStateInvalidError } from '../../../../src/core/index.js';
 import { CustodyRecheckScheduler, custodyRecheckSettings } from '../../../../src/services/custody/custody-recheck.js';
 import { DEFAULT_RECHECK_SETTINGS, RECHECK_ACTOR, type CustodyRecheckRun, type OnboardingResult } from '../../../../src/services/custody/custody.service.js';
-import { events, harness, type Harness } from './harness.js';
+import { CustodyEvents, events, harness, type Harness } from './harness.js';
 
 const MINUTE = 60 * 1000;
 
@@ -52,8 +52,8 @@ describe('CustodyService.recheckPending', () => {
     expect(onActivated).toHaveBeenCalledWith(expect.objectContaining({ did: created.did, status: 'active' }), expect.stringMatching(/^custody-recheck:[0-9a-f]{16}$/));
     expect(await h.records.findRecord(created.did)).toMatchObject({ status: 'active', nextRecheckAt: null, credentialVcId: 'vc:test:1' });
     const requestId = onActivated.mock.calls[0]![1] as string;
-    expect(events(h, AuditEvents.CUSTODY_ACTIVATED)).toEqual([expect.objectContaining({ actor: RECHECK_ACTOR, did: created.did, resolution: 'verified', requestId })]);
-    expect(events(h, AuditEvents.AGENT_ONBOARDED)).toEqual([expect.objectContaining({ agentDid: created.did, requestId })]);
+    expect(events(h, CustodyEvents.CUSTODY_ACTIVATED)).toEqual([expect.objectContaining({ actor: RECHECK_ACTOR, did: created.did, resolution: 'verified', requestId })]);
+    expect(events(h, CustodyEvents.AGENT_ONBOARDED)).toEqual([expect.objectContaining({ agentDid: created.did, requestId })]);
     // Active: never re-checked again; manual activation now says so.
     later(h, 60 * MINUTE);
     expect((await h.service.recheckPending()).checked).toEqual([]);
@@ -82,7 +82,7 @@ describe('CustodyService.recheckPending', () => {
 
     publish(h, created);
     expect(await h.service.activate(created.did, h.context())).toMatchObject({ status: 'active' });
-    expect(events(h, AuditEvents.CUSTODY_ACTIVATED)).toEqual([expect.objectContaining({ actor: 'admin' })]);
+    expect(events(h, CustodyEvents.CUSTODY_ACTIVATED)).toEqual([expect.objectContaining({ actor: 'admin' })]);
   });
 
   it('reads one subject per owner host per run and at most batchSize subjects, leaving the rest due', async () => {
@@ -119,7 +119,7 @@ describe('CustodyService.recheckPending', () => {
     expect(runs.flatMap((run) => run.checked)).toEqual([created.did]);
     expect(runs.flatMap((run) => run.deferred)).toEqual([created.did]);
     expect([...h.issued, ...other.issued]).toHaveLength(1);
-    expect([...events(h, AuditEvents.CUSTODY_ACTIVATED), ...events(other, AuditEvents.CUSTODY_ACTIVATED)]).toHaveLength(1);
+    expect([...events(h, CustodyEvents.CUSTODY_ACTIVATED), ...events(other, CustodyEvents.CUSTODY_ACTIVATED)]).toHaveLength(1);
   });
 
   it('a manual "Check and activate" racing the background re-check activates once', async () => {
