@@ -34,7 +34,7 @@ describe('EvidenceEncryptor', () => {
 
   it('refuses bytes that do not match the reference', () => {
     const tampered = object();
-    tampered.ciphertext[0] ^= 1;
+    tampered.ciphertext[0] = tampered.ciphertext[0]! ^ 1;
     expect(() => encryptor().decrypt(tampered, aad())).toThrow(/does not match its reference/);
     const short = { ref: { ...evidence.ref, size: '3', ciphertextDigest: digestBytes(new Uint8Array([1, 2, 3])) }, ciphertext: new Uint8Array([1, 2, 3]) };
     expect(() => encryptor().decrypt(short, aad())).toThrow(/shorter than its authentication tag/);
@@ -81,7 +81,7 @@ describe('MemoryEvidenceStore', () => {
     expect(await store.putIfAbsent(object())).toEqual(evidence.ref);
     expect(await store.putIfAbsent(object())).toEqual(evidence.ref);
     const got = (await store.get(evidence.ref.objectId))!;
-    got.ciphertext[0] ^= 1;
+    got.ciphertext[0] = got.ciphertext[0]! ^ 1;
     expect((await store.get(evidence.ref.objectId))!.ciphertext).toEqual(object().ciphertext);
     const other = encryptor().encrypt({ plaintext: 'other', mediaType: 'text/plain', aad: aad() });
     await expect(store.putIfAbsent({ ...other, ref: { ...other.ref, objectId: evidence.ref.objectId } })).rejects.toThrow(/collision/);
