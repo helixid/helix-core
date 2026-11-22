@@ -13,6 +13,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { VCService } from '../../../src/services/vc/vc.service.js';
 import { VcRepository } from '../../../src/repositories/vc.repository.js';
 import { buildDIDDocument, derivePublicKey, getBit, type SignedVC } from '../../../src/core/index.js';
+import { TestAuditTrail } from '../../utils/TestAuditTrail.js';
 
 const signingKey = 'a'.repeat(64);
 const issuerDid = 'did:hedera:testnet:testissuer';
@@ -23,19 +24,19 @@ const GRANT = 'DelegationGrantCredential';
 
 describe('VCService.reconcileActive', () => {
   let repository: VcRepository;
-  let audit: { log: ReturnType<typeof vi.fn> };
+  let audit: TestAuditTrail;
   let service: VCService;
 
   beforeEach(() => {
     repository = new VcRepository();
-    audit = { log: vi.fn() };
+    audit = new TestAuditTrail();
     const didService = {
       resolveDID: vi.fn(async (did: string) =>
         did === issuerDid ? { didDocument: buildDIDDocument(issuerDid, derivePublicKey(signingKey)) } : {},
       ),
       registerResolvedDID: vi.fn(),
     };
-    service = new VCService(repository, didService as never, audit as never, signingKey, issuerDid, 'http://localhost');
+    service = new VCService(repository, didService as never, audit, signingKey, issuerDid, 'http://localhost');
   });
 
   /** A service's grant on the platform list, stored the way grants are, with what reconcile did. */
@@ -80,7 +81,14 @@ describe('VCService.reconcileActive', () => {
     const list = await service.getStatusList('helix-status-list-1');
     expect(getBit(list.credentialSubject.encodedList, first.statusListIndex)).toBe(1);
     expect(getBit(list.credentialSubject.encodedList, second.statusListIndex)).toBe(0);
-    expect(audit.log).toHaveBeenCalledWith(expect.objectContaining({ event: 'VC_REVOKED', vcId: first.vcId, reason: 'superseded' }));
+    await audit.flush();
+    expect(audit.ofType('delegation.revoked')).toContainEqual(
+      expect.objectContaining({
+        reason: { code: 'superseded' },
+        resource: { kind: 'public_did', did: agentDid },
+        details: { family: 'delegation', phase: 'revoked', delegationRef: first.vcId },
+      }),
+    );
   });
 
   it('a different scope set stands beside the existing one; revokeExisting clears the others', async () => {

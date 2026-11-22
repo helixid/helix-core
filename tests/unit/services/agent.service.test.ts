@@ -1,6 +1,7 @@
 // Copyright 2026 DgVerse LLP
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import { AgentService } from '../../../src/services/agent/agent.service.js';
+import { TestAuditTrail } from '../../utils/TestAuditTrail.js';
 
 const TEST_PRIVATE_KEY_HEX = '00'.repeat(32);
 
@@ -8,7 +9,7 @@ describe('AgentService Unit Tests', () => {
   let repository: any;
   let didService: any;
   let vcService: any;
-  let auditLogger: any;
+  let auditLogger: TestAuditTrail;
   let agentKeyRepository: any;
   let keyCustody: any;
   let credentialService: any;
@@ -45,7 +46,7 @@ describe('AgentService Unit Tests', () => {
         statusListIndex: 42,
       }),
     };
-    auditLogger = { log: vi.fn() };
+    auditLogger = new TestAuditTrail();
     agentKeyRepository = { create: vi.fn(), findByDid: vi.fn() };
     keyCustody = {
       generateAndEncrypt: vi.fn(),

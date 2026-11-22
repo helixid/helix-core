@@ -1,12 +1,13 @@
 // Copyright 2026 DgVerse LLP
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { VCService } from '../../../src/services/vc/vc.service.js';
+import { TestAuditTrail } from '../../utils/TestAuditTrail.js';
 import { ErrorCode, buildDIDDocument, createStatusList, derivePublicKey, getBit } from '../../../src/core/index.js';
 
 describe('VCService Branch Coverage', () => {
   let repository: any;
   let didService: any;
-  let auditLogger: any;
+  let auditLogger: TestAuditTrail;
   let service: VCService;
   const validStatusList = createStatusList();
   const signingKey = 'a'.repeat(64);
@@ -34,7 +35,7 @@ describe('VCService Branch Coverage', () => {
         return Promise.resolve({});
       }),
     };
-    auditLogger = { log: vi.fn() };
+    auditLogger = new TestAuditTrail();
     service = new VCService(
       repository,
       didService,

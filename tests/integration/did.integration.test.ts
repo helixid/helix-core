@@ -17,7 +17,7 @@ import { generateKeyPair, ErrorCode } from '../../src/core/index.js';
 
 import { DIDService } from '../../src/services/did/did.service.js';
 import { DidRepository } from '../../src/repositories/did.repository.js';
-import { ApiAuditLogger } from '../../src/audit/index.js';
+import { TestAuditTrail } from '../utils/TestAuditTrail.js';
 import { MockHederaClient } from '../../src/hedera/mock/MockHederaClient.js';
 import { errorHandler } from '../../src/middleware/errorHandler.js';
 import didRoutes from '../../src/routes/did/index.js';
@@ -35,7 +35,7 @@ describe('DID API Integration', () => {
   beforeAll(async () => {
     prisma = createTestPrisma();
     mockHedera = new MockHederaClient();
-    const auditLogger = new ApiAuditLogger(prisma);
+    const auditLogger = new TestAuditTrail();
     const didRepository = new DidRepository(prisma);
     const didService = new DIDService(didRepository, mockHedera, auditLogger);
 
@@ -49,7 +49,6 @@ describe('DID API Integration', () => {
   afterEach(async () => {
     await prisma.vc.deleteMany();
     await prisma.statusListEntry.deleteMany();
-    await prisma.auditLog.deleteMany();
     await prisma.didUpdate.deleteMany();
     await prisma.did.deleteMany();
     mockHedera.reset();
@@ -73,7 +72,7 @@ describe('DID API Integration', () => {
         },
       });
 
-      expect(response.statusCode).toBe(201);
+      expect(response.statusCode, response.body).toBe(201);
       const body = JSON.parse(response.body);
       expect(body.id).toMatch(/^did:hedera:testnet:[0-9a-f]{32}$/);
       expect(body.publicKey).toBe(publicKey);
