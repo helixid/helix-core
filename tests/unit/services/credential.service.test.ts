@@ -323,6 +323,19 @@ describe('CredentialService', () => {
       const second = await service.issueIdentity({ agentDid: childDid, name: 'x', ownerDid }, 'req');
       expect((await service.listAgentCredentials(childDid)).identity).toMatchObject({ vcId: second.id, status: 'active' });
     });
+
+    it('orders credentials stored in the same millisecond by id', async () => {
+      vi.useFakeTimers({ toFake: ['Date'] });
+      try {
+        vi.setSystemTime(new Date('2026-11-22T00:00:00.000Z'));
+        await service.issueAttestations({ agentDid: childDid, capabilities: ['read:a', 'read:b', 'read:c'] }, 'req');
+      } finally {
+        vi.useRealTimers();
+      }
+      const ids = (await service.listAgentCredentials(childDid)).attestations.map((entry) => entry.vcId);
+      expect(ids).toHaveLength(3);
+      expect(ids).toEqual([...ids].sort((a, b) => a.localeCompare(b)));
+    });
   });
   describe('audit (KYA-OS A-1)', () => {
     function withTrail(trail: { record: (input: unknown) => Promise<unknown> }) {
