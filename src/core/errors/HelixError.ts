@@ -699,3 +699,25 @@ export class CaptchaFailedError extends HelixError {
     super('CAPTCHA_FAILED', message, 400);
   }
 }
+
+/** KYA-OS story C-A: a value that is not an Entity Card as SPEC-ENTITY-CARD §4 and its strict schema write one. */
+export class EntityCardInvalidError extends HelixError {
+  constructor(message: string, details?: Record<string, unknown>) {
+    super('ENTITY_CARD_INVALID', message, 400, details);
+  }
+}
+
+/**
+ * KYA-OS story C-A: SafeFetch (SPEC-ENTITY-CARD §6.6) refused an outbound
+ * read, or the read failed: a scheme other than https, a non-public address,
+ * a cross-origin redirect, a body over the cap, a read over the deadline.
+ */
+export class SafeFetchRefusedError extends HelixError {
+  constructor(
+    public readonly reason: string,
+    message: string,
+    details?: Record<string, unknown>,
+  ) {
+    super('SAFE_FETCH_REFUSED', message, 502, { reason, ...details });
+  }
+}
