@@ -404,12 +404,32 @@ describe('VCService Branch Coverage', () => {
     });
   });
 
-  describe('getStatusList branches', () => {
-    it('throws STATUS_LIST_NOT_FOUND if missing', async () => {
+  describe('claimStatusListEntry (the platform list legacy grants use: the Helix issuer\'s list, story L3-C)', () => {
+    it('creates the list on first use, claims the next index and names the list URL', async () => {
       repository.findStatusListById.mockResolvedValue(null);
-      await expect(service.getStatusList('l1')).rejects.toMatchObject({
-        code: ErrorCode.STATUS_LIST_NOT_FOUND,
-      });
+      repository.createStatusList.mockResolvedValue(undefined);
+      repository.claimNextIndex.mockResolvedValue({ list: {}, claimedIndex: 0 });
+      const entry = await service.claimStatusListEntry();
+      expect(repository.createStatusList).toHaveBeenCalledWith('helix-status-list-1', expect.any(String));
+      expect(entry).toMatchObject({ statusListIndex: 0, statusListCredentialUrl: expect.stringMatching(/\/v1\/status-list\/helix-status-list-1$/) });
+    });
+
+    it('claims on an existing list, and refuses a full one', async () => {
+      repository.findStatusListById.mockResolvedValue({ listId: 'helix-status-list-1', encodedList: 'H4s', nextIndex: 7 });
+      repository.claimNextIndex.mockResolvedValue({ list: {}, claimedIndex: 7 });
+      expect((await service.claimStatusListEntry()).statusListIndex).toBe(7);
+      repository.findStatusListById.mockResolvedValue({ listId: 'helix-status-list-1', encodedList: 'H4s', nextIndex: 131072 });
+      await expect(service.claimStatusListEntry()).rejects.toMatchObject({ code: ErrorCode.STATUS_LIST_INDEX_EXHAUSTED });
+    });
+  });
+
+  describe('createStatusList', () => {
+    it('creates the row and returns its id and bits; serving lists is the StatusListService\'s (story L3-C)', async () => {
+      repository.createStatusList.mockResolvedValue(undefined);
+      const created = await service.createStatusList({ listId: 'l1', length: 64 });
+      expect(created.listId).toBe('l1');
+      expect(repository.createStatusList).toHaveBeenCalledWith('l1', created.encodedList);
+      expect((await service.createStatusList()).listId).toBe('helix-status-list-1');
     });
   });
 });

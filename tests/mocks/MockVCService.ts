@@ -1,4 +1,4 @@
-import { buildStatusListCredential, createStatusList, setBit } from '../../src/core/index.js';
+import { createStatusList } from '../../src/core/index.js';
 import type { SignedVC } from '../../src/core/index.js';
 import type {
   IVCService,
@@ -98,27 +98,8 @@ export class MockVCService implements IVCService {
     }];
   }
 
-  async getStatusList(): Promise<{ credentialSubject: { encodedList: string } }> {
-    const list = this.status === 'revoked' ? setBit(createStatusList(), 0, 1) : createStatusList();
-    return { credentialSubject: { encodedList: list } };
-  }
-
-  async createStatusList(input?: { listId?: string; length?: number }): Promise<{
-    '@context': string[];
-    id: string;
-    type: string[];
-    issuer: string;
-    validFrom: string;
-    credentialSubject: {
-      id: string;
-      type: 'BitstringStatusList';
-      statusPurpose: 'revocation';
-      encodedList: string;
-    };
-  }> {
-    const listId = input?.listId ?? 'helix-status-list-1';
-    const encodedList = createStatusList(input?.length);
-    return buildStatusListCredential(listId, encodedList, 'did:web:localhost:3000', 'http://localhost:3000');
+  async createStatusList(input?: { listId?: string; length?: number }): Promise<{ listId: string; encodedList: string }> {
+    return { listId: input?.listId ?? 'helix-status-list-1', encodedList: createStatusList(input?.length) };
   }
 
   async findRecordByVcId(

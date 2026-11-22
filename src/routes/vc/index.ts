@@ -23,6 +23,8 @@ export interface VcRouteOptions {
   vcService: IVCService;
   /** Renews F-1 identity credentials; other VC ids fall back to `vcService.renewVC`. */
   credentialService?: Pick<CredentialService, 'renewIdentity'> | undefined;
+  /** Story L3-C: revocation through the issuer's own list, with its bit flipped, the list republished and a signal emitted. */
+  statusLists?: { revokeVC(vcId: string, requestId: string): Promise<{ vcId: string; revoked: true; revokedAt: string }> } | undefined;
   adminApiKey?: string | undefined;
 }
 
@@ -121,7 +123,7 @@ const vcRoutes: FastifyPluginAsync<VcRouteOptions> = async (fastify, options) =>
   fastify.post('/:vcId/revoke', async (request, reply) => {
     requireAdmin(request);
     const { vcId } = request.params as VCParams;
-    const result = await vcService.revokeVC(vcId, request.id);
+    const result = await (options.statusLists ?? vcService).revokeVC(vcId, request.id);
     return reply.send(result);
   });
 

@@ -273,7 +273,8 @@ describe('CredentialService', () => {
       const { hop } = await service.issueHop(root.id, { invoker: childDid, allowedAction: ['read:orders'] }, 'req');
       const grand = await service.issueHop(hop.id, { invoker: grandchildDid, allowedAction: ['read:orders'] }, 'req');
       const revoked = await service.revokeHop(hop.id, 'req');
-      expect(revoked).toEqual([grand.hop.id, hop.id]);
+      // Parents before children: the hop asked for first, then its cascade.
+      expect(revoked).toEqual([hop.id, grand.hop.id]);
       expect((await vcRepo.findByVcId(root.id))!.revokedAt).toBeNull();
       expect(await service.revokeHop(hop.id, 'req')).toEqual([]);
       await expect(service.revokeHop('urn:zcap:missing', 'req')).rejects.toMatchObject({ code: ErrorCode.VC_NOT_FOUND });

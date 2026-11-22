@@ -67,23 +67,8 @@ export interface IVCService {
     status: VCStatus;
   } | null>;
   getVCStatus(vcId: string): Promise<VCStatus>;
-  getStatusList(listId: string): Promise<{ credentialSubject: { encodedList: string } }>;
-  createStatusList(input?: {
-    listId?: string;
-    length?: number;
-  }): Promise<{
-    '@context': string[];
-    id: string;
-    type: string[];
-    issuer: string;
-    validFrom: string;
-    credentialSubject: {
-      id: string;
-      type: 'BitstringStatusList';
-      statusPurpose: 'revocation';
-      encodedList: string;
-    };
-  }>;
+  /** Creates (or resets) a status list row; the StatusListService signs and serves lists (story L3-C). */
+  createStatusList(input?: { listId?: string; length?: number }): Promise<{ listId: string; encodedList: string }>;
   issueVC(input: IssueVCInput, requestId: string): Promise<IssueVCResult>;
   /**
    * Persists an already-signed VC produced outside issueVC()'s own

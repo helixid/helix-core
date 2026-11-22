@@ -12,6 +12,9 @@ import { PrismaClient } from '@prisma/client';
 import {
   EnvSigner,
   buildDIDDocument,
+  resolveDID as resolveDIDCore,
+  type DidResolver,
+  type Signer,
   derivePublicKey,
   generateKeyPair,
   loadConfigFromEnv,
@@ -35,11 +38,17 @@ import { DIDService } from './services/did/did.service.js';
 import { VCService } from './services/vc/vc.service.js';
 import { AgentService } from './services/agent/agent.service.js';
 import { CredentialService } from './services/credentials/credential.service.js';
+import { StatusListPublisher, StatusListService } from './services/status-lists/status-list.service.js';
+import { RevocationService } from './services/revocation/revocation.service.js';
+import { publicDidResolver } from './services/revocation/public-resolver.js';
+import { RedisSignalBus, RevocationSignalPublisher, type RedisPubSubLike } from './services/revocation/signal-publisher.js';
 import { ServiceProviderService } from './services/service-provider/service-provider.service.js';
 import didRoutes from './routes/did/index.js';
 import didWebRoutes from './routes/did-web/index.js';
 import vcRoutes from './routes/vc/index.js';
 import statusListRoutes from './routes/status-list/index.js';
+import revocationRoutes from './routes/revocations/index.js';
+import eventRoutes from './routes/events/index.js';
 import verifyRoutes from './routes/verify/index.js';
 import agentRoutes from './routes/agent/index.js';
 import auditLogRoutes from './routes/audit-log/index.js';
@@ -127,15 +136,55 @@ const keyCustody = new AesGcmKeyCustody(agentKeyEncryptionKey);
 // KYA-OS story F-1: identity, attestations and hops. The Helix issuer signs
 // through an EnvSigner (the key stays in HELIX_SIGNING_KEY); custodial keys
 // sign through the key custody. Copies land in the vcs table for the console.
-const credentialService = new CredentialService(
+const helixSigner = new EnvSigner({ did: config.HELIX_ISSUER_DID });
+// Public DID resolution: the keys of revokers and of issuers that sign their own lists.
+const resolvePublicDid: DidResolver = publicDidResolver(resolveDIDCore);
+// KYA-OS story L3-C: one signed Bitstring Status List v1.0 per issuer DID, signed through that issuer's Signer.
+const statusListPublisher: StatusListPublisher = new StatusListPublisher({
+  repo: vcRepository,
+  helixIssuerDid: config.HELIX_ISSUER_DID,
+  apiBaseUrl: config.API_BASE_URL,
+  // The Helix issuer, or a key Helix holds (KeyStore, rule 8); undefined for a self-custody issuer, who signs its own list.
+  signerFor: async (did): Promise<Signer | undefined> => {
+    try {
+      return await credentialService.signerFor(did);
+    } catch {
+      return undefined;
+    }
+  },
+  resolveDid: resolvePublicDid,
+  listTtlSeconds: config.STATUS_LIST_TTL_SECONDS,
+  refreshBeforeSeconds: config.STATUS_LIST_REFRESH_BEFORE_SECONDS,
+  signedCache: statusListCache,
+  audit: auditLogger,
+});
+const statusListService: StatusListService = new StatusListService({ publisher: statusListPublisher, repo: vcRepository, audit: auditLogger });
+const credentialService: CredentialService = new CredentialService(
   vcRepository,
-  vcService,
+  statusListService,
   didService,
-  new EnvSigner({ did: config.HELIX_ISSUER_DID }),
+  helixSigner,
   didKeyRepository,
   keyCustody,
   auditLogger,
 );
+// One SET per revocation, signed by the Helix issuer; across instances through Redis pub/sub when Redis is configured.
+const revocationSignals = new RevocationSignalPublisher({
+  signer: helixSigner,
+  ...(redis && config.REDIS_URL
+    ? { bus: new RedisSignalBus({ publisher: new Redis(config.REDIS_URL) as unknown as RedisPubSubLike, subscriber: new Redis(config.REDIS_URL) as unknown as RedisPubSubLike }) }
+    : {}),
+  webhooks: (config.REVOCATION_WEBHOOK_URLS ?? '').split(',').map((url) => url.trim()).filter((url) => url.length > 0),
+  audit: auditLogger,
+});
+statusListService.setSignals(revocationSignals);
+statusListPublisher.startRefresh();
+const revocationService = new RevocationService({
+  repo: vcRepository,
+  statusLists: statusListService,
+  resolveDid: resolvePublicDid,
+  audience: `${config.API_BASE_URL}/v1/revocations`,
+});
 const agentService = new AgentService(
   agentRepository,
   didService,
@@ -244,13 +293,22 @@ await app.register(vcRoutes, {
   prefix: '/v1/vcs',
   vcService,
   credentialService,
+  statusLists: statusListService,
   adminApiKey: config.HELIX_ADMIN_API_KEY,
 });
 await app.register(statusListRoutes, {
   prefix: '/v1/status-list',
-  vcService,
+  statusLists: statusListService,
   adminApiKey: config.HELIX_ADMIN_API_KEY,
 });
+// KYA-OS story L3-C: signed revocation requests, cascading, and the revocation signal (SSE + RFC 8935 push).
+await app.register(revocationRoutes, {
+  prefix: '/v1/revocations',
+  revocations: revocationService,
+  signerFor: (did) => credentialService.signerFor(did),
+  adminApiKey: config.HELIX_ADMIN_API_KEY,
+});
+await app.register(eventRoutes, { prefix: '/v1/events', signals: revocationSignals, adminApiKey: config.HELIX_ADMIN_API_KEY });
 // KYA-OS story F-2: the local verifier over HTTP; /v1/vp/verify is retired. It reads no database.
 await app.register(verifyRoutes, { prefix: '/v1/verify', allowLoopbackHttp: config.NODE_ENV !== 'production' });
 await app.register(sessionRoutes, {
@@ -278,6 +336,8 @@ await app.register(serviceProviderRoutes, {
 const shutdown = async (): Promise<void> => {
   app.log.info('Helix ID API shutting down...');
   await app.close();
+  statusListPublisher.stopRefresh();
+  await revocationSignals.close();
   (redis as Redis | null)?.disconnect();
   await prisma?.$disconnect();
   await pool?.end();

@@ -43,25 +43,6 @@ describe('VCService status-list cache behavior', () => {
     );
   });
 
-  it('caches public status list credentials after the first DB read', async () => {
-    const encodedList = createStatusList();
-    repository.findStatusListById.mockResolvedValue({ listId: 'helix-status-list-1', encodedList, nextIndex: 0 });
-
-    const first = await service.getStatusList('helix-status-list-1');
-    const second = await service.getStatusList('helix-status-list-1');
-
-    expect(first.credentialSubject.encodedList).toBe(encodedList);
-    expect(second.credentialSubject.encodedList).toBe(encodedList);
-    expect(repository.findStatusListById).toHaveBeenCalledTimes(1);
-  });
-
-  it('throws STATUS_LIST_NOT_FOUND and does not cache missing lists', async () => {
-    repository.findStatusListById.mockResolvedValue(null);
-
-    await expect(service.getStatusList('missing')).rejects.toMatchObject({ code: ErrorCode.STATUS_LIST_NOT_FOUND });
-    await expect(statusListCache.get('missing')).resolves.toBeNull();
-  });
-
   it('invalidates status-list cache after VC revocation', async () => {
     const encodedList = createStatusList();
     await statusListCache.set('helix-status-list-1', encodedList, 60);

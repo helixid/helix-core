@@ -47,9 +47,9 @@ describe('VCService.reconcileActive', () => {
     expect(second.revokedVcIds).toEqual([]);
     expect(await activeIds()).toEqual([second.vcId]);
     expect((await service.getVC(first.vcId, 'r')).renewedByVcId).toBe(second.vcId);
-    const list = await service.getStatusList('helix-status-list-1');
-    expect(getBit(list.credentialSubject.encodedList, first.statusListIndex)).toBe(1);
-    expect(getBit(list.credentialSubject.encodedList, second.statusListIndex)).toBe(0);
+    const list = (await repository.findStatusListById('helix-status-list-1'))!;
+    expect(getBit(list.encodedList, first.statusListIndex)).toBe(1);
+    expect(getBit(list.encodedList, second.statusListIndex)).toBe(0);
     expect(audit.log).toHaveBeenCalledWith(expect.objectContaining({ event: 'VC_REVOKED', vcId: first.vcId, reason: 'superseded' }));
   });
 
@@ -119,7 +119,7 @@ describe('VCService.reconcileActive', () => {
 
     expect(result.replacedVcIds).toEqual(['vc:d1']);
     expect((await service.getVC('vc:d1', 'r')).status).toBe('revoked');
-    const list = await service.getStatusList('helix-status-list-1');
-    expect(getBit(list.credentialSubject.encodedList, 0)).toBe(0);
+    const list = (await repository.findStatusListById('helix-status-list-1'))!;
+    expect(getBit(list.encodedList, 0)).toBe(0);
   });
 });
