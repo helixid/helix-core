@@ -26,6 +26,7 @@ import { StatusListPublisher, StatusListService } from '../../../src/services/st
 import { REVOCATION_REQUEST_TYP, RevocationService } from '../../../src/services/revocation/revocation.service.js';
 import { RevocationSignalPublisher, type RevocationEvent } from '../../../src/services/revocation/signal-publisher.js';
 import { InProcessCache } from '../../../src/cache/InProcessCache.js';
+import { TestAuditTrail } from '../../utils/TestAuditTrail.js';
 
 const API = 'https://api.helix.test';
 const AUDIENCE = `${API}/v1/revocations`;
@@ -46,7 +47,7 @@ function world() {
   const vcRepo = new VcRepository();
   const keyRepo = new DidKeyRepository();
   const custody = new AesGcmKeyCustody('22'.repeat(32));
-  const audit = { log: vi.fn() };
+  const audit = new TestAuditTrail();
   let now = Date.parse('2026-06-01T00:00:00Z');
   const clock = (): number => now;
   // eslint-disable-next-line prefer-const -- assigned after the publisher that closes over it
@@ -66,11 +67,11 @@ function world() {
     listTtlSeconds: 600,
     refreshBeforeSeconds: 60,
     signedCache: new InProcessCache<string>(),
-    audit: audit as never,
+    audit,
     clock,
   });
-  const signals = new RevocationSignalPublisher({ signer: helixSigner, audit: audit as never, clock });
-  const statusLists = new StatusListService({ publisher, repo: vcRepo, audit: audit as never, signals });
+  const signals = new RevocationSignalPublisher({ signer: helixSigner, audit, clock });
+  const statusLists = new StatusListService({ publisher, repo: vcRepo, audit, signals });
   credentials = new CredentialService(
     vcRepo,
     statusLists,
@@ -78,7 +79,7 @@ function world() {
     helixSigner,
     keyRepo,
     custody,
-    audit as never,
+    audit,
   );
   const revocations = new RevocationService({ repo: vcRepo, statusLists, resolveDid: resolve, audience: AUDIENCE, clock });
   const custodial = async (): Promise<{ did: string; signer: Awaited<ReturnType<CredentialService['signerFor']>> }> => {
@@ -246,8 +247,23 @@ describe('signed per-issuer status lists', () => {
   it('audits a signal it could not emit, and still revokes', async () => {
     const { root } = await chainOf(w);
     w.statusLists.setSignals({ publish: async () => Promise.reject(new Error('bus down')) });
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     await w.statusLists.revokeVC(root.id, 'req');
-    expect(w.audit.log).toHaveBeenCalledWith('VC_REVOCATION_FAILED', expect.objectContaining({ vcId: root.id, stage: 'revocation_signal', message: 'bus down' }));
+    await w.audit.flush();
+    expect(errors).toHaveBeenCalledWith('REVOCATION_SIGNAL_FAILED', root.id, 'bus down');
+    errors.mockRestore();
+    // The revocation itself, then the lost signal: no exception text in the event core.
+    expect(w.audit.ofType('delegation.revoked')).toEqual([
+      expect.objectContaining({ outcome: 'succeeded', correlationId: 'req', action: { category: 'credential', name: 'revoked' } }),
+      expect.objectContaining({
+        outcome: 'failed',
+        correlationId: 'req',
+        action: { category: 'revocation_signal', name: 'emit' },
+        reason: { code: 'revocation_signal_failed' },
+        details: { family: 'delegation', phase: 'revoked', delegationRef: root.id },
+      }),
+    ]);
+    expect(JSON.stringify(w.audit.events)).not.toContain('bus down');
     expect(await w.bitOf(root)).toBe(1);
   });
 });
@@ -270,9 +286,24 @@ describe('POST /v1/revocations service: revoke(credentialId, revokerSigner)', ()
       expect((await w.vcRepo.findByVcId(hop.id))!.revokedAt).not.toBeNull();
       expect(await w.bitOf(hop)).toBe(1);
     }
-    const revokedEvents = w.audit.log.mock.calls.filter(([event]) => event === 'VC_REVOKED');
-    expect(revokedEvents).toHaveLength(3);
-    expect(revokedEvents[1]![1]).toMatchObject({ vcId: child.id, revoker: helixDid, cascadeFrom: root.id });
+    // One audit event per credential: the target revoked, each descendant cascade_revoked under it.
+    await w.audit.flush();
+    expect(w.audit.ofType('delegation.revoked')).toEqual([
+      expect.objectContaining({
+        outcome: 'succeeded',
+        correlationId: 'req-r',
+        actor: { kind: 'public_did', did: helixDid },
+        details: { family: 'delegation', phase: 'revoked', delegationRef: root.id },
+      }),
+    ]);
+    const cascaded = w.audit.ofType('delegation.cascade_revoked');
+    expect(cascaded.map((event) => event.details)).toEqual([
+      { family: 'delegation', phase: 'cascade_revoked', delegationRef: child.id, parentRef: root.id },
+      { family: 'delegation', phase: 'cascade_revoked', delegationRef: grand.id, parentRef: root.id },
+    ]);
+    for (const event of cascaded) {
+      expect(event).toMatchObject({ actor: { kind: 'public_did', did: helixDid }, reason: { code: 'ancestor_revoked' }, action: { category: 'credential', name: 'cascade_revoked' } });
+    }
     expect(events.map((event) => event.credentialId)).toEqual([root.id, child.id, grand.id]);
     for (const event of events) {
       const verdict = await kyaos.verifier.verifyRevocationSignal(event.set, { trustedIssuers: [helixDid], resolveDid: w.resolve as never, now: w.now() });

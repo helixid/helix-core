@@ -79,9 +79,44 @@ export const ConfigSchema = z.object({
   /** Comma-separated https endpoints every revocation SET is pushed to (RFC 8935). */
   REVOCATION_WEBHOOK_URLS: z.string().optional(),
 
-  // Audit
-  AUDIT_LOG_DESTINATION: z.enum(['stdout', 'file', 'both']).default('stdout'),
+  // Audit (KYA-OS A-1). Events are stored in the database; AUDIT_LOG_DESTINATION
+  // additionally echoes each canonical event as one JSON line to stdout and/or a file.
+  AUDIT_LOG_DESTINATION: z.enum(['stdout', 'file', 'both', 'none']).default('stdout'),
   AUDIT_LOG_PATH: z.string().optional(),
+  // Names this API as a producer source; sequences and predecessor digests are per source.
+  AUDIT_SOURCE_ID: z.string().min(1).max(256).default('helix-api'),
+  // Record tool names in tool events. Off by default: an explicit policy decision.
+  AUDIT_INCLUDE_TOOL_NAMES: BooleanEnvSchema.default(false),
+  // The evidence vault key (AES-256-GCM). Unset: exact payloads are never kept and events carry no evidence.
+  AUDIT_EVIDENCE_KEY: z
+    .string()
+    .regex(/^[0-9a-fA-F]{64}$/, 'must be 64 hex chars (32 bytes) for AES-256-GCM')
+    .optional(),
+  AUDIT_EVIDENCE_KEY_ID: z.string().min(1).max(256).default('evidence-key-v1'),
+
+  // Audit recorder (KYA-OS A-2, AAP-2 Chained). The recorder signs every
+  // receipt with its own key, never an issuer key: AUDIT_RECORDER_SIGNING_KEY
+  // (Ed25519, hex) must differ from HELIX_SIGNING_KEY. Unset outside
+  // production, a per-process key is generated (each restart then opens a
+  // key_rotation epoch); unset in production, the server refuses to start.
+  AUDIT_RECORDER_SIGNING_KEY: z
+    .string()
+    .refine(isSupportedEd25519PrivateKeyHex, { message: 'must be an Ed25519 private key in hex' })
+    .optional(),
+  // The recorder's DID and key fragment; default did:key of the recorder key.
+  AUDIT_RECORDER_DID: z.string().regex(/^did:[^\r\n]{3,}$/).optional(),
+  AUDIT_RECORDER_KID: z.string().min(1).max(256).optional(),
+  // managed: Helix records for every tenant that submits (a ledger per tenant).
+  // self-hosted: only the tenants named in AUDIT_RECORDER_TENANTS (JSON array of
+  // party references); by default this API's own tenant.
+  AUDIT_RECORDER_MODE: z.enum(['managed', 'self-hosted']).default('managed'),
+  AUDIT_RECORDER_TENANTS: z.string().optional(),
+  // The restore witness: what this recorder last committed, kept outside the
+  // database it witnesses. Default ./data/audit-recorder-witness.json for a
+  // durable journal; unset with the memory journal.
+  AUDIT_RECORDER_WITNESS_PATH: z.string().optional(),
+  // A floor below which nothing is disposed, on top of the longest delegation lifetime.
+  AUDIT_RETENTION_MIN_DAYS: z.coerce.number().int().min(0).max(36500).default(0),
 
   // Hosted accounts & auth (Item #1, see the hosted-instance design).
   // All optional/defaulted so self-hosted deployments (which don't use

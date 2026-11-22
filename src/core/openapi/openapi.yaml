@@ -558,11 +558,31 @@ paths:
           description: Challenge verified
   /v1/audit-log:
     get:
-      summary: List audit events
-      description: Admin-only audit operation. Requires x-admin-api-key.
+      summary: List audit journal entries, one page at a time
+      description: >-
+        Admin-only audit operation. Requires x-admin-api-key. Newest first by
+        the recorder's service time, ties by ledger, epoch and sequence. Answers
+        `{ items, nextCursor }`; pass `nextCursor` back as `cursor` for the next
+        page (null on the last). A hosted deployment's account audit view pages
+        the same way with the same cursor.
       parameters:
         - in: query
           name: eventType
+          required: false
+          schema:
+            type: string
+        - in: query
+          name: family
+          required: false
+          schema:
+            type: string
+        - in: query
+          name: correlationId
+          required: false
+          schema:
+            type: string
+        - in: query
+          name: ledgerId
           required: false
           schema:
             type: string
@@ -572,6 +592,11 @@ paths:
           schema:
             type: string
             format: date-time
+        - in: query
+          name: cursor
+          required: false
+          schema:
+            type: string
         - in: query
           name: limit
           required: false
@@ -587,7 +612,43 @@ paths:
             type: string
       responses:
         "200":
-          description: Audit event summaries
+          description: One page of journal entries
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, nextCursor]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      required: [id, recordedAt, eventDigest, event, ledgerId, ledgerEpochId, sequence, entryDigest, receipt]
+                      properties:
+                        id:
+                          type: string
+                        recordedAt:
+                          type: string
+                          format: date-time
+                        eventDigest:
+                          type: string
+                        event:
+                          type: object
+                        ledgerId:
+                          type: string
+                        ledgerEpochId:
+                          type: string
+                        sequence:
+                          type: string
+                        entryDigest:
+                          type: string
+                        receipt:
+                          type: object
+                  nextCursor:
+                    type: string
+                    nullable: true
+        "400":
+          description: Invalid query or cursor
         "403":
           description: Admin authorization required
   /v1/audit-log/vp-verification:

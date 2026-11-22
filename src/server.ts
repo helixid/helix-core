@@ -23,11 +23,10 @@ import {
 } from './core/index.js';
 
 import { errorHandler } from './middleware/errorHandler.js';
-import { ApiAuditLogger } from './audit/index.js';
+import { createApiAudit, createApiAuditStorage } from './audit/index.js';
 import { createHederaClient } from './hedera/createHederaClient.js';
 import { DidRepository } from './repositories/did.repository.js';
 import { VcRepository } from './repositories/vc.repository.js';
-import { AuditLogRepository } from './repositories/audit-log.repository.js';
 import { AgentRepository } from './repositories/agent.repository.js';
 import { DidKeyRepository } from './repositories/did-key.repository.js';
 import { ServiceRepository } from './repositories/service.repository.js';
@@ -53,6 +52,7 @@ import verifyRoutes from './routes/verify/index.js';
 import agentRoutes from './routes/agent/index.js';
 import agentKeyRoutes from './routes/agent-keys/index.js';
 import auditLogRoutes from './routes/audit-log/index.js';
+import auditRoutes from './routes/audit/index.js';
 import sessionRoutes from './routes/sessions/index.js';
 import serviceProviderRoutes from './routes/service-provider/index.js';
 import type { RedisLike } from './cache/RedisCache.js';
@@ -92,10 +92,15 @@ const redis: RedisLike | null =
     ? new Redis(config.REDIS_URL)
     : null;
 
-const auditLogger = new ApiAuditLogger(prisma, config, sqlite);
+// A-2: every audit event enters through the authoritative recorder.
+const auditDeps = { pool, sqlite };
+const audit = createApiAudit(config, createApiAuditStorage(auditDeps), { deps: auditDeps, baseDir: apiPackageDir });
+// Opens every known ledger: a journal behind the restore witness, or a new
+// recorder key, opens a successor epoch here, before any request is served.
+await audit.recorder.start();
+const auditTrail = audit.trail;
 const didRepository = new DidRepository(prisma, sqlite);
 const vcRepository = new VcRepository(prisma, sqlite);
-const auditLogRepository = new AuditLogRepository(prisma, sqlite);
 const agentRepository = new AgentRepository(prisma, sqlite);
 const didKeyRepository = new DidKeyRepository(prisma, sqlite);
 const serviceRepository = new ServiceRepository(prisma, sqlite);
@@ -111,7 +116,7 @@ const jwtSessionKeyPair = generateKeyPair();
 const didService = new DIDService(
   didRepository,
   hederaClient,
-  auditLogger,
+  auditTrail,
   didCache,
   config.DID_CACHE_L1_TTL_SECONDS,
   didMethod,
@@ -120,7 +125,7 @@ const didService = new DIDService(
 const vcService = new VCService(
   vcRepository,
   didService,
-  auditLogger,
+  auditTrail,
   config.HELIX_SIGNING_KEY,
   config.HELIX_ISSUER_DID,
   config.API_BASE_URL,
@@ -157,9 +162,9 @@ const statusListPublisher: StatusListPublisher = new StatusListPublisher({
   listTtlSeconds: config.STATUS_LIST_TTL_SECONDS,
   refreshBeforeSeconds: config.STATUS_LIST_REFRESH_BEFORE_SECONDS,
   signedCache: statusListCache,
-  audit: auditLogger,
+  audit: auditTrail,
 });
-const statusListService: StatusListService = new StatusListService({ publisher: statusListPublisher, repo: vcRepository, audit: auditLogger });
+const statusListService: StatusListService = new StatusListService({ publisher: statusListPublisher, repo: vcRepository, audit: auditTrail });
 const credentialService: CredentialService = new CredentialService(
   vcRepository,
   statusListService,
@@ -167,7 +172,7 @@ const credentialService: CredentialService = new CredentialService(
   helixSigner,
   didKeyRepository,
   keyCustody,
-  auditLogger,
+  auditTrail,
 );
 // One SET per revocation, signed by the Helix issuer; across instances through Redis pub/sub when Redis is configured.
 const revocationSignals = new RevocationSignalPublisher({
@@ -176,7 +181,7 @@ const revocationSignals = new RevocationSignalPublisher({
     ? { bus: new RedisSignalBus({ publisher: new Redis(config.REDIS_URL) as unknown as RedisPubSubLike, subscriber: new Redis(config.REDIS_URL) as unknown as RedisPubSubLike }) }
     : {}),
   webhooks: (config.REVOCATION_WEBHOOK_URLS ?? '').split(',').map((url) => url.trim()).filter((url) => url.length > 0),
-  audit: auditLogger,
+  audit: auditTrail,
 });
 statusListService.setSignals(revocationSignals);
 statusListPublisher.startRefresh();
@@ -190,7 +195,7 @@ const agentService = new AgentService(
   agentRepository,
   didService,
   vcService,
-  auditLogger,
+  auditTrail,
   didKeyRepository,
   keyCustody,
   credentialService,
@@ -203,7 +208,7 @@ const serviceProviderService = new ServiceProviderService(
   serviceRepository,
   didKeyRepository,
   keyCustody,
-  auditLogger,
+  auditTrail,
 );
 
 const app = Fastify({
@@ -318,8 +323,12 @@ await app.register(sessionRoutes, {
 });
 await app.register(auditLogRoutes, {
   prefix: '/v1/audit-log',
-  auditLogRepository,
-  auditLogger,
+  audit,
+  adminApiKey: config.HELIX_ADMIN_API_KEY,
+});
+await app.register(auditRoutes, {
+  prefix: '/v1/audit',
+  audit,
   adminApiKey: config.HELIX_ADMIN_API_KEY,
 });
 await app.register(agentRoutes, {

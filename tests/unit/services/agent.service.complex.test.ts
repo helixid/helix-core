@@ -23,12 +23,13 @@ vi.mock('../../../src/core/index.js', async () => {
 });
 
 import { verifySignature } from '../../../src/core/index.js';
+import { TestAuditTrail } from '../../utils/TestAuditTrail.js';
 
 describe('AgentService Branch Coverage', () => {
   let repository: any;
   let didService: any;
   let vcService: any;
-  let auditLogger: any;
+  let auditLogger: TestAuditTrail;
   let agentKeyRepository: any;
   let keyCustody: any;
   let credentialService: any;
@@ -54,7 +55,7 @@ describe('AgentService Branch Coverage', () => {
       prepareDIDCreation: vi.fn().mockResolvedValue({ stateJson: '{}', signingPayloadHex: 'ab'.repeat(32) }),
     };
     vcService = { findActiveBySubjectDid: vi.fn(), issueVC: vi.fn() };
-    auditLogger = { log: vi.fn() };
+    auditLogger = new TestAuditTrail();
     agentKeyRepository = { create: vi.fn(), findByDid: vi.fn() };
     keyCustody = {
       generateAndEncrypt: vi.fn(),

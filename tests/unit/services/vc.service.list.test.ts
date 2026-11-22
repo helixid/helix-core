@@ -1,5 +1,6 @@
 // Copyright 2026 DgVerse LLP
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { TestAuditTrail } from '../../utils/TestAuditTrail.js';
 import { VCService } from '../../../src/services/vc/vc.service.js';
 
 function record(overrides: Record<string, unknown> = {}): Record<string, unknown> {
@@ -31,7 +32,7 @@ describe('VCService.listVCs', () => {
     service = new VCService(
       repository,
       { resolveDID: vi.fn() } as any,
-      { log: vi.fn() } as any,
+      new TestAuditTrail(),
       'a'.repeat(64),
       'did:hedera:testnet:issuer',
       'http://localhost',

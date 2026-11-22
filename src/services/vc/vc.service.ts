@@ -26,11 +26,16 @@ import {
   type SignedVC,
   VPMultipleActiveVCError,
   vcLookupColumns,
+  delegationRef,
+  delegationReference,
+  publicDid,
+  type AuditEventInput,
+  type AuditTrail,
+  type PartyRef,
 } from '../../core/index.js';
 import * as crypto from 'node:crypto';
 import { VcRepository, type VCRecord } from '../../repositories/vc.repository.js';
 import type { IDIDService } from '../did/did.service.js';
-import type { IAuditLogger } from '../../core/index.js';
 import type { ICache } from '../../cache/ICache.js';
 import { NoopCache } from '../../cache/NoopCache.js';
 import { extractEd25519PublicKeyHexFromDIDDocument } from '../did/publicKey.js';
@@ -186,19 +191,88 @@ export interface IVCService {
 /**
  * Implementation of Verifiable Credential lifecycle management.
  */
+
+const DID_PATTERN = /^did:[^\r\n]+$/;
+
+/** A `public_did` reference, or nothing when the value is not a DID: the event then names no party rather than failing validation. */
+function didRef(value: string | undefined): PartyRef | undefined {
+  return value !== undefined && DID_PATTERN.test(value) ? publicDid(value) : undefined;
+}
+
+function reportAuditFailure(error: unknown): void {
+  console.error('AUDIT_RECORD_FAILED', error instanceof Error ? error.message : String(error));
+}
+
 export class VCService implements IVCService {
   private readonly DEFAULT_STATUS_LIST_ID = 'helix-status-list-1';
 
   constructor(
     private readonly vcRepo: VcRepository,
     private readonly didService: IDIDService,
-    private readonly audit: IAuditLogger,
+    private readonly auditTrail: AuditTrail,
     private readonly signingKeyHex: string,
     private readonly issuerDid: string,
     private readonly apiBaseUrl: string,
     private readonly statusListCache: ICache<string> = new NoopCache<string>(),
     private readonly statusListCacheTtlSeconds = 60,
   ) {}
+
+  /** Records one typed audit event; a failure to record never breaks the request. */
+  private audit(input: AuditEventInput): void {
+    try {
+      this.auditTrail.record(input).catch(reportAuditFailure);
+    } catch (error) {
+      reportAuditFailure(error);
+    }
+  }
+
+  /** `delegation.issued` for a credential this platform now holds; `parentRef` names what it renews or derives from. */
+  private auditCredentialIssued(requestId: string, name: string, subjectDid: string, ref: string, parentRef?: string): void {
+    const resource = didRef(subjectDid);
+    this.audit({
+      eventType: 'delegation.issued',
+      action: { category: 'credential', name },
+      outcome: 'succeeded',
+      correlationId: requestId,
+      ...(resource !== undefined ? { resource } : {}),
+      details: {
+        family: 'delegation',
+        phase: 'issued',
+        delegationRef: ref,
+        ...(parentRef !== undefined ? { parentRef } : {}),
+      },
+    });
+  }
+
+  private auditCredentialRevoked(requestId: string, subjectDid: string, vcId: string, code?: string): void {
+    const resource = didRef(subjectDid);
+    this.audit({
+      eventType: 'delegation.revoked',
+      action: { category: 'credential', name: 'revoked' },
+      outcome: 'succeeded',
+      correlationId: requestId,
+      ...(resource !== undefined ? { resource } : {}),
+      ...(code !== undefined ? { reason: { code } } : {}),
+      details: { family: 'delegation', phase: 'revoked', delegationRef: delegationReference(vcId) },
+    });
+  }
+
+  /** `consent.approved`: the service (issuer) recorded the user's consent to the agent. */
+  private auditConsentRegistered(requestId: string, vc: SignedVC, agentDid: string, userDid: string | undefined): void {
+    const actor = didRef(agentDid);
+    const resource = didRef(vc.issuer);
+    const responsibleParty = didRef(userDid);
+    this.audit({
+      eventType: 'consent.approved',
+      action: { category: 'consent', name: 'grant_registered' },
+      outcome: 'succeeded',
+      correlationId: requestId,
+      ...(actor !== undefined ? { actor } : {}),
+      ...(resource !== undefined ? { resource } : {}),
+      ...(responsibleParty !== undefined ? { responsibleParty } : {}),
+      details: { family: 'consent', phase: 'approved', consentRef: vc.id },
+    });
+  }
 
   async findActiveBySubjectDid(
     subjectDid: string,
@@ -332,14 +406,7 @@ export class VCService implements IVCService {
     await this.vcRepo.revokeVc(record.vcId, this.DEFAULT_STATUS_LIST_ID, encoded);
     if (ownsBit) await this.statusListCache.delete(this.DEFAULT_STATUS_LIST_ID);
 
-    await this.audit.log({
-      event: 'VC_REVOKED',
-      timestamp: new Date().toISOString(),
-      requestId,
-      vcId: record.vcId,
-      subjectDid: record.subjectDid,
-      reason: 'superseded',
-    });
+    this.auditCredentialRevoked(requestId, record.subjectDid, record.vcId, 'superseded');
     return true;
   }
 
@@ -486,16 +553,7 @@ export class VCService implements IVCService {
       ...vcLookupColumns(vc),
     });
 
-    await this.audit.log({
-      event: 'CONSENT_GRANTED',
-      timestamp: new Date().toISOString(),
-      requestId,
-      vcId: vc.id,
-      subjectDid: subject.id,
-      subjectType: 'agent',
-      privilegeScopes,
-      expiresAt: expiresAt?.toISOString() ?? null,
-    });
+    this.auditCredentialIssued(requestId, 'registered', subject.id, delegationRef(vc) ?? delegationReference(vc.id));
 
     const reconciled = await this.reconcileActive(vc, options, requestId);
     return { vcId: vc.id, alreadyRegistered: false, ...reconciled };
@@ -633,17 +691,12 @@ export class VCService implements IVCService {
     });
 
     // 7. Audit
-    await this.audit.log({
-      event: 'VC_ISSUED',
-      timestamp: now.toISOString(),
+    this.auditCredentialIssued(
       requestId,
-      vcId,
-      subjectDid: params.subjectDid,
-      subjectType: params.subjectType,
-      privilegeScopes: params.privilegeScopes,
-      expiresAt: expiresAt?.toISOString() ?? null,
-      statusListIndex: claimedIndex,
-    });
+      'issued',
+      params.subjectDid,
+      delegationRef(signedVc) ?? delegationReference(vcId),
+    );
 
     const reconciled = await this.reconcileActive(
       signedVc,
@@ -780,13 +833,7 @@ export class VCService implements IVCService {
     const updatedRecord = await this.vcRepo.revokeVc(vcId, this.DEFAULT_STATUS_LIST_ID, newEncoded);
     if (ownsBit) await this.statusListCache.delete(this.DEFAULT_STATUS_LIST_ID);
 
-    await this.audit.log({
-      event: 'VC_REVOKED',
-      timestamp: new Date().toISOString(),
-      requestId,
-      vcId,
-      subjectDid: record.subjectDid,
-    });
+    this.auditCredentialRevoked(requestId, record.subjectDid, vcId);
 
     return {
       vcId,
@@ -826,14 +873,7 @@ export class VCService implements IVCService {
 
     await this.vcRepo.markAsRenewed(vcId, newVcResult.vcId);
 
-    await this.audit.log({
-      event: 'VC_RENEWED',
-      timestamp: new Date().toISOString(),
-      requestId,
-      oldVcId: vcId,
-      newVcId: newVcResult.vcId,
-      subjectDid: record.subjectDid,
-    });
+    this.auditCredentialIssued(requestId, 'renewed', record.subjectDid, delegationReference(newVcResult.vcId), vcId);
 
     return {
       ...newVcResult,
@@ -895,19 +935,7 @@ export class VCService implements IVCService {
       ...vcLookupColumns(vc),
     });
 
-    await this.audit.log({
-      event: 'CONSENT_GRANTED',
-      timestamp: new Date().toISOString(),
-      requestId,
-      vcId: vc.id,
-      issuer: vc.issuer,
-      subjectDid: subject.id,
-      subjectType: 'agent',
-      userDid: subject.userDid,
-      scopes: subject.scopes,
-      durability: subject.durability,
-      expiresAt: validUntil ?? null,
-    });
+    this.auditConsentRegistered(requestId, vc, subject.id, subject.userDid);
 
     return this.reconcileActive(vc, options, requestId);
   }

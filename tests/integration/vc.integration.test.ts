@@ -19,7 +19,7 @@ import { VCService } from '../../src/services/vc/vc.service.js';
 import { VcRepository } from '../../src/repositories/vc.repository.js';
 import { DIDService } from '../../src/services/did/did.service.js';
 import { DidRepository } from '../../src/repositories/did.repository.js';
-import { ApiAuditLogger } from '../../src/audit/index.js';
+import { TestAuditTrail } from '../utils/TestAuditTrail.js';
 import { MockHederaClient } from '../../src/hedera/mock/MockHederaClient.js';
 import { errorHandler } from '../../src/middleware/errorHandler.js';
 import vcRoutes from '../../src/routes/vc/index.js';
@@ -38,7 +38,7 @@ describe('VC API Integration', () => {
   beforeAll(async () => {
     prisma = createTestPrisma();
     
-    const auditLogger = new ApiAuditLogger(prisma);
+    const auditLogger = new TestAuditTrail();
     const didRepo = new DidRepository(prisma);
     const vcRepo = new VcRepository(prisma);
     const mockHedera = new MockHederaClient();

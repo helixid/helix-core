@@ -2,6 +2,7 @@
 // Licensed under the Apache License, Version 2.0
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { TestAuditTrail } from '../../utils/TestAuditTrail.js';
 import { createStatusList, generateKeyPair } from '../../../src/core/index.js';
 import { VCService } from '../../../src/services/vc/vc.service.js';
 import { InProcessCache } from '../../../src/cache/InProcessCache.js';
@@ -9,7 +10,7 @@ import { InProcessCache } from '../../../src/cache/InProcessCache.js';
 describe('VCService status-list cache behavior', () => {
   let repository: any;
   let didService: any;
-  let auditLogger: any;
+  let auditLogger: TestAuditTrail;
   let statusListCache: InProcessCache<string>;
   let service: VCService;
   let signingKey: string;
@@ -29,7 +30,7 @@ describe('VCService status-list cache behavior', () => {
       findActiveChildren: vi.fn().mockResolvedValue([]),
     };
     didService = { resolveDID: vi.fn() };
-    auditLogger = { log: vi.fn() };
+    auditLogger = new TestAuditTrail();
     statusListCache = new InProcessCache<string>();
     service = new VCService(
       repository,

@@ -10,7 +10,7 @@ import { CredentialService } from '../../src/services/credentials/credential.ser
 import { AesGcmKeyCustody } from '../../src/services/key-custody/key-custody.js';
 import { MockDIDService } from '../mocks/MockDIDService.js';
 import { MockVCService } from '../mocks/MockVCService.js';
-import { TestAuditLogger } from '../utils/TestAuditLogger.js';
+import { TestAuditTrail } from '../utils/TestAuditTrail.js';
 
 const TEST_ADMIN_KEY = 'test-admin-key';
 const ISSUER_KEY = 'a'.repeat(64);
@@ -31,7 +31,7 @@ function makeApp() {
   const vcService = new MockVCService();
   const keyRepository = new DidKeyRepository();
   const keyCustody = new AesGcmKeyCustody('11'.repeat(32));
-  const audit = new TestAuditLogger();
+  const audit = new TestAuditTrail();
   let nextIndex = 0;
   const credentialService = new CredentialService(
     new VcRepository(),

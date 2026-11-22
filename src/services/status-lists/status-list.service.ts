@@ -53,12 +53,12 @@ import {
   verifyDataIntegrity,
   type BitstringStatusEntry,
   type DidResolver,
-  type IAuditLogger,
+  type AuditTrail,
   type SignedStatusListCredential,
   type Signer,
   type StatusListCredential,
 } from '../../core/index.js';
-import { AuditEvents } from '../../core/audit/events.js';
+import { credentialRevoked, recordAudit, revocationSignalFailed, statusListPublished } from '../revocation/audit.js';
 import type { ICache } from '../../cache/ICache.js';
 import { NoopCache } from '../../cache/NoopCache.js';
 import type { RevokeVcItem, VcRepository, VCRecord } from '../../repositories/vc.repository.js';
@@ -85,7 +85,8 @@ export interface StatusListPublisherOptions {
   refreshBeforeSeconds?: number | undefined;
   /** Where issuer-signed lists are kept, shared by every API instance (Redis); default this process only. */
   signedCache?: ICache<string> | undefined;
-  audit?: IAuditLogger | undefined;
+  /** A-1's typed trail: one `configuration.changed` per list newly signed. */
+  audit?: AuditTrail | undefined;
   /** Milliseconds since the epoch; default `Date.now`. */
   clock?: (() => number) | undefined;
 }
@@ -208,7 +209,7 @@ export class StatusListPublisher {
     const credential = await buildStatusListCredential({ id: this.urlFor(listId), issuer, encodedList, ...this.#window() }, signer);
     const published: Published = { credential, encodedList, validUntilMs: Date.parse(credential.validUntil) };
     this.#published.set(listId, published);
-    this.#options.audit?.log(AuditEvents.STATUS_LIST_UPDATED, { requestId: 'status-list-publisher', listId, issuer, validUntil: credential.validUntil });
+    recordAudit(this.#options.audit, statusListPublished(issuer, 'published'));
     return published;
   }
 
@@ -272,7 +273,7 @@ export class StatusListPublisher {
     const published: Published = { credential: list as SignedStatusListCredential, encodedList: stored.encodedList, validUntilMs: until };
     this.#published.set(listId, published);
     await this.#signedCache.set(listId, JSON.stringify(published), Math.max(1, Math.ceil((until - now) / 1000)));
-    this.#options.audit?.log(AuditEvents.STATUS_LIST_UPDATED, { requestId: 'status-list-publisher', listId, issuer, validUntil: list.validUntil, issuerSigned: true });
+    recordAudit(this.#options.audit, statusListPublished(issuer, 'submitted'));
     return published.credential;
   }
 
@@ -323,10 +324,10 @@ export interface RevokeContext {
 export class StatusListService {
   readonly publisher: StatusListPublisher;
   readonly #repo: StatusListRepository;
-  readonly #audit: IAuditLogger;
+  readonly #audit: AuditTrail | undefined;
   #signals: RevocationSignalSink | undefined;
 
-  constructor(options: { publisher: StatusListPublisher; repo: StatusListRepository; audit: IAuditLogger; signals?: RevocationSignalSink | undefined }) {
+  constructor(options: { publisher: StatusListPublisher; repo: StatusListRepository; audit: AuditTrail | undefined; signals?: RevocationSignalSink | undefined }) {
     this.publisher = options.publisher;
     this.#repo = options.repo;
     this.#audit = options.audit;
@@ -402,26 +403,15 @@ export class StatusListService {
       await this.publisher.publish(listId);
     }
     for (const [position, record] of records.entries()) {
-      await this.#audit.log(AuditEvents.VC_REVOKED, {
-        requestId: context.requestId,
-        vcId: record.vcId,
-        subjectDid: record.subjectDid,
-        issuer: record.issuerDid ?? undefined,
-        ...(context.revoker === undefined ? {} : { revoker: context.revoker }),
-        ...(position > 0 || context.cascadeFrom !== undefined ? { cascadeFrom: context.cascadeFrom ?? vcIds[0] } : {}),
-        statusList: items[position]?.listId ?? null,
-      });
+      const cascadeFrom = context.cascadeFrom ?? (position > 0 ? vcIds[0] : undefined);
+      recordAudit(this.#audit, credentialRevoked({ requestId: context.requestId, vcId: record.vcId, subjectDid: record.subjectDid, revoker: context.revoker, cascadeFrom }));
     }
     for (const record of records) {
       try {
         await this.#signals?.publish(record.vcId);
       } catch (error) {
-        await this.#audit.log(AuditEvents.VC_REVOCATION_FAILED, {
-          requestId: context.requestId,
-          vcId: record.vcId,
-          stage: 'revocation_signal',
-          message: (error as Error).message,
-        });
+        console.error('REVOCATION_SIGNAL_FAILED', record.vcId, (error as Error).message);
+        recordAudit(this.#audit, revocationSignalFailed({ vcId: record.vcId, correlationId: context.requestId, stage: 'emit' }));
       }
     }
     return revoked;

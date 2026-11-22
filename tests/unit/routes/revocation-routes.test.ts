@@ -18,6 +18,7 @@ import {
 import type { DidResolver } from '../../../src/core/credentials/index.js';
 import { errorHandler } from '../../../src/middleware/errorHandler.js';
 import { VcRepository } from '../../../src/repositories/vc.repository.js';
+import { TestAuditTrail } from '../../utils/TestAuditTrail.js';
 import { StatusListPublisher, StatusListService } from '../../../src/services/status-lists/status-list.service.js';
 import { RevocationService } from '../../../src/services/revocation/revocation.service.js';
 import { InProcessSignalBus, RedisSignalBus, RevocationSignalPublisher, type RedisPubSubLike, type RevocationEvent } from '../../../src/services/revocation/signal-publisher.js';
@@ -50,7 +51,7 @@ interface Stack {
 
 async function stack(options: { listen?: boolean; heartbeatMs?: number; signerFor?: boolean } = {}): Promise<Stack> {
   const repo = new VcRepository();
-  const audit = { log: vi.fn() };
+  const audit = new TestAuditTrail();
   const publisher = new StatusListPublisher({
     repo,
     helixIssuerDid: helixDid,
@@ -58,8 +59,8 @@ async function stack(options: { listen?: boolean; heartbeatMs?: number; signerFo
     signerFor: async (did) => (did === helixDid ? helixSigner : undefined),
     resolveDid: resolve,
   });
-  const signals = new RevocationSignalPublisher({ signer: helixSigner, audit: audit as never });
-  const statusLists = new StatusListService({ publisher, repo, audit: audit as never, signals });
+  const signals = new RevocationSignalPublisher({ signer: helixSigner, audit });
+  const statusLists = new StatusListService({ publisher, repo, audit, signals });
   const revocations = new RevocationService({ repo, statusLists, resolveDid: resolve, audience: `${API}/v1/revocations` });
   const entry = await statusLists.statusEntryFor(helixDid);
   const identityId = 'urn:uuid:identity-1';
@@ -236,7 +237,8 @@ describe('GET /v1/events/revocations (SSE) and the webhook registry', () => {
 
 describe('RevocationSignalPublisher delivery', () => {
   it('pushes each SET to every webhook (RFC 8935): 202 is delivery, errors retry with backoff, 400 does not, and failures are audited', async () => {
-    const audit = { log: vi.fn() };
+    const audit = new TestAuditTrail();
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const calls: Array<{ url: string; type: string | null; body: string }> = [];
     const answers: Record<string, number[]> = { 'https://ok.example/s': [202], 'https://flaky.example/s': [500, 202], 'https://down.example/s': [503, 503], 'https://bad.example/s': [400] };
     const fetchStub = (async (url: string, init: RequestInit) => {
@@ -250,7 +252,7 @@ describe('RevocationSignalPublisher delivery', () => {
       fetch: fetchStub,
       maxAttempts: 2,
       retryDelayMs: 1,
-      audit: audit as never,
+      audit,
     });
     const event = await signals.publish('urn:uuid:c');
     await signals.drain();
@@ -258,8 +260,23 @@ describe('RevocationSignalPublisher delivery', () => {
     expect(calls.filter((call) => call.url === 'https://flaky.example/s')).toHaveLength(2);
     expect(calls.filter((call) => call.url === 'https://bad.example/s')).toHaveLength(1);
     expect(calls[0]).toMatchObject({ type: 'application/secevent+jwt', body: event.set });
-    const failures = audit.log.mock.calls.filter(([name]) => name === 'VC_REVOCATION_FAILED').map(([, payload]) => (payload as { endpoint: string }).endpoint);
+    // The operator log names the endpoint; the audit event names only the credential and the SET (no URL, no error text).
+    const failures = errors.mock.calls.filter(([name]) => name === 'REVOCATION_WEBHOOK_PUSH_FAILED').map(([, url]) => url as string);
     expect(failures.sort()).toEqual(['https://bad.example/s', 'https://down.example/s', 'https://throws.example/s']);
+    errors.mockRestore();
+    await audit.flush();
+    expect(audit.ofType('delegation.revoked')).toEqual(
+      Array.from({ length: 3 }, () =>
+        expect.objectContaining({
+          outcome: 'failed',
+          correlationId: event.id,
+          action: { category: 'revocation_signal', name: 'webhook_push' },
+          reason: { code: 'webhook_push_failed' },
+          details: { family: 'delegation', phase: 'revoked', delegationRef: 'urn:uuid:c' },
+        }),
+      ),
+    );
+    expect(JSON.stringify(audit.events)).not.toMatch(/example\/s|connection refused/);
     expect(signals.removeWebhook('not a url')).toBe(false);
     expect(() => signals.addWebhook('nope')).toThrow(/not a URL/);
     signals.addWebhook('http://127.0.0.1:9/s');

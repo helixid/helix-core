@@ -32,8 +32,8 @@
  */
 
 import { kyaos } from '@helixid/sdk-js';
-import { AuditEvents } from '../../core/audit/events.js';
-import type { IAuditLogger, Signer } from '../../core/index.js';
+import type { AuditTrail, Signer } from '../../core/index.js';
+import { recordAudit, revocationSignalFailed } from './audit.js';
 
 export interface RevocationEvent {
   /** The SET's `jti`: the SSE event id. */
@@ -121,7 +121,8 @@ export interface RevocationSignalPublisherOptions {
   retryDelayMs?: number | undefined;
   /** How many recent events a reconnecting SSE client can be replayed; default 1000. */
   bufferSize?: number | undefined;
-  audit?: IAuditLogger | undefined;
+  /** A-1's typed trail: a push that never succeeded is recorded (`delegation.revoked`, outcome `failed`). */
+  audit?: AuditTrail | undefined;
   clock?: (() => number) | undefined;
 }
 
@@ -202,14 +203,8 @@ export class RevocationSignalPublisher {
         delay *= 2;
       }
     }
-    await this.#options.audit?.log(AuditEvents.VC_REVOCATION_FAILED, {
-      requestId: 'revocation-signal',
-      vcId: event.credentialId,
-      stage: 'webhook_push',
-      endpoint: url,
-      jti: event.id,
-      message: last,
-    });
+    console.error('REVOCATION_WEBHOOK_PUSH_FAILED', url, event.id, last);
+    recordAudit(this.#options.audit, revocationSignalFailed({ vcId: event.credentialId, correlationId: event.id, stage: 'webhook_push' }));
   }
 
   addWebhook(url: string): void {

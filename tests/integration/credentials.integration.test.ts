@@ -25,7 +25,7 @@ import { CredentialService } from '../../src/services/credentials/credential.ser
 import { AesGcmKeyCustody } from '../../src/services/key-custody/key-custody.js';
 import { MockDIDService } from '../mocks/MockDIDService.js';
 import { MockVCService } from '../mocks/MockVCService.js';
-import { TestAuditLogger } from '../utils/TestAuditLogger.js';
+import { TestAuditTrail } from '../utils/TestAuditTrail.js';
 
 const ADMIN = 'test-admin-key';
 const ISSUER_KEY = 'a'.repeat(64);
@@ -41,7 +41,7 @@ function makeApp(withCredentials = true) {
   const didService = new MockDIDService({ id: 'did:hedera:testnet:user-1', verificationMethod: [{ id: 'did:hedera:testnet:user-1#key-1', type: 'Ed25519VerificationKey2020', publicKeyHex: 'a'.repeat(64) }] });
   const keyRepository = new DidKeyRepository();
   const keyCustody = new AesGcmKeyCustody('11'.repeat(32));
-  const audit = new TestAuditLogger();
+  const audit = new TestAuditTrail();
   const vcRepository = new VcRepository();
   void vcRepository.createStatusList('helix-status-list-1', 'list');
   let nextIndex = 0;

@@ -28,20 +28,36 @@ import {
   buildCapabilityAttestation,
   buildDelegationHop,
   buildIdentityCredential,
+  credentialDigest,
+  delegationRef,
+  UNKNOWN_DELEGATION_REF,
   evaluateDelegationChain,
+  publicDid,
   resolveDID as resolveDIDCore,
   rootHopInput,
   verifyCapabilityAttestation,
   type BitstringStatusEntry,
+  type AuditEventInput,
+  type AuditTrail,
   type Caveat,
-  type IAuditLogger,
   type JwsDidDocument,
+  type PartyRef,
   type Signer,
   type SignedCapabilityAttestation,
   type SignedDelegationHop,
   type SignedIdentityCredential,
 } from '../../core/index.js';
-import { AuditEvents, type AuditEventType } from '../../core/audit/events.js';
+
+const DID_PATTERN = /^did:[^\r\n]+$/;
+
+/** A `public_did` reference, or nothing when the value is not a DID: the event then names no party rather than failing validation. */
+function didRef(value: unknown): PartyRef | undefined {
+  return typeof value === 'string' && DID_PATTERN.test(value) ? publicDid(value) : undefined;
+}
+
+function reportAuditFailure(error: unknown): void {
+  console.error('AUDIT_RECORD_FAILED', error instanceof Error ? error.message : String(error));
+}
 import type { VcRepository, VCRecord } from '../../repositories/vc.repository.js';
 import type { DidKeyRepository } from '../../repositories/did-key.repository.js';
 import type { IKeyCustody } from '../key-custody/key-custody.js';
@@ -152,8 +168,41 @@ export class CredentialService {
     private readonly helixSigner: Signer,
     private readonly keyRepository: Pick<DidKeyRepository, 'findByDid'>,
     private readonly keyCustody: IKeyCustody,
-    private readonly auditLogger: IAuditLogger,
+    private readonly auditTrail: AuditTrail,
   ) {}
+
+  /** Records one typed audit event (KYA-OS A-1); a failure to record never breaks the request. */
+  private audit(input: AuditEventInput): void {
+    try {
+      this.auditTrail.record(input).catch(reportAuditFailure);
+    } catch (error) {
+      reportAuditFailure(error);
+    }
+  }
+
+  /**
+   * `delegation.issued` for a credential this platform now holds (identity,
+   * capability attestation or delegation hop): named by its SPEC 7.8
+   * reference with its digest; `parentRef` names the hop it derives from or
+   * the credential it renews.
+   */
+  private auditIssued(credential: unknown, subjectDid: string, name: 'issued' | 'registered' | 'renewed', requestId: string, parentRef?: string): void {
+    const record = credential as Record<string, unknown>;
+    const ref = delegationRef(credential) ?? UNKNOWN_DELEGATION_REF;
+    const digest = credentialDigest(credential);
+    const actor = didRef(record['issuer']);
+    const resource = didRef(subjectDid);
+    this.audit({
+      eventType: 'delegation.issued',
+      action: { category: 'credential', name },
+      outcome: 'succeeded',
+      correlationId: requestId,
+      ...(actor !== undefined ? { actor } : {}),
+      ...(resource !== undefined ? { resource } : {}),
+      authorization: { source: 'delegation', decision: 'allowed', delegationRef: ref, ...(digest !== undefined ? { delegationCredentialDigest: digest } : {}) },
+      details: { family: 'delegation', phase: 'issued', delegationRef: ref, ...(parentRef !== undefined ? { parentRef } : {}) },
+    });
+  }
 
   /** The Helix issuer DID, the responsible party of record when an agent has no owner DID. */
   get issuerDid(): string {
@@ -209,12 +258,11 @@ export class CredentialService {
     scopes: string[] | undefined,
     parentVcId: string | undefined,
     requestId: string,
-    event: { event: AuditEventType; [member: string]: unknown },
+    name: 'issued' | 'registered' = 'issued',
   ): Promise<void> {
     await this.ensureSubjectRegistered(subjectDid, requestId);
     const index = Number(credential.credentialStatus.statusListIndex);
     const record = credential as unknown as Record<string, unknown>;
-    const subject = credential.credentialSubject as Record<string, unknown>;
     const types = record['type'] as string[];
     await this.vcRepo.createVc({
       vcId: credential.id,
@@ -230,15 +278,7 @@ export class CredentialService {
       userDid: null,
       scopeKey: scopes ? [...new Set(scopes)].sort().join(' ') : null,
     });
-    this.auditLogger.log(event.event, {
-      requestId,
-      vcId: credential.id,
-      subjectDid,
-      credentialType: types.find((type) => type !== 'VerifiableCredential'),
-      issuer: record['issuer'],
-      ...(typeof subject['capability'] === 'string' ? { capability: subject['capability'] } : {}),
-      ...event,
-    });
+    this.auditIssued(credential, subjectDid, name, requestId, parentVcId);
   }
 
   async issueIdentity(input: IssueIdentityInput, requestId: string): Promise<SignedIdentityCredential> {
@@ -253,7 +293,7 @@ export class CredentialService {
       },
       this.helixSigner,
     );
-    await this.store(identity, input.agentDid, undefined, undefined, requestId, { event: AuditEvents.VC_ISSUED });
+    await this.store(identity, input.agentDid, undefined, undefined, requestId);
     return identity;
   }
 
@@ -283,12 +323,7 @@ export class CredentialService {
       requestId,
     );
     await this.vcRepo.markAsRenewed(vcId, identity.id);
-    this.auditLogger.log(AuditEvents.VC_RENEWED, {
-      requestId,
-      oldVcId: vcId,
-      newVcId: identity.id,
-      subjectDid: previous.credentialSubject.id,
-    });
+    this.auditIssued(identity, previous.credentialSubject.id, 'renewed', requestId, vcId);
     return {
       vcId: identity.id,
       vc: identity,
@@ -313,7 +348,7 @@ export class CredentialService {
         },
         signer,
       );
-      await this.store(attestation, input.agentDid, [capability], undefined, requestId, { event: AuditEvents.VC_ISSUED });
+      await this.store(attestation, input.agentDid, [capability], undefined, requestId);
       issued.push(attestation);
     }
     return issued;
@@ -336,10 +371,7 @@ export class CredentialService {
     if (await this.vcRepo.findByVcId(verdict.credential.id)) {
       throw new HelixError(ErrorCode.VALIDATION_ERROR, 'attestation already registered', 409);
     }
-    await this.store(verdict.credential, agentDid, [verdict.capability], undefined, requestId, {
-      event: AuditEvents.VC_ISSUED,
-      ownerSigned: true,
-    });
+    await this.store(verdict.credential, agentDid, [verdict.capability], undefined, requestId, 'registered');
     return verdict.credential;
   }
 
@@ -377,7 +409,7 @@ export class CredentialService {
     if (!evaluation.ok) {
       throw new HelixError(ErrorCode.DELEGATION_CHAIN_INVALID, evaluation.reasons.join('; '), 400);
     }
-    await this.store(hop, input.invoker, [...input.allowedAction], undefined, requestId, { event: AuditEvents.VC_ISSUED });
+    await this.store(hop, input.invoker, [...input.allowedAction], undefined, requestId);
     return hop;
   }
 
@@ -430,7 +462,7 @@ export class CredentialService {
     if (!evaluation.ok) {
       throw new HelixError(ErrorCode.DELEGATION_CHAIN_INVALID, evaluation.reasons.join('; '), 400);
     }
-    await this.store(hop, input.invoker, [...input.allowedAction], parentId, requestId, { event: AuditEvents.VC_ISSUED });
+    await this.store(hop, input.invoker, [...input.allowedAction], parentId, requestId);
     return { hop, chain };
   }
 
