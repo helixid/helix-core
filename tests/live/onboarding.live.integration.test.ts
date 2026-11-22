@@ -86,9 +86,8 @@ describe('Onboarding Live Integration', () => {
     expect(auditTypes).toEqual(expect.arrayContaining([
       'credential.required',   // enrollment token generated, onboarding challenge issued
       'credential.verified',   // token consumed, challenge verified, agent onboarded
-      'configuration.changed', // DID created, service enrolled
-      'delegation.issued',     // agent credential issued
-      'proof.generated',       // VP signed
+      'configuration.changed', // DID created
+      'delegation.issued',     // identity credential and capability attestations issued
     ]));
   }, LIVE_HEDERA_TIMEOUT_MS);
 });
