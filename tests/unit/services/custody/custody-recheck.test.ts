@@ -147,11 +147,12 @@ describe('CustodyService.recheckPending', () => {
       keyStore: h.keyStore,
       didRepository: h.dids,
       credentials: {
-        issueVC: async () => {
+        issuerDid: 'did:web:helix.example',
+        issueIdentity: async () => {
           if (fail) throw new Error('issuer down');
-          return { vcId: 'vc:late', vc: {} };
+          return { id: 'vc:late' };
         },
-        revokeVC: async () => ({}),
+        issueAttestations: async () => [],
       },
     });
     const created = await pendingAgent(h, 'flaky');

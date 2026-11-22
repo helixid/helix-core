@@ -54,7 +54,6 @@ import {
   buildDidDocument,
   buildEntityCard,
   cardEndpointOf,
-  custodyClaims,
   custodyLabel,
   didKeyFromPublicKey,
   didWebCardUrl,
@@ -151,21 +150,18 @@ export interface CustodyDidRecords {
   updateDidDocument(did: string, didDocument: unknown, update: { updateType: string; hederaTransactionId: string; payload: unknown }): Promise<unknown>;
 }
 
+/**
+ * Credential issuance for custody agents: story F-1's identity credential and
+ * one capability attestation per scope, as every agent gets them
+ * (CredentialService implements this). Key custody and DID hosting are not
+ * in the credential: they stay in the custody record, where the conformance
+ * report and the `custody: helix` label read them.
+ */
 export interface CustodyCredentials {
-  issueVC(
-    input: {
-      subjectDid: string;
-      subjectType: 'agent';
-      privilegeScopes: string[];
-      agentName: string;
-      keyCustody: KeyCustodyMode;
-      didHosting: DidHostingMode;
-      delegationDepth?: number;
-      maxDelegationDepth?: number;
-    },
-    requestId: string,
-  ): Promise<{ vcId: string; vc: Record<string, unknown> }>;
-  revokeVC(vcId: string, requestId: string): Promise<unknown>;
+  /** The responsible party of record when an agent names no owner (the Helix issuer). */
+  readonly issuerDid: string;
+  issueIdentity(input: { agentDid: string; name: string; ownerDid: string }, requestId: string): Promise<{ id: string }>;
+  issueAttestations(input: { agentDid: string; capabilities: readonly string[] }, requestId: string): Promise<readonly { id: string }[]>;
 }
 
 export interface CustodyServices {
@@ -363,7 +359,6 @@ export interface ChangeCustodyResult extends CustodyView {
   hopReissue: HopReissueResult;
   documents: PublishedDocuments;
   publishRequired: boolean;
-  vcId?: string;
 }
 
 /**
@@ -792,13 +787,9 @@ export class CustodyService implements CustodialKeys {
     }
     const hopReissue = await this.hopReissuer.reissueHopsForKid({ did, oldKid: previous.kid, newKid, requestId: context.requestId });
 
-    let vcId: string | undefined;
-    if (record.subjectType === 'agent') {
-      const issued = await this.issueCredential({ ...record, keyCustody: target }, context);
-      vcId = issued;
-      if (record.credentialVcId) await this.retireCredential(record.credentialVcId, context.requestId);
-    }
-    record = await this.options.records.updateRecord(did, { keyCustody: target, kid: newKid, ...(vcId ? { credentialVcId: vcId } : {}) });
+    // The identity credential carries no custody facts (story F-1), so a
+    // custody change keeps it; the custody record says who holds the key now.
+    record = await this.options.records.updateRecord(did, { keyCustody: target, kid: newKid });
     this.audit.changed({
       requestId: context.requestId,
       actor: context.actor,
@@ -823,7 +814,6 @@ export class CustodyService implements CustodialKeys {
       hopReissue,
       documents,
       publishRequired: record.didHosting === 'own',
-      ...(vcId ? { vcId } : {}),
     };
   }
 
@@ -867,9 +857,9 @@ export class CustodyService implements CustodialKeys {
   }
 
   /**
-   * The KeyStore signer of an active custodial agent or service, for the
-   * pre-KYA-OS signing paths (VP signing, delegation, consent grants): only
-   * a `keyCustody: helix` subject has one; a self-custody key never reaches Helix.
+   * The KeyStore signer of an active custodial agent or service, for
+   * server-side signing (consent grants): only a `keyCustody: helix` subject
+   * has one; a self-custody key never reaches Helix.
    */
   async signerFor(did: string, subjectType: 'agent' | 'service', use: CustodialSigningUse): Promise<Signer | undefined> {
     const record = await this.options.records.findRecord(did);
@@ -1074,35 +1064,21 @@ export class CustodyService implements CustodialKeys {
     return { ...(await this.view(active)), ...(vcId ? { vcId } : {}) };
   }
 
-  /** The agent's identity credential, carrying `keyCustody` and `didHosting` (point 1). */
+  /**
+   * Story F-1's credentials for the agent: the identity credential (its id is
+   * the record's `credentialVcId`) and one capability attestation per scope.
+   * `maxDelegationDepth` and `requestedDomains` stay on the custody record.
+   */
   private async issueCredential(record: CustodyRecordRow, context: CustodyContext): Promise<string> {
-    const issued = await this.options.credentials.issueVC(
-      {
-        subjectDid: record.did,
-        subjectType: 'agent',
-        privilegeScopes: record.scopes ?? [],
-        agentName: record.name ?? record.did,
-        ...custodyClaims(record),
-        delegationDepth: 0,
-        maxDelegationDepth: record.maxDelegationDepth,
-      },
+    const credentials = this.options.credentials;
+    const identity = await credentials.issueIdentity(
+      { agentDid: record.did, name: record.name ?? record.did, ownerDid: record.ownerDid ?? credentials.issuerDid },
       context.requestId,
     );
-    return issued.vcId;
-  }
-
-  /**
-   * Revokes the identity credential a custody change replaced. Issuing the
-   * new one may already have retired it (the VC service keeps one active
-   * credential per agent and scope set), which is the outcome wanted.
-   */
-  private async retireCredential(vcId: string, requestId: string): Promise<void> {
-    try {
-      await this.options.credentials.revokeVC(vcId, requestId);
-    } catch (error) {
-      if ((error as { code?: unknown })?.code === ErrorCode.VC_ALREADY_REVOKED) return;
-      throw error;
+    if (record.scopes && record.scopes.length > 0) {
+      await credentials.issueAttestations({ agentDid: record.did, capabilities: record.scopes }, context.requestId);
     }
+    return identity.id;
   }
 
   /** The DID document listing `keys` (current first) and the card anchored to it. */

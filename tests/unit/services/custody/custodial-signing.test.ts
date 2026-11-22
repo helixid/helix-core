@@ -1,23 +1,27 @@
 // Copyright 2026 DgVerse LLP
-// KYA-OS story F-3: agents and services created through the custody routes sign VPs, delegations and consent grants
-// through the KeyStore (stories rule 8), are recognised as onboarded, and log the enrollment event.
+// KYA-OS story F-3: services created through the custody routes sign consent grants through the KeyStore (stories
+// rule 8); custodial agents sign KYA-OS delegation hops through the generic /sign route; agents log the enrollment event.
 import * as ed25519 from '@noble/ed25519';
 import { describe, expect, it } from 'vitest';
 import {
-  AgentKeyNotFoundError,
   AuditEvents,
+  CustodialSigningRefusedError,
   DelegateeNotAnAgentError,
   ServiceKeyNotFoundError,
   createEd25519Proof,
+  base64UrlDecodeStrict,
+  base64UrlEncode,
+  buildDelegationHop,
   derivePublicKey,
   proofKeyOf,
+  rootHopInput,
   verificationMethodOfKey,
+  verifyDelegationHop,
+  type Signer,
   verifyEd25519Proof,
   type DIDDocument,
 } from '../../../../src/core/index.js';
-import { AgentRepository } from '../../../../src/repositories/agent.repository.js';
 import { DidKeyRepository } from '../../../../src/repositories/did-key.repository.js';
-import { AgentService } from '../../../../src/services/agent/agent.service.js';
 import { AesGcmKeyCustody } from '../../../../src/services/key-custody/key-custody.js';
 import { ServiceProviderService } from '../../../../src/services/service-provider/service-provider.service.js';
 import { MockVCService } from '../../../mocks/MockVCService.js';
@@ -41,13 +45,6 @@ async function documentOf(h: Harness, did: string): Promise<DIDDocument> {
   return (await h.dids.findDidById(did))!.didDocument as DIDDocument;
 }
 
-function agentServiceFor(h: Harness, vcService: MockVCService, attach = true): { agents: AgentService; didKeys: DidKeyRepository } {
-  const didKeys = new DidKeyRepository();
-  const agents = new AgentService(new AgentRepository(), {} as never, vcService as never, { log: () => undefined } as never, didKeys, new AesGcmKeyCustody(MASTER));
-  if (attach) agents.attachCustodialKeys(h.service);
-  return { agents, didKeys };
-}
-
 describe('createEd25519Proof with a Signer', () => {
   it('makes the same proof as the raw key, and refuses a signer that returns no signature', async () => {
     const seed = '7d'.repeat(32);
@@ -64,81 +61,45 @@ describe('createEd25519Proof with a Signer', () => {
   });
 });
 
-describe('VP signing for agents created through POST /v1/agents', () => {
-  it('a custodial agent: signVP signs through its KeyStore key, under its current kid, and the proof verifies against its DID document', async () => {
+describe('KYA-OS delegation for custodial agents: signed through the generic /sign route', () => {
+  /** What HelixCustodialSigner does in the SDKs: POST /v1/agents/{did}/sign, here the service method behind it. */
+  function custodialSigner(h: Harness, did: string): Signer {
+    return {
+      did,
+      kid: 'key-1',
+      sign: async (data: Uint8Array) => base64UrlDecodeStrict((await h.service.sign(did, { payload: base64UrlEncode(data) }, h.context({ actor: 'account:acc_1' }), 'agent')).signature)!,
+    };
+  }
+
+  it('a custodial agent signs a delegation hop with its KeyStore key; the hop verifies against its DID document and the signature is audited', async () => {
     const h = harness();
-    const agent = await h.service.createAgent({ name: 'Presenter', scopes: ['read:orders'], keyCustody: 'helix' }, h.context());
-    const vcService = new MockVCService();
-    vcService.setActiveVC(agentVC(agent.did));
-    const { agents } = agentServiceFor(h, vcService);
-    const { signedVP } = await agents.signVP({ did: agent.did, targetService: 'did:web:orders.example' }, 'req');
-    expect(signedVP.proof.verificationMethod).toBe(`${agent.did}#key-1`);
-    const { proof, ...payload } = signedVP as unknown as Record<string, unknown> & { proof: { proofValue: string } };
-    expect(await verifyEd25519Proof(payload, proof, await documentOf(h, agent.did))).toBe(true);
-    expect(events(h, AuditEvents.CUSTODIAL_SIGNATURE)).toEqual([
-      expect.objectContaining({ requestId: 'req', actor: 'custodial-vp', subjectType: 'agent', did: agent.did, kid: `${agent.did}#key-1`, payloadBytes: 32 }),
-    ]);
+    const delegator = await h.service.createAgent({ name: 'Delegator', scopes: ['read:orders'], keyCustody: 'helix' }, h.context());
+    const delegatee = await h.service.createAgent({ name: 'Delegatee', keyCustody: 'helix' }, h.context());
+    const hop = await buildDelegationHop(
+      rootHopInput({
+        invoker: delegatee.did,
+        invocationTarget: 'did:web:orders.example',
+        allowedAction: ['read:orders'],
+        validUntil: '2027-01-01T00:00:00Z',
+        statusEntry: { type: 'BitstringStatusListEntry', statusPurpose: 'revocation', statusListIndex: '7', statusListCredential: 'https://helix.example/v1/status-list/1' },
+      }),
+      custodialSigner(h, delegator.did),
+    );
+    expect(hop.issuer).toBe(delegator.did);
+    const verified = await verifyDelegationHop(hop, async (did) => (await documentOf(h, did)) as never);
+    expect(verified).toMatchObject({ ok: true, issuer: delegator.did, invoker: delegatee.did });
+    expect(events(h, AuditEvents.CUSTODIAL_SIGNATURE)).toEqual([expect.objectContaining({ actor: 'account:acc_1', did: delegator.did, kid: `${delegator.did}#key-1` })]);
   });
 
-  it('is AGENT_KEY_NOT_FOUND for a self-custody agent (its key never reaches Helix), for an unknown agent, and without the KeyStore attached', async () => {
-    const h = harness();
-    const key = clientKey();
-    const created = await h.service.createAgent({ name: 'Own keys', keyCustody: 'self' }, h.context());
-    const challenge = await h.service.enrollmentChallenge(created.enrollmentToken);
-    await h.service.enroll({ enrollmentToken: created.enrollmentToken, publicKeyJwk: key.publicKeyJwk, signature: enrollmentSignature(key, challenge.did, challenge.kid, challenge.nonce) }, h.context());
-    const custodial = await h.service.createAgent({ name: 'Custodial', keyCustody: 'helix' }, h.context());
-    const vcService = new MockVCService();
-    vcService.setActiveVC(agentVC(created.did));
-    const { agents } = agentServiceFor(h, vcService);
-    await expect(agents.signVP({ did: created.did, targetService: 'did:web:s' }, 'req')).rejects.toThrow(AgentKeyNotFoundError);
-    await expect(agents.signVP({ did: 'did:web:nobody', targetService: 'did:web:s' }, 'req')).rejects.toThrow(AgentKeyNotFoundError);
-    const { agents: unattached } = agentServiceFor(h, vcService, false);
-    await expect(unattached.signVP({ did: custodial.did, targetService: 'did:web:s' }, 'req')).rejects.toThrow(AgentKeyNotFoundError);
-  });
-
-  it('after a change to self custody, Helix no longer signs for the agent', async () => {
+  it('after a change to self custody, Helix no longer signs for the agent, through /sign or for a grant', async () => {
     const h = harness();
     const agent = await h.service.createAgent({ name: 'Mover', keyCustody: 'helix' }, h.context());
     const key = clientKey();
     const { rotationProof } = await import('./harness.js');
     await h.service.changeCustody(agent.did, { keyCustody: 'self', publicKeyJwk: key.publicKeyJwk, proof: rotationProof(key, agent.did, `${agent.did}#key-2`, h.now.value.toISOString()) }, h.context());
-    expect(await h.service.signerFor(agent.did, 'agent', { requestId: 'req', purpose: 'vp' })).toBeUndefined();
+    await expect(custodialSigner(h, agent.did).sign(new Uint8Array([1]))).rejects.toThrow(CustodialSigningRefusedError);
+    expect(await h.service.signerFor(agent.did, 'agent', { requestId: 'req', purpose: 'grant' })).toBeUndefined();
     expect(await h.service.isActiveAgent(agent.did)).toBe(true);
-  });
-});
-
-describe('delegation for agents created through POST /v1/agents', () => {
-  it('a custodial agent delegates to another custody agent, signing the delegation through its KeyStore key', async () => {
-    const h = harness();
-    const delegator = await h.service.createAgent({ name: 'Delegator', scopes: ['read:orders'], keyCustody: 'helix', maxDelegationDepth: 1 }, h.context());
-    const delegatee = await h.service.createAgent({ name: 'Delegatee', scopes: ['read:orders'], keyCustody: 'helix' }, h.context());
-    const vcService = new MockVCService();
-    const source = agentVC(delegator.did);
-    vcService.setActiveVC(source);
-    const { agents } = agentServiceFor(h, vcService);
-    const { delegatedVC } = await agents.delegateAuthority({ did: delegator.did, to: delegatee.did, scopes: ['read:orders'], expiresIn: 3600, vcId: source['id'] as string }, 'req');
-    expect(delegatedVC.issuer).toBe(delegator.did);
-    expect(delegatedVC.proof.verificationMethod).toBe(`${delegator.did}#key-1`);
-    const { proof, ...payload } = delegatedVC as unknown as Record<string, unknown> & { proof: { proofValue: string } };
-    expect(await verifyEd25519Proof(payload, proof, await documentOf(h, delegator.did))).toBe(true);
-    expect(events(h, AuditEvents.CUSTODIAL_SIGNATURE)).toEqual([expect.objectContaining({ actor: 'custodial-delegation', did: delegator.did })]);
-  });
-
-  it('refuses a delegatee that is neither a did_keys agent nor an active custody agent, and a did_keys key of another kind', async () => {
-    const h = harness();
-    const delegator = await h.service.createAgent({ name: 'Delegator', scopes: ['read:orders'], keyCustody: 'helix', maxDelegationDepth: 1 }, h.context());
-    const pending = await h.service.createAgent({ name: 'Pending', keyCustody: 'self' }, h.context());
-    const vcService = new MockVCService();
-    const source = agentVC(delegator.did);
-    vcService.setActiveVC(source);
-    const { agents, didKeys } = agentServiceFor(h, vcService);
-    for (const to of [pending.did, 'did:web:nobody']) {
-      await expect(agents.delegateAuthority({ did: delegator.did, to, scopes: ['read:orders'], expiresIn: 3600, vcId: source['id'] as string }, 'req')).rejects.toThrow(DelegateeNotAnAgentError);
-    }
-    await didKeys.create({ did: 'did:web:a-service', subjectType: 'service', encryptedPrivateKey: 'x', iv: 'x', authTag: 'x', algorithm: 'aes-256-gcm' });
-    await expect(agents.delegateAuthority({ did: delegator.did, to: 'did:web:a-service', scopes: ['read:orders'], expiresIn: 3600, vcId: source['id'] as string }, 'req')).rejects.toThrow(DelegateeNotAnAgentError);
-    const { agents: unattached } = agentServiceFor(h, vcService, false);
-    await expect(unattached.delegateAuthority({ did: delegator.did, to: pending.did, scopes: ['read:orders'], expiresIn: 3600 }, 'req')).rejects.toThrow(AgentKeyNotFoundError);
   });
 });
 

@@ -57,8 +57,10 @@ export interface Harness {
   dids: DidRepository;
   services: ServiceRepository;
   audit: TestAuditLogger;
+  /** Identity credentials issued (story F-1), in order; `vcId` is `vc:test:<n>`. */
   issued: { input: Record<string, unknown>; vcId: string }[];
-  revoked: string[];
+  /** Capability attestations issued, one per scope. */
+  attested: { agentDid: string; capability: string; vcId: string }[];
   /** The owner's domain: URL → JSON body (or a status code). */
   web: Map<string, unknown>;
   fetched: string[];
@@ -75,7 +77,7 @@ export function harness(overrides: Partial<CustodyServiceOptions> = {}): Harness
   const services = new ServiceRepository();
   const audit = new TestAuditLogger();
   const issued: Harness['issued'] = [];
-  const revoked: string[] = [];
+  const attested: Harness['attested'] = [];
   const web = new Map<string, unknown>();
   const fetched: string[] = [];
   const now = { value: new Date('2026-11-21T10:00:00Z') };
@@ -94,15 +96,18 @@ export function harness(overrides: Partial<CustodyServiceOptions> = {}): Harness
     keyStore,
     didRepository: dids,
     credentials: {
-      issueVC: async (input) => {
+      issuerDid: 'did:web:helix.example',
+      issueIdentity: async (input) => {
         const vcId = `vc:test:${issued.length + 1}`;
         issued.push({ input: input as unknown as Record<string, unknown>, vcId });
-        return { vcId, vc: { credentialSubject: input } };
+        return { id: vcId };
       },
-      revokeVC: async (vcId) => {
-        revoked.push(vcId);
-        return { vcId, revoked: true };
-      },
+      issueAttestations: async (input) =>
+        input.capabilities.map((capability) => {
+          const vcId = `att:test:${attested.length + 1}`;
+          attested.push({ agentDid: input.agentDid, capability, vcId });
+          return { id: vcId };
+        }),
     },
     services,
     auditLogger: audit,
@@ -121,7 +126,7 @@ export function harness(overrides: Partial<CustodyServiceOptions> = {}): Harness
     services,
     audit,
     issued,
-    revoked,
+    attested,
     web,
     fetched,
     now,

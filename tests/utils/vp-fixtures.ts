@@ -160,3 +160,39 @@ export function decodeJwtPayload(token: string): Record<string, unknown> {
   const segment = token.split('.')[1] ?? '';
   return JSON.parse(Buffer.from(segment, 'base64url').toString('utf8')) as Record<string, unknown>;
 }
+
+/**
+ * The retired agent-credential chain's delegated VC, as `buildDelegationVC`
+ * used to write it before KYA-OS story F-1 removed it from issuance. Kept
+ * here, test-only, so the untouched `verifyVP` chain walk (retired by story
+ * F-2) stays covered until it goes.
+ */
+export async function makeLegacyDelegationVC(
+  options: { to: string; scopes: string[]; expiresIn: number; fromVC: SignedVC; credentialStatus?: SignedVC['credentialStatus'] },
+  delegator: Actor,
+): Promise<SignedVC> {
+  const parentSubject = options.fromVC.credentialSubject as { privilegeScopes: string[]; delegationDepth?: number; maxDelegationDepth?: number };
+  const parentChain = (options.fromVC as SignedVC & { delegationChain?: SignedVC[] }).delegationChain ?? [];
+  const now = new Date();
+  const payload = {
+    '@context': ['https://www.w3.org/ns/credentials/v2', 'https://helixid.io/contexts/v1'],
+    id: `vc:helix:delegation:${crypto.randomUUID()}`,
+    type: ['VerifiableCredential', 'HelixAgentCredential'],
+    issuer: delegator.did,
+    validFrom: now.toISOString(),
+    validUntil: new Date(now.getTime() + options.expiresIn * 1000).toISOString(),
+    credentialSubject: {
+      id: options.to,
+      type: 'HelixAgent' as const,
+      privilegeScopes: options.scopes,
+      agentName: options.to,
+      delegatedFrom: delegator.did,
+      delegationDepth: (parentSubject.delegationDepth ?? 0) + 1,
+      maxDelegationDepth: parentSubject.maxDelegationDepth ?? 0,
+      parentVcId: options.fromVC.id,
+    },
+    ...(options.credentialStatus ? { credentialStatus: options.credentialStatus } : {}),
+    delegationChain: [...parentChain, options.fromVC],
+  };
+  return signVC(payload, delegator);
+}

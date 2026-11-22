@@ -11,10 +11,7 @@
 // limitations under the License.
 
 import { z } from 'zod';
-import {
-  DelegationChainInvalidError,
-  ScopeEscalationDeniedError,
-} from '../errors/HelixError.js';
+import { ScopeEscalationDeniedError } from '../errors/HelixError.js';
 import type { DelegationGrantVC } from './delegation-grant.js';
 
 /**
@@ -57,13 +54,6 @@ export const AgentCredentialSubjectSchema = z.object({
   type: z.literal('HelixAgent'),
   privilegeScopes: z.array(z.string()),
   agentName: z.string(),
-  delegatedFrom: z.string().optional(),
-  delegationDepth: z.number().int().min(0).optional(),
-  maxDelegationDepth: z.number().int().min(0).optional(),
-  parentVcId: z.string().optional(),
-  // KYA-OS story F-3: who holds the key and who serves the DID, as Helix recorded them at onboarding.
-  keyCustody: z.enum(['self', 'helix']).optional(),
-  didHosting: z.enum(['own', 'helix']).optional(),
 });
 
 /**
@@ -127,55 +117,4 @@ export function validateScopeSubset(parentScopes: string[], childScopes: string[
       throw new ScopeEscalationDeniedError(scope);
     }
   }
-}
-
-export function validateChainIntegrity(chain: AgentVC[]): void {
-  if (chain.length < 2) {
-    throw new DelegationChainInvalidError('chain must contain root and leaf credentials');
-  }
-
-  const root = chain[0];
-  if (!root) {
-    throw new DelegationChainInvalidError('root credential missing');
-  }
-  const rootDepth = root.credentialSubject.delegationDepth ?? 0;
-  if (rootDepth !== 0) {
-    throw new DelegationChainInvalidError('root credential depth must be 0');
-  }
-  const maxDepth = root.credentialSubject.maxDelegationDepth ?? 0;
-
-  for (let index = 1; index < chain.length; index += 1) {
-    const parent = chain[index - 1];
-    const child = chain[index];
-    if (!parent || !child) {
-      throw new DelegationChainInvalidError('chain contains a missing link');
-    }
-
-    if (child.credentialSubject.delegatedFrom !== parent.credentialSubject.id) {
-      throw new DelegationChainInvalidError('delegatedFrom does not match parent subject DID');
-    }
-    if (child.credentialSubject.parentVcId !== parent.id) {
-      throw new DelegationChainInvalidError('parentVcId does not match parent VC id');
-    }
-    if (child.credentialSubject.delegationDepth !== index) {
-      throw new DelegationChainInvalidError('delegationDepth values are not sequential');
-    }
-    if (child.credentialSubject.maxDelegationDepth !== maxDepth) {
-      throw new DelegationChainInvalidError('maxDelegationDepth changed inside the chain');
-    }
-
-    validateScopeSubset(parent.credentialSubject.privilegeScopes, child.credentialSubject.privilegeScopes);
-  }
-
-  const leaf = chain.at(-1);
-  if (!leaf) {
-    throw new DelegationChainInvalidError('leaf credential missing');
-  }
-  if ((leaf.credentialSubject.delegationDepth ?? 0) > maxDepth) {
-    throw new DelegationChainInvalidError('leaf delegationDepth exceeds root maxDelegationDepth');
-  }
-}
-
-export function extractChainFromVC(leafVC: AgentVC): string[] {
-  return leafVC.credentialSubject.parentVcId ? [leafVC.credentialSubject.parentVcId, leafVC.id] : [leafVC.id];
 }

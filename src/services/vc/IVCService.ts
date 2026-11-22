@@ -10,10 +10,6 @@ export interface IssueVCInput {
   userId?: string;
   expiresInSeconds?: number;
   expiresAt?: Date | null;
-  delegatedFrom?: string;
-  delegationDepth?: number;
-  maxDelegationDepth?: number;
-  parentVcId?: string;
   revokeExisting?: boolean;
   /** KYA-OS story F-3: recorded on the agent's identity credential. */
   keyCustody?: 'self' | 'helix';

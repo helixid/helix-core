@@ -66,7 +66,7 @@ export type SafeFetchReason =
 export interface SafeFetchInit {
   headers?: Record<string, string>;
   /** Ends the read when it aborts, on top of SafeFetch's own deadline. */
-  signal?: AbortSignal | undefined;
+  signal?: AbortSignal;
 }
 
 /** What SafeFetch gives back: the subset of `Response` a resolver reads. */

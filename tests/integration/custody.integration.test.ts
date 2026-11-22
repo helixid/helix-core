@@ -35,7 +35,7 @@ function service(): { custody: CustodyService; wrapped: WrappedKeyRepository; re
     records,
     keyStore: new DbKeyStore({ table: wrapped, keyEncryptionKey: '7c'.repeat(32) }),
     didRepository: new DidRepository(prisma),
-    credentials: { issueVC: async () => ({ vcId: `vc:${suffix}`, vc: {} }), revokeVC: async () => ({}) },
+    credentials: { issuerDid: 'did:web:helix.example', issueIdentity: async () => ({ id: `vc:${suffix}` }), issueAttestations: async () => [] },
     services: new ServiceRepository(prisma),
     auditLogger: new TestAuditLogger(),
     host: `helix-${suffix}.example`,

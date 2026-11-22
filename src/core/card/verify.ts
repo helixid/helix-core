@@ -33,9 +33,9 @@
  */
 
 import { validateDelegationChain, type DelegationChainContext, type DelegationHop } from './chain.js';
-import { capabilityName, type BitstringStatusListEntry, type Capability, type CardAttestation, type ConformanceLevel, type EntityCard } from './schema.js';
-
-export type TrustedIssuers = '*' | readonly string[];
+import { capabilityName, type ConformanceLevel } from '../credentials/card-level.js';
+import type { TrustedIssuers } from '../credentials/types.js';
+import type { BitstringStatusListEntry, Capability, CardAttestation, EntityCard } from './schema.js';
 
 export interface CapabilityCheckResult {
   verified: string[];

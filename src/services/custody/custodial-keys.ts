@@ -11,20 +11,25 @@
 // limitations under the License.
 
 /**
- * What the pre-KYA-OS signing paths (VP signing, delegation, consent grants)
- * need from KYA-OS story F-3 for agents and services created through the
- * custody routes: their key is in the KeyStore, never in did_keys, so these
- * paths sign through a KeyStoreSigner (stories rule 8: KeyStore only, no
- * second key location) and recognise such an agent as onboarded.
- * CustodyService implements it.
+ * What consent-grant issuance needs from KYA-OS story F-3 for services and
+ * agents created through the custody routes: a service's key is in the
+ * KeyStore, never in did_keys, so grants are signed through a KeyStoreSigner
+ * (stories rule 8: KeyStore only, no second key location), and such an agent
+ * counts as onboarded. CustodyService implements it.
  */
 
 import type { Signer } from '../../core/index.js';
 
-/** Which pre-KYA-OS path asks for the signature, and its request: each signature is audited as CUSTODIAL_SIGNATURE. */
+/**
+ * Which server-side path asks for the signature, and its request: each
+ * signature is audited as CUSTODIAL_SIGNATURE. Consent grants are the only one:
+ * VP signing is not extended to custody agents (F-2 removes it), and the old
+ * delegation path is gone with story F-1; KYA-OS delegation hops and request
+ * proofs are signed client side through the generic /sign route.
+ */
 export interface CustodialSigningUse {
   requestId: string;
-  purpose: 'vp' | 'delegation' | 'grant';
+  purpose: 'grant';
 }
 
 export interface CustodialKeys {

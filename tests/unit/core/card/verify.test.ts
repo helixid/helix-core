@@ -11,6 +11,7 @@ import {
   setBit,
   validateDelegationChain,
   verifyEntityCard,
+  type BitstringStatusListEntry,
   type DelegationHop,
   type EntityCard,
   type OutboundFetch,
@@ -65,7 +66,8 @@ describe('validateDelegationChain', () => {
       depth: 2,
     });
     expect(validateDelegationChain([{ ...root, issuer: { id: ORG } }], { now: NOW }).responsibleParty).toBe(ORG);
-    expect(validateDelegationChain([hop({ subject: { invoker: undefined, controller: AGENT } })], { now: NOW }).leafInvoker).toBe(AGENT);
+    const { invoker: _invoker, ...byController } = hop({ subject: { controller: AGENT } }).credentialSubject;
+    expect(validateDelegationChain([{ ...root, credentialSubject: byController }], { now: NOW }).leafInvoker).toBe(AGENT);
   });
 
   it('refuses, with every reason, an empty chain, a bad root, each broadening hop, a continuity break, drift, a window, and depth', () => {
@@ -79,7 +81,8 @@ describe('validateDelegationChain', () => {
     expect(reasons([root, { ...leaf, credentialSubject: { ...leaf.credentialSubject, caveats: [{ type: 'MaxAmount', limit: '1000.01', currency: 'USD' }] } }])).toEqual(['caveat "MaxAmount" broadened or dropped by child', 'caveat "ValidUntil" broadened or dropped by child']);
     expect(reasons([root, { ...leaf, credentialSubject: { ...leaf.credentialSubject, caveats: [{ type: 'MaxAmount', limit: '500', currency: 'EUR' }, { type: 'ValidUntil', date: '2026-12-01T00:00:00Z' }] } }])).toEqual(['caveat "MaxAmount" broadened or dropped by child']);
     expect(reasons([root, { ...leaf, validUntil: '2027-06-01T00:00:00Z' }])).toEqual(['validUntil broadened: child must expire no later than its parent']);
-    expect(reasons([root, { ...leaf, validUntil: undefined }])).toEqual(['validUntil broadened: child must expire no later than its parent']);
+    const { validUntil: _validUntil, ...openEnded } = leaf;
+    expect(reasons([root, openEnded])).toEqual(['validUntil broadened: child must expire no later than its parent']);
     expect(reasons([root, { ...leaf, issuer: 'did:web:helix.test:acme:stranger' }])).toEqual(['broken continuity: parent invoker is not the child issuer']);
     expect(reasons([root, { ...leaf, credentialSubject: { ...leaf.credentialSubject, parentCapability: 'urn:zcap:other' } }])).toEqual(['broken continuity: child.parentCapability is not the parent capability id']);
     expect(reasons([root, { ...leaf, credentialSubject: { ...leaf.credentialSubject, invocationTarget: 'did:web:other' } }])).toEqual(['invocationTarget drift along the chain']);
@@ -146,7 +149,7 @@ describe('verifyEntityCard', () => {
     expect(await verifyEntityCard(attested, { ...live, proofDid: AGENT, capabilityVerifier: async () => ({ verified: ['ledger.read'], unverified: ['ledger.post'] }) })).toMatchObject({ conformanceLevel: 'L1', verifiedCapabilities: ['ledger.read'] });
     expect(await verifyEntityCard(attested, { ...live, proofDid: AGENT, capabilityVerifier: async () => { throw new Error('x'); } })).toMatchObject({ ok: true, conformanceLevel: 'L1' });
     expect(await verifyEntityCard(attested, { ...live, proofDid: AGENT, statusListChecker: async () => ({ revoked: true, fresh: true }) })).toMatchObject({ ok: false, conformanceLevel: 'L1', verifiedCapabilities: [] });
-    const accountable = card({ capabilities: attested.capabilities, revocation: attested.revocation, responsibleParty: ORG, delegationRef: 'urn:zcap:root' });
+    const accountable = card({ capabilities: attested.capabilities!, revocation: attested.revocation!, responsibleParty: ORG, delegationRef: 'urn:zcap:root' });
     expect(await verifyEntityCard(accountable, { ...live, proofDid: AGENT, accountabilityVerifier: async () => ({ verified: true, fresh: false }) })).toMatchObject({ ok: true, conformanceLevel: 'L2' });
     expect(await verifyEntityCard(accountable, { ...live, proofDid: AGENT, accountabilityVerifier: async () => ({ verified: true, fresh: true }) })).toMatchObject({ ok: true, conformanceLevel: 'L3' });
   });
@@ -163,7 +166,7 @@ describe('verifyEntityCard', () => {
 });
 
 describe('createStatusListChecker', () => {
-  const entry = { statusListCredential: LIST_URL, statusListIndex: '7' };
+  const entry: BitstringStatusListEntry = { statusListCredential: LIST_URL, statusListIndex: '7' };
 
   it('reads the bit live through the outbound fetch, fresh, and from a list in hand, not fresh', async () => {
     expect(await createStatusListChecker({ fetch: serving({ [LIST_URL]: list(clear) }) })(entry, { credentialIssuer: AGENT })).toEqual({ revoked: false, fresh: true });

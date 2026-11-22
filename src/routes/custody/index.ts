@@ -88,6 +88,13 @@ export interface CustodyRouteOptions {
   reportSubjects?: ((request: FastifyRequest, subjects: ConformanceSubject[]) => Promise<ConformanceSubject[]> | ConformanceSubject[]) | undefined;
   /** What the conformance report says the implementation claims. Default: no claims. */
   implementation?: ConformanceImplementation | undefined;
+  /**
+   * POST /agents with an `enrollmentToken` in the body is story F-1's token
+   * onboarding (identity credential and attestations): handed to this handler
+   * unchanged, without the custody authorization. Without it, such a body is
+   * a custody create like any other.
+   */
+  enrollmentOnboarding?: ((request: FastifyRequest, reply: FastifyReply) => Promise<FastifyReply>) | undefined;
 }
 
 const SUBJECT_PATHS: { path: string; subjectType: CustodySubjectType }[] = [
@@ -142,6 +149,10 @@ const custodyRoutes: FastifyPluginAsync<CustodyRouteOptions> = async (fastify, o
   }
 
   fastify.post('/agents', async (request, reply) => {
+    const raw = request.body as { enrollmentToken?: unknown } | null | undefined;
+    if (options.enrollmentOnboarding && raw && typeof raw === 'object' && 'enrollmentToken' in raw) {
+      return options.enrollmentOnboarding(request, reply);
+    }
     try {
       await authorize(request, { action: 'createAgent' });
       const input = body(request);

@@ -10,6 +10,7 @@ import { Redis } from 'ioredis';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '@prisma/client';
 import {
+  EnvSigner,
   buildDIDDocument,
   derivePublicKey,
   generateKeyPair,
@@ -34,13 +35,14 @@ import { DIDService } from './services/did/did.service.js';
 import { VCService } from './services/vc/vc.service.js';
 import { VPService } from './services/vp/vp.service.js';
 import { AgentService } from './services/agent/agent.service.js';
+import { CredentialService } from './services/credentials/credential.service.js';
 import { ServiceProviderService } from './services/service-provider/service-provider.service.js';
 import didRoutes from './routes/did/index.js';
 import didWebRoutes from './routes/did-web/index.js';
 import vcRoutes from './routes/vc/index.js';
 import statusListRoutes from './routes/status-list/index.js';
 import vpRoutes from './routes/vp/index.js';
-import agentRoutes from './routes/agent/index.js';
+import agentRoutes, { enrollmentOnboardingHandler } from './routes/agent/index.js';
 import entityCardRoutes from './routes/entity-card/index.js';
 import { createEntityCardSource } from './services/entity-card/entity-card.source.js';
 import auditLogRoutes from './routes/audit-log/index.js';
@@ -135,6 +137,18 @@ const vpService = new VPService(vcService, auditLogger, config.API_BASE_URL, {
 // pattern as HOSTED_ACCESS_TOKEN_SECRET below it.
 const agentKeyEncryptionKey = config.HOSTED_KEY_ENCRYPTION_KEY ?? crypto.randomBytes(32).toString('hex');
 const keyCustody = new AesGcmKeyCustody(agentKeyEncryptionKey);
+// KYA-OS story F-1: identity, attestations and hops. The Helix issuer signs
+// through an EnvSigner (the key stays in HELIX_SIGNING_KEY); custodial keys
+// sign through the key custody. Copies land in the vcs table for the console.
+const credentialService = new CredentialService(
+  vcRepository,
+  vcService,
+  didService,
+  new EnvSigner({ did: config.HELIX_ISSUER_DID }),
+  didKeyRepository,
+  keyCustody,
+  auditLogger,
+);
 const agentService = new AgentService(
   agentRepository,
   didService,
@@ -142,6 +156,7 @@ const agentService = new AgentService(
   auditLogger,
   didKeyRepository,
   keyCustody,
+  credentialService,
 );
 
 // Services are custodial too: same master key and custody object as agents.
@@ -167,7 +182,7 @@ const custodyService = new CustodyService({
   records: new CustodyRepository(prisma, sqlite),
   keyStore,
   didRepository,
-  credentials: vcService,
+  credentials: credentialService,
   services: serviceRepository,
   auditLogger,
   host: config.DID_DOMAIN,
@@ -177,9 +192,8 @@ const custodyService = new CustodyService({
 // Own-hosted subjects waiting for their documents are re-checked in the background.
 const custodyRecheck = new CustodyRecheckScheduler(custodyService, { tickSeconds: config.CUSTODY_RECHECK_TICK_SECONDS });
 
-// Agents and services created through the custody routes sign VPs,
-// delegations and consent grants through the KeyStore.
-agentService.attachCustodialKeys(custodyService);
+// Services created through the custody routes sign consent grants through
+// the KeyStore (stories rule 8).
 serviceProviderService.attachCustodialKeys(custodyService);
 
 const app = Fastify({
@@ -269,6 +283,7 @@ await app.register(didWebRoutes, { issuerDid: config.HELIX_ISSUER_DID, didDomain
 await app.register(vcRoutes, {
   prefix: '/v1/vcs',
   vcService,
+  credentialService,
   adminApiKey: config.HELIX_ADMIN_API_KEY,
 });
 await app.register(statusListRoutes, {
@@ -290,7 +305,10 @@ await app.register(auditLogRoutes, {
 await app.register(agentRoutes, {
   prefix: '/v1',
   agentService,
+  credentialService,
   adminApiKey: config.HELIX_ADMIN_API_KEY,
+  // KYA-OS story F-3: the custody routes own POST /v1/agents.
+  createAgentRoute: false,
 });
 await app.register(serviceProviderRoutes, {
   prefix: '/v1',
@@ -298,7 +316,13 @@ await app.register(serviceProviderRoutes, {
   adminApiKey: config.HELIX_ADMIN_API_KEY,
   custody: { service: custodyService },
 });
-await app.register(custodyRoutes, { prefix: '/v1', custodyService, adminApiKey: config.HELIX_ADMIN_API_KEY });
+await app.register(custodyRoutes, {
+  prefix: '/v1',
+  custodyService,
+  adminApiKey: config.HELIX_ADMIN_API_KEY,
+  // A POST /v1/agents body with enrollmentToken is story F-1's token onboarding, unchanged.
+  enrollmentOnboarding: enrollmentOnboardingHandler(agentService),
+});
 // KYA-OS story C-A: /{path}/did.json, /{path}/card.json and /.well-known/kya-os-card.json; after the static routes, so the wildcard never shadows them.
 await app.register(entityCardRoutes, { source: createEntityCardSource({ host: config.DID_DOMAIN, didRepository, services: serviceRepository, details: (did) => custodyService.cardDetails(did) }) });
 

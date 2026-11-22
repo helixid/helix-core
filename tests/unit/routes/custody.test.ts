@@ -155,7 +155,7 @@ describe('custody routes', () => {
     const created = await post(a, '/v1/agents', { name: 'Router', scopes: ['read:orders'], keyCustody: 'helix', requestedDomains: ['orders.example'], maxDelegationDepth: 3 });
     expect(created.statusCode, created.body).toBe(201);
     expect(created.json().documents.didDocument.service[0]).toEqual({ id: '#domain-1', type: 'LinkedDomains', serviceEndpoint: 'https://orders.example' });
-    expect(a.h.issued.at(-1)!.input).toMatchObject({ maxDelegationDepth: 3, delegationDepth: 0 });
+    expect(await a.h.records.findRecord(created.json().did)).toMatchObject({ maxDelegationDepth: 3, requestedDomains: ['https://orders.example'] });
     const badDomain = await post(a, '/v1/agents', { name: 'x', requestedDomains: ['not a url'] });
     expect(badDomain.statusCode).toBe(400);
     expect(badDomain.json()).toMatchObject({ error: { code: 'INVALID_SERVICE_ENDPOINT_URL' } });

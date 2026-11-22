@@ -61,7 +61,7 @@ function publishOwnDomain(h: Harness, documents: { didDocument: unknown; card: u
 }
 
 describe('full custodial onboarding (point 3)', () => {
-  it('creates the agent in one call: key in the KeyStore, did:web under the Helix domain, active, credential with the custody claims', async () => {
+  it('creates the agent in one call: key in the KeyStore, did:web under the Helix domain, active, identity credential and one attestation per scope (F-1)', async () => {
     const h = harness();
     const result = await h.service.createAgent({ name: 'Serverless Bot', scopes: ['read:orders'], keyCustody: 'helix', didHosting: 'helix' }, h.context({ org: 'acme' }));
     expect(result.did).toMatch(/^did:web:helix\.example:acme:serverless-bot-[0-9a-f]{8}$/);
@@ -75,7 +75,10 @@ describe('full custodial onboarding (point 3)', () => {
     expect(document.service).toEqual([{ id: '#kya-os-card', type: 'KyaOsEntityCard', serviceEndpoint: `https://${HOST}/acme/${result.did.split(':').pop()}/card.json` }]);
     expect(result.documents!.card).toMatchObject({ id: result.did, entityType: 'agent', name: 'Serverless Bot', kid: `${result.did}#key-1` });
     expect(result.documents!.didDocumentUrl).toBe(`https://${HOST}/acme/${result.did.split(':').pop()}/did.json`);
-    expect(h.issued[0]!.input).toEqual({ subjectDid: result.did, subjectType: 'agent', privilegeScopes: ['read:orders'], agentName: 'Serverless Bot', keyCustody: 'helix', didHosting: 'helix', delegationDepth: 0, maxDelegationDepth: 0 });
+    // Story F-1's credentials: the identity credential (no custody claims: those stay in the custody record) and one attestation per scope.
+    expect(h.issued[0]!.input).toEqual({ agentDid: result.did, name: 'Serverless Bot', ownerDid: 'did:web:helix.example' });
+    expect(h.attested).toEqual([{ agentDid: result.did, capability: 'read:orders', vcId: 'att:test:1' }]);
+    expect(await h.records.findRecord(result.did)).toMatchObject({ keyCustody: 'helix', didHosting: 'helix', credentialVcId: 'vc:test:1' });
     expect(events(h, AuditEvents.CUSTODY_CHOSEN)).toEqual([
       expect.objectContaining({ actor: 'admin', did: result.did, subjectType: 'agent', keyCustody: 'helix', didHosting: 'helix', source: { keyCustody: 'override', didHosting: 'override' } }),
     ]);
@@ -135,7 +138,8 @@ describe('self-custody onboarding (point 2) and the self-custody invariant', () 
     expect(enrolled).toMatchObject({ did: created.did, status: 'active', kid: `${created.did}#key-1`, vcId: 'vc:test:1' });
     expect(keyIn(await documentOf(h, created.did), enrolled.kid!)).toEqual({ ...key.publicKeyJwk });
     expect(enrolled.documents!.card.publicKeyJwk).toMatchObject({ x: key.publicKeyJwk.x });
-    expect(h.issued[0]!.input).toMatchObject({ keyCustody: 'self', didHosting: 'helix' });
+    expect(h.issued[0]!.input).toEqual({ agentDid: created.did, name: 'Self bot', ownerDid: 'did:web:helix.example' });
+    expect(h.attested.map((entry) => [entry.agentDid, entry.capability])).toEqual([[created.did, 'read:orders']]);
     // The database holds no private key for the self-custody agent.
     expect(await h.keyStore.list(created.did)).toEqual([]);
     expect(h.wrapped.dump()).toEqual([]);
@@ -287,7 +291,7 @@ describe('mixed custody per agent (point 4)', () => {
 });
 
 describe('requestedDomains and maxDelegationDepth on POST /v1/agents', () => {
-  it('a custodial agent: domains as #domain-N LinkedDomains entries before the card entry, depth on the identity credential', async () => {
+  it('a custodial agent: domains as #domain-N LinkedDomains entries before the card entry, depth on the agent record, not in the credential', async () => {
     const h = harness();
     const agent = await h.service.createAgent(
       { name: 'Router', scopes: ['read:orders'], keyCustody: 'helix', requestedDomains: ['orders.example', 'https://api.example/v1'], maxDelegationDepth: 2 },
@@ -300,7 +304,7 @@ describe('requestedDomains and maxDelegationDepth on POST /v1/agents', () => {
       expect.objectContaining({ id: '#kya-os-card', type: 'KyaOsEntityCard' }),
     ]);
     expect(agent.documents!.didDocument.service).toEqual(services);
-    expect(h.issued[0]!.input).toMatchObject({ delegationDepth: 0, maxDelegationDepth: 2 });
+    expect(h.issued[0]!.input).not.toHaveProperty('maxDelegationDepth');
     expect(await h.records.findRecord(agent.did)).toMatchObject({ requestedDomains: ['https://orders.example', 'https://api.example/v1'], maxDelegationDepth: 2 });
   });
 
@@ -311,17 +315,16 @@ describe('requestedDomains and maxDelegationDepth on POST /v1/agents', () => {
       { id: '#domain-1', type: 'LinkedDomains', serviceEndpoint: 'http://tools.example' },
       expect.objectContaining({ type: 'KyaOsEntityCard' }),
     ]);
-    expect(h.issued[0]!.input).toMatchObject({ maxDelegationDepth: 5 });
+    expect(await h.records.findRecord(enrolled.did)).toMatchObject({ maxDelegationDepth: 5 });
     const changed = await h.service.changeCustody(enrolled.did, { keyCustody: 'helix' }, h.context());
     expect(changed.documents.didDocument.service).toEqual(enrolled.documents!.didDocument.service);
-    expect(h.issued[1]!.input).toMatchObject({ keyCustody: 'helix', maxDelegationDepth: 5 });
+    expect(await h.records.findRecord(enrolled.did)).toMatchObject({ keyCustody: 'helix', maxDelegationDepth: 5, requestedDomains: ['http://tools.example'] });
   });
 
   it('defaults to no domains and depth 0', async () => {
     const h = harness();
     const agent = await h.service.createAgent({ name: 'Plain', keyCustody: 'helix', requestedDomains: [] }, h.context());
     expect((await documentOf(h, agent.did)).service).toEqual([expect.objectContaining({ type: 'KyaOsEntityCard' })]);
-    expect(h.issued[0]!.input).toMatchObject({ delegationDepth: 0, maxDelegationDepth: 0 });
     expect(await h.records.findRecord(agent.did)).toMatchObject({ requestedDomains: null, maxDelegationDepth: 0 });
   });
 
@@ -440,7 +443,7 @@ describe('services and owners (points 1 and 7)', () => {
 });
 
 describe('changing custody is a rotation (point 6)', () => {
-  it('helix to self: new key client side, both keys listed during the overlap, old proofs verify, old key shredded, hop seam called, credential reissued', async () => {
+  it('helix to self: new key client side, both keys listed during the overlap, old proofs verify, old key shredded, hop seam called, identity credential kept', async () => {
     const h = harness();
     const agent = await h.service.createAgent({ name: 'Mover', scopes: ['read:orders'], keyCustody: 'helix' }, h.context());
     const oldKid = agent.kid!;
@@ -451,7 +454,7 @@ describe('changing custody is a rotation (point 6)', () => {
     const newKey = clientKey();
     const newKid = `${agent.did}#key-2`;
     const changed = await h.service.changeCustody(agent.did, { keyCustody: 'self', publicKeyJwk: newKey.publicKeyJwk, proof: rotationProof(newKey, agent.did, newKid, h.now.value.toISOString()) }, h.context({ actor: 'account:acc_1' }));
-    expect(changed).toMatchObject({ keyCustody: 'self', label: 'custody: self', conformant: true, kid: newKid, previousKid: oldKid, previousKeyShredded: true, publishRequired: false, vcId: 'vc:test:2' });
+    expect(changed).toMatchObject({ keyCustody: 'self', label: 'custody: self', conformant: true, kid: newKid, previousKid: oldKid, previousKeyShredded: true, publishRequired: false, credentialVcId: 'vc:test:1' });
     expect(changed.retiresAt).toBe(new Date(h.now.value.getTime() + 86_400_000).toISOString());
     expect(changed.hopReissue).toEqual({ reissued: 0, pending: true, note: expect.stringMatching(/C-E/) });
     expect(changed.keys.map((key) => [key.kid, key.location, key.status])).toEqual([
@@ -473,9 +476,9 @@ describe('changing custody is a rotation (point 6)', () => {
     for (const form of newKey.forms) expect(await everythingStored(h)).not.toContain(form);
     // Helix will not sign for it any more.
     await expect(h.service.sign(agent.did, { payload: 'AQ' }, h.context(), 'agent')).rejects.toThrow(CustodialSigningRefusedError);
-    // The identity credential is reissued with the new custody, the old one revoked.
-    expect(h.issued[1]!.input).toMatchObject({ keyCustody: 'self', didHosting: 'helix' });
-    expect(h.revoked).toEqual(['vc:test:1']);
+    // The identity credential carries no custody facts (F-1), so it is kept; nothing is reissued.
+    expect(h.issued).toHaveLength(1);
+    expect(changed).not.toHaveProperty('vcId');
     expect(events(h, AuditEvents.CUSTODY_CHANGED)).toEqual([
       expect.objectContaining({ actor: 'account:acc_1', did: agent.did, from: 'helix', to: 'self', oldKid, newKid, hopReissue: expect.objectContaining({ pending: true }) }),
     ]);
@@ -568,40 +571,12 @@ describe('changing custody is a rotation (point 6)', () => {
     expect(await pendingHopReissuer.reissueHopsForKid({ did: 'd', oldKid: 'a', newKid: 'b', requestId: 'r' })).toMatchObject({ pending: true });
   });
 
-  it('tolerates the old credential already retired by the new one, and surfaces any other revocation failure', async () => {
-    const retired = harness({
-      credentials: {
-        issueVC: async () => ({ vcId: `vc:${Math.random()}`, vc: {} }),
-        revokeVC: async () => {
-          throw Object.assign(new Error('Credential already revoked'), { code: 'VC_ALREADY_REVOKED', httpStatus: 409 });
-        },
-      },
-    });
-    const agent = await retired.service.createAgent({ name: 'Mover', keyCustody: 'helix' }, retired.context());
-    const key = clientKey();
-    const changed = await retired.service.changeCustody(agent.did, { keyCustody: 'self', publicKeyJwk: key.publicKeyJwk, proof: rotationProof(key, agent.did, `${agent.did}#key-2`, retired.now.value.toISOString()) }, retired.context());
-    expect(changed.keyCustody).toBe('self');
-
-    const broken = harness({
-      credentials: {
-        issueVC: async () => ({ vcId: `vc:${Math.random()}`, vc: {} }),
-        revokeVC: async () => {
-          throw new Error('database down');
-        },
-      },
-    });
-    const other = await broken.service.createAgent({ name: 'Mover', keyCustody: 'helix' }, broken.context());
-    await expect(
-      broken.service.changeCustody(other.did, { keyCustody: 'self', publicKeyJwk: key.publicKeyJwk, proof: rotationProof(key, other.did, `${other.did}#key-2`, broken.now.value.toISOString()) }, broken.context()),
-    ).rejects.toThrow(/database down/);
-  });
-
   it('a service changes custody too, with no credential to reissue', async () => {
     const h = harness();
     const created = await h.service.createService({ name: 'svc', domain: 'svc.example', requiredScopes: ['a'], keyCustody: 'helix' }, h.context());
     const key = clientKey();
     const changed = await h.service.changeCustody(created.did, { keyCustody: 'self', publicKeyJwk: key.publicKeyJwk, proof: rotationProof(key, created.did, `${created.did}#key-2`, h.now.value.toISOString()) }, h.context(), 'service');
-    expect(changed.vcId).toBeUndefined();
-    expect(h.revoked).toEqual([]);
+    expect(changed).not.toHaveProperty('vcId');
+    expect(h.issued).toEqual([]);
   });
 });
