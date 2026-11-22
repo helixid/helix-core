@@ -325,7 +325,7 @@ export class InsufficientScopeError extends HelixError {
 }
 
 export class VPMissingError extends HelixError {
-  constructor(message = 'No Verifiable Presentation in the X-Helix-VP header or MCP _meta["x-helix-vp"]') {
+  constructor(message = 'No KYA-OS request proof in MCP _meta["org.kya-os/request-proof"]') {
     super('VP_MISSING', message, 401);
   }
 }
@@ -425,7 +425,7 @@ export class ConsentGrantScopeNotAllowedError extends HelixError {
   constructor(scopes: string[]) {
     super(
       'CONSENT_GRANT_SCOPE_NOT_ALLOWED',
-      `Consent grant scopes are not held by the agent's own credential: ${scopes.join(', ')}`,
+      `Consent grant scopes are not attested for the agent (no active capability attestation): ${scopes.join(', ')}`,
       400,
     );
   }
@@ -584,7 +584,7 @@ export class DelegateeNotAnAgentError extends HelixError {
 
 export class AgentActiveCredentialNotFoundError extends HelixError {
   constructor(did: string) {
-    super('AGENT_ACTIVE_CREDENTIAL_NOT_FOUND', `No active credential for agent DID: ${did}`, 404);
+    super('AGENT_ACTIVE_CREDENTIAL_NOT_FOUND', `No active identity credential for agent DID: ${did}`, 404);
   }
 }
 

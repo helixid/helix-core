@@ -45,16 +45,30 @@ describe('ServiceProviderService', () => {
     };
     audit = { log: vi.fn() };
     service = new ServiceProviderService(didService, vcService, services, didKeys, keyCustody, audit);
-    // The agent's own onboarding credential: what any consent to it may grant.
-    vcService.setActiveVC(agentVC(['read:calendar', 'a', 'b', 'x']));
+    // What onboarding leaves the agent with (story F-1): an identity
+    // credential and one capability attestation per scope. The attested
+    // capabilities are what any consent to it may grant.
+    vcService.setActiveVCs(agentCredentials(['read:calendar', 'a', 'b', 'x']));
   });
 
-  function agentVC(privilegeScopes: string[], extra: Record<string, unknown> = {}): Record<string, unknown> {
+  function identity(): Record<string, unknown> {
     return {
-      id: 'vc:test:agent',
-      type: ['VerifiableCredential', 'HelixAgentCredential'],
-      credentialSubject: { privilegeScopes, ...extra },
+      id: 'urn:uuid:identity',
+      type: ['VerifiableCredential', 'AgentIdentityCredential'],
+      credentialSubject: { id: 'did:key:zAgent', name: 'agent', responsibleParty: 'did:key:zOwner' },
     };
+  }
+
+  function attestation(capability: string): Record<string, unknown> {
+    return {
+      id: `urn:uuid:attestation-${capability}`,
+      type: ['VerifiableCredential', 'CapabilityAttestationCredential'],
+      credentialSubject: { id: 'did:key:zAgent', capability },
+    };
+  }
+
+  function agentCredentials(scopes: string[]): Array<Record<string, unknown>> {
+    return [identity(), ...scopes.map(attestation)];
   }
 
   async function onboardedAgent(): Promise<string> {
@@ -160,9 +174,13 @@ describe('ServiceProviderService', () => {
     ).rejects.toBeInstanceOf(DelegateeNotAnAgentError);
   });
 
-  it('refuses an agent with no active HelixAgentCredential', async () => {
+  it('refuses an agent with no active identity credential, even one holding attestations', async () => {
     const { did: serviceDid } = await service.enroll(ENROLL, 'r');
     const agentDid = await onboardedAgent();
+    vcService.setActiveVCs([attestation('x')]);
+    await expect(
+      service.issueDelegationGrant({ serviceDid, agentDid, userDid: 'did:key:zU', scopes: ['x'] }, 'r'),
+    ).rejects.toMatchObject({ code: 'AGENT_ACTIVE_CREDENTIAL_NOT_FOUND', httpStatus: 404, message: expect.stringContaining('identity credential') });
     vcService.setActiveVC(null);
     await expect(
       service.issueDelegationGrant({ serviceDid, agentDid, userDid: 'did:key:zU', scopes: ['x'] }, 'r'),
@@ -184,10 +202,10 @@ describe('ServiceProviderService', () => {
     }
   });
 
-  describe('grant scopes are bounded by the agent\'s own credential', () => {
+  describe('grant scopes are bounded by the agent\'s capability attestations', () => {
     const userDid = 'did:web:mock.local:users:alice';
 
-    it('refuses a scope the agent was not onboarded with, naming it', async () => {
+    it('refuses a scope the agent holds no attestation for, naming it', async () => {
       const { did: serviceDid } = await service.enroll(ENROLL, 'r');
       const agentDid = await onboardedAgent();
       await expect(
@@ -214,14 +232,14 @@ describe('ServiceProviderService', () => {
       ).rejects.toMatchObject({ code: 'CONSENT_NO_GRANTABLE_SCOPES' });
     });
 
-    it('ignores credentials delegated to the agent: only its own scopes count', async () => {
+    it('an identity with no attestations offers nothing: the scope is refused by name', async () => {
       const { did: serviceDid } = await service.enroll(ENROLL, 'r');
       const agentDid = await onboardedAgent();
-      vcService.setActiveVC(agentVC(['delegated:scope'], { delegatedFrom: 'did:key:zParent' }));
-      // Its only active credential is delegated, so it has no scopes of its own.
+      vcService.setActiveVCs([identity()]);
       await expect(
-        service.issueDelegationGrant({ serviceDid, agentDid, userDid, scopes: ['delegated:scope'] }, 'r'),
-      ).rejects.toBeInstanceOf(AgentActiveCredentialNotFoundError);
+        service.issueDelegationGrant({ serviceDid, agentDid, userDid, scopes: ['read:calendar'] }, 'r'),
+      ).rejects.toMatchObject({ code: 'CONSENT_GRANT_SCOPE_NOT_ALLOWED', message: expect.stringContaining('read:calendar') });
+      expect(vcService.registeredGrants).toEqual([]);
     });
 
     it('records allowDelegation on the grant when given, and leaves it out otherwise', async () => {
@@ -241,9 +259,19 @@ describe('ServiceProviderService', () => {
   });
 
   describe('getAgentScopes', () => {
-    it('returns the union of the agent\'s own active credentials\' scopes', async () => {
+    it('returns the capabilities of the agent\'s active attestations, each once, in issuance order', async () => {
       const agentDid = await onboardedAgent();
       expect(await service.getAgentScopes(agentDid)).toEqual({ agentDid, scopes: ['read:calendar', 'a', 'b', 'x'] });
+      // A repeated capability counts once; an attestation naming no capability counts for nothing.
+      const unnamed = { ...attestation('ignored'), credentialSubject: { id: 'did:key:zAgent' } };
+      vcService.setActiveVCs([identity(), attestation('b'), attestation('a'), attestation('b'), unnamed]);
+      expect(await service.getAgentScopes(agentDid)).toEqual({ agentDid, scopes: ['b', 'a'] });
+    });
+
+    it('an identity credential with no attestations has no scopes', async () => {
+      const agentDid = await onboardedAgent();
+      vcService.setActiveVCs([identity()]);
+      expect(await service.getAgentScopes(agentDid)).toEqual({ agentDid, scopes: [] });
     });
 
     it('refuses a DID this server did not onboard as an agent, and a non-DID', async () => {
@@ -251,9 +279,11 @@ describe('ServiceProviderService', () => {
       await expect(service.getAgentScopes('alice')).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
     });
 
-    it('refuses an agent with no active credential of its own', async () => {
+    it('refuses an agent with no active identity credential', async () => {
       const agentDid = await onboardedAgent();
       vcService.setActiveVC(null);
+      await expect(service.getAgentScopes(agentDid)).rejects.toBeInstanceOf(AgentActiveCredentialNotFoundError);
+      vcService.setActiveVCs([attestation('a')]);
       await expect(service.getAgentScopes(agentDid)).rejects.toBeInstanceOf(AgentActiveCredentialNotFoundError);
     });
   });
