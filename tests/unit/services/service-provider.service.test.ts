@@ -87,6 +87,14 @@ describe('ServiceProviderService', () => {
     expect(didService.createDID).toHaveBeenCalledWith(expect.any(String), 'service', [], 'req-1');
   });
 
+  it('refuses to enroll with a scope the scope rule rejects', async () => {
+    await expect(service.enroll({ ...ENROLL, requiredScopes: ['x'.repeat(300)] }, 'r')).rejects.toMatchObject({
+      code: 'VALIDATION_ERROR',
+      message: expect.stringContaining('requiredScopes'),
+    });
+    expect(didService.createDID).not.toHaveBeenCalled();
+  });
+
   it('enrolls with several scopes, split by the scope rule and de-duplicated', async () => {
     const record = await service.enroll(
       { ...ENROLL, requiredScopes: ['calendar.events,calendar.freebusy', ' https://www.googleapis.com/auth/gmail.readonly\tcalendar.events '] },
@@ -195,6 +203,7 @@ describe('ServiceProviderService', () => {
     for (const bad of [
       { ...base, scopes: [] },
       { ...base, userDid: 'alice@example.com' },
+      { ...base, agentDid: 'not-a-did' },
       { ...base, agentDid: serviceDid },
       { ...base, durability: 'forever' as never },
     ]) {
