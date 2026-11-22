@@ -265,14 +265,46 @@ paths:
           description: Status list credential created
         "403":
           description: Admin authorization required
-  /v1/vp/verify:
+  /v1/verify:
     post:
-      summary: Verify signed VP only for JWT session bridge flow
+      summary: Verify a KYA-OS request proof and its carried delegation chain (story F-2)
+      description: >
+        Runs the local verifier of @helixid/sdk-js for callers that do not run
+        the SDK. Reads only the presented artifacts, public DID documents,
+        status lists and Entity Cards over HTTPS, an in-process nonce store and
+        configuration; never a Helix database. Replaces /v1/vp/verify.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [proof, request, expectedAudience]
+              properties:
+                proof:
+                  description: The org.kya-os/proof.v1 object from _meta["org.kya-os/request-proof"].
+                chain:
+                  description: The carried chain from _meta["org.kya-os/delegation-chain"], root to leaf.
+                request:
+                  type: object
+                  description: The JSON-RPC request the proof binds ({method, params}).
+                card:
+                  description: The agent's Entity Card, when the caller holds it.
+                expectedAudience:
+                  type: string
+                  description: The caller's own DID, the audience the proof must name.
+                resource: { type: string }
+                resourceOwner: { type: string }
+                trustedRootIssuers: { type: array, items: { type: string } }
+                catalog: { type: array, items: { type: string } }
+                action: { type: string }
+                tokenCnfJkt: { type: string }
+                maxChainLength: { type: integer, minimum: 1 }
       responses:
         "200":
-          description: VP verified and JWT session issued
-        "410":
-          description: SDK-only VP verification must use verifyVP() from @helixid/sdk-js
+          description: The verifier's result, {ok, level, effectiveScopes, reasons, chainSummary, ...}, whether or not the proof verified
+        "400":
+          description: The body is not a verification request
   /v1/sessions/public-key:
     get:
       summary: Get JWT session verification public key

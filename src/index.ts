@@ -87,8 +87,6 @@ export type {
   ReconcileOptions,
   ReconcileResult,
 } from './services/vc/vc.service.js';
-export { VPService } from './services/vp/vp.service.js';
-export type { IVPService } from './services/vp/IVPService.js';
 export { AgentService, mapAgentError, hashToken } from './services/agent/agent.service.js';
 export type {
   IAgentService,
@@ -96,7 +94,6 @@ export type {
   ChallengeResult,
   OnboardVerifyResult,
   OnboardWithCustodyResult,
-  SignVPResult,
   UserChallengeVerifyResult,
 } from './services/agent/IAgentService.js';
 export { CredentialService } from './services/credentials/credential.service.js';
@@ -129,7 +126,8 @@ export type { DIDRouteAction, DIDRouteOptions } from './routes/did/index.js';
 export { default as didWebRoutes } from './routes/did-web/index.js';
 export { default as vcRoutes, type VcRouteOptions } from './routes/vc/index.js';
 export { default as statusListRoutes } from './routes/status-list/index.js';
-export { default as vpRoutes } from './routes/vp/index.js';
+export { default as verifyRoutes } from './routes/verify/index.js';
+export type { VerifyRouteOptions } from './routes/verify/index.js';
 export { default as agentRoutes } from './routes/agent/index.js';
 export { default as agentKeyRoutes, readRegisterAgentKeyBody, AGENT_KEY_UPDATE_TYPE } from './routes/agent-keys/index.js';
 export type { AgentKeyRouteOptions, RegisterAgentKeyBody, RegisterAgentKeyResult } from './routes/agent-keys/index.js';

@@ -1,13 +1,10 @@
 import { createHash, randomBytes } from 'node:crypto';
 import {
   AgentAlreadyOnboardedError,
-  AgentActiveCredentialNotFoundError,
-  AgentKeyNotFoundError,
   ChallengeAlreadyVerifiedError,
   ChallengeExpiredError,
   ChallengeNotFoundError,
   ChallengeSignatureInvalidError,
-  ConsentGrantNotFoundError,
   ErrorCode,
   HelixError,
   EnrollmentTokenAlreadyUsedError,
@@ -18,17 +15,12 @@ import {
   parseScopes,
   signBytes,
   verifySignature,
-  VPBuilder,
-  jsonDigest,
   publicDid,
   type AuditEventInput,
   type AuditTrail,
-  type Digest,
   type PartyRef,
   type SignedCapabilityAttestation,
   type SignedIdentityCredential,
-  type SignedVC,
-  type SignedVP,
 } from '../../core/index.js';
 import type { AgentRepository } from '../../repositories/agent.repository.js';
 import type { DidKeyRepository } from '../../repositories/did-key.repository.js';
@@ -247,81 +239,6 @@ export class AgentService implements IAgentService {
     await this.agentKeyRepository.create({ did: result.agentDid, subjectType: 'agent', ...encrypted });
 
     return { agentDid: result.agentDid, vcId: result.vcId, identity: result.identity, attestations: result.attestations };
-  }
-
-  /**
-   * Signs a VP on behalf of a server-custody agent — the caller never has,
-   * and never can have, the private key, so "present a VP" is an API call
-   * instead of a local VPBuilder.sign().
-   *
-   * The credentials are picked from the DIDs alone, never named by the
-   * caller: the VP carries every active HelixAgentCredential the agent holds
-   * (its own, plus any delegated to it) -- the verifier takes the union of
-   * their scopes.
-   *
-   * `targetService` is the DID of the service the VP is for. With a
-   * `userDid`, the VP is the agent acting on that user's behalf, and the
-   * consent that allows it is looked up here: every active
-   * DelegationGrantCredential that service issued to this agent for that
-   * user goes into the VP (the verifier takes the union of their scopes).
-   * No such grant means the user has not consented, and the caller should
-   * send them to the service's consent screen.
-   */
-  async signVP(
-    input: { did: string; targetService: string; userDid?: string },
-    requestId: string,
-  ): Promise<{ signedVP: SignedVP }> {
-    if (typeof input.targetService !== 'string' || !input.targetService.startsWith('did:')) {
-      throw new HelixError(ErrorCode.VALIDATION_ERROR, 'targetService must be the service DID', 400);
-    }
-
-    const keyRecord = await this.agentKeyRepository.findByDid(input.did);
-    if (!keyRecord) {
-      throw new AgentKeyNotFoundError(input.did);
-    }
-
-    const agentVCs = (await this.vcService.listActiveBySubjectDid(input.did, 'HelixAgentCredential')) as SignedVC[];
-    if (agentVCs.length === 0) {
-      throw new AgentActiveCredentialNotFoundError(input.did);
-    }
-
-    const agentCredentials = agentVCs;
-    let grants: SignedVC[] = [];
-    if (input.userDid) {
-      grants = await this.vcService.listActiveGrants({
-        agentDid: input.did,
-        serviceDid: input.targetService,
-        userDid: input.userDid,
-      });
-      if (grants.length === 0) {
-        throw new ConsentGrantNotFoundError(input.did, input.targetService, input.userDid);
-      }
-    }
-
-    const credentials = [...agentCredentials, ...grants];
-    const signedVP = await this.keyCustody.signWith(keyRecord, (privateKeyHex) =>
-      new VPBuilder({
-        credentials,
-        holderDid: input.did,
-        ...(input.userDid ? { userDid: input.userDid } : {}),
-        targetService: input.targetService,
-      }).sign(privateKeyHex, `${input.did}#key-1`),
-    );
-
-    const targetRef = didRef(input.targetService);
-    const userRef = didRef(input.userDid);
-    this.audit({
-      eventType: 'proof.generated',
-      action: { category: 'presentation', name: 'vp_signed' },
-      outcome: 'succeeded',
-      correlationId: requestId,
-      actor: publicDid(input.did),
-      ...(targetRef !== undefined ? { resource: targetRef } : {}),
-      ...(userRef !== undefined ? { responsibleParty: userRef } : {}),
-      details: { family: 'proof', phase: 'generated', proofDigest: jsonDigest(signedVP) as Digest },
-    });
-
-    return { signedVP };
   }
 
   async processOnboardCreateChallenge(
