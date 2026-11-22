@@ -90,6 +90,43 @@ describe.each(backends)('custody repositories (%s)', (_name, make) => {
     expect(await custody.claimEnrollment('did:web:h:o:none', new Date())).toBe(false);
   });
 
+  it('moves a status only from the expected one (activation compare-and-set)', async () => {
+    const { custody } = make();
+    await custody.createRecord(record('did:web:h:o:t', { status: 'pending_resolution', nextRecheckAt: new Date('2026-11-22T10:00:00Z') }));
+    const at = new Date('2026-11-22T10:05:00Z');
+    expect(await custody.transitionStatus('did:web:h:o:t', 'pending_resolution', { status: 'active', activatedAt: at, nextRecheckAt: null })).toMatchObject({
+      status: 'active',
+      activatedAt: at,
+      nextRecheckAt: null,
+    });
+    expect(await custody.transitionStatus('did:web:h:o:t', 'pending_resolution', { status: 'active' })).toBeNull();
+    expect(await custody.transitionStatus('did:web:h:o:none', 'pending_key', { status: 'active' })).toBeNull();
+  });
+
+  it('lists due re-checks soonest first and claims each once', async () => {
+    const { custody } = make();
+    const t = (minute: number): Date => new Date(Date.UTC(2026, 10, 22, 10, minute));
+    const created = await custody.createRecord(record('did:web:h:o:new'));
+    expect(created).toMatchObject({ pendingResolutionSince: null, recheckAttempts: 0, nextRecheckAt: null });
+    await custody.createRecord(record('did:web:h:o:late', { status: 'pending_resolution', pendingResolutionSince: t(0), nextRecheckAt: t(9), enrollmentTokenHash: 'h1' }));
+    await custody.createRecord(record('did:web:h:o:soon', { status: 'pending_resolution', pendingResolutionSince: t(0), nextRecheckAt: t(2), enrollmentTokenHash: 'h2' }));
+    await custody.createRecord(record('did:web:h:o:b', { status: 'pending_resolution', nextRecheckAt: t(5), enrollmentTokenHash: 'h3' }));
+    await custody.createRecord(record('did:web:h:o:a', { status: 'pending_resolution', nextRecheckAt: t(5), enrollmentTokenHash: 'h4' }));
+    await custody.createRecord(record('did:web:h:o:stopped', { status: 'pending_resolution', nextRecheckAt: null, enrollmentTokenHash: 'h5' }));
+    await custody.createRecord(record('did:web:h:o:active', { status: 'active', nextRecheckAt: t(1), enrollmentTokenHash: 'h6' }));
+    expect((await custody.listDueRechecks(t(5), 10)).map((row) => row.did)).toEqual(['did:web:h:o:soon', 'did:web:h:o:a', 'did:web:h:o:b']);
+    expect((await custody.listDueRechecks(t(5), 1)).map((row) => row.did)).toEqual(['did:web:h:o:soon']);
+    const due = (await custody.findRecord('did:web:h:o:soon'))!;
+    expect(due).toMatchObject({ pendingResolutionSince: t(0), recheckAttempts: 0, nextRecheckAt: t(2) });
+    expect(await custody.claimRecheck(due.did, due.nextRecheckAt!, { nextRecheckAt: t(8), recheckAttempts: 1 })).toBe(true);
+    expect(await custody.claimRecheck(due.did, due.nextRecheckAt!, { nextRecheckAt: t(8), recheckAttempts: 1 })).toBe(false);
+    expect(await custody.findRecord(due.did)).toMatchObject({ recheckAttempts: 1, nextRecheckAt: t(8) });
+    expect(await custody.claimRecheck('did:web:h:o:active', t(1), { nextRecheckAt: null, recheckAttempts: 1 })).toBe(false);
+    expect(await custody.claimRecheck('did:web:h:o:none', t(1), { nextRecheckAt: null, recheckAttempts: 1 })).toBe(false);
+    expect(await custody.claimRecheck('did:web:h:o:late', t(9), { nextRecheckAt: null, recheckAttempts: 0 })).toBe(true);
+    expect(await custody.findRecord('did:web:h:o:late')).toMatchObject({ nextRecheckAt: null });
+  });
+
   it('adds, lists and updates keys in sequence order', async () => {
     const { custody } = make();
     await custody.createRecord(record('did:web:h:o:d'));
@@ -135,7 +172,7 @@ describe('custody drivers (sqlite upgrade)', () => {
     store.execute(`INSERT INTO custody_records (did, subject_type, key_custody, did_hosting, status, created_at, updated_at)
       VALUES ('did:web:h:o:old', 'agent', 'helix', 'helix', 'active', '2026-11-21T00:00:00.000Z', '2026-11-21T00:00:00.000Z')`);
     const custody = new CustodyRepository(undefined, store);
-    expect(await custody.findRecord('did:web:h:o:old')).toMatchObject({ requestedDomains: null, maxDelegationDepth: 0 });
+    expect(await custody.findRecord('did:web:h:o:old')).toMatchObject({ requestedDomains: null, maxDelegationDepth: 0, pendingResolutionSince: null, recheckAttempts: 0, nextRecheckAt: null });
     await custody.createRecord(record('did:web:h:o:new', { requestedDomains: ['https://a.example'], maxDelegationDepth: 2 }));
     expect(await custody.findRecord('did:web:h:o:new')).toMatchObject({ requestedDomains: ['https://a.example'], maxDelegationDepth: 2 });
     expect(new CustodyRepository(undefined, store)).toBeInstanceOf(CustodyRepository);
@@ -168,6 +205,15 @@ describe('custody drivers (postgres)', () => {
     await driver.updateRecord('did:web:h:o:p', { scopes: null, status: 'active' });
     expect(prisma.custodyRecord.update).toHaveBeenCalledWith({ where: { did: 'did:web:h:o:p' }, data: { scopes: undefined, status: 'active' } });
     expect(await driver.claimEnrollment('did:web:h:o:p', new Date())).toBe(true);
+    const at = new Date('2026-11-22T10:00:00Z');
+    expect((await driver.transitionStatus('did:web:h:o:p', 'pending_resolution', { status: 'active', nextRecheckAt: null }))?.did).toBe('did:web:h:o:p');
+    expect(prisma.custodyRecord.updateMany).toHaveBeenLastCalledWith({ where: { did: 'did:web:h:o:p', status: 'pending_resolution' }, data: { status: 'active', nextRecheckAt: null } });
+    expect(await driver.claimRecheck('did:web:h:o:p', at, { nextRecheckAt: null, recheckAttempts: 2 })).toBe(true);
+    expect(prisma.custodyRecord.updateMany).toHaveBeenLastCalledWith({ where: { did: 'did:web:h:o:p', status: 'pending_resolution', nextRecheckAt: at }, data: { nextRecheckAt: null, recheckAttempts: 2 } });
+    prisma.custodyRecord.updateMany.mockResolvedValueOnce({ count: 0 });
+    expect(await driver.transitionStatus('did:web:h:o:p', 'pending_key', { status: 'active' })).toBeNull();
+    expect(await driver.listDueRechecks(at, 7)).toHaveLength(1);
+    expect(prisma.custodyRecord.findMany).toHaveBeenLastCalledWith({ where: { status: 'pending_resolution', nextRecheckAt: { lte: at } }, orderBy: [{ nextRecheckAt: 'asc' }, { did: 'asc' }], take: 7 });
     await driver.listRecords({ subjectType: 'agent', dids: ['did:web:h:o:p'] });
     expect(prisma.custodyRecord.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { subjectType: 'agent', did: { in: ['did:web:h:o:p'] } } }));
     await driver.listRecords({});

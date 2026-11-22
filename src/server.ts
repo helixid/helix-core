@@ -52,6 +52,7 @@ import { SqliteStore } from './storage/sqlite.js';
 import { CustodyRepository, WrappedKeyRepository } from './repositories/custody.repository.js';
 import { DbKeyStore, resolveKeyEncryptionKey } from './services/custody/db-key-store.js';
 import { CustodyService } from './services/custody/custody.service.js';
+import { CustodyRecheckScheduler, custodyRecheckSettings } from './services/custody/custody-recheck.js';
 import custodyRoutes from './routes/custody/index.js';
 
 const config = loadConfigFromEnv();
@@ -172,7 +173,10 @@ const custodyService = new CustodyService({
   auditLogger,
   host: config.DID_DOMAIN,
   didCache,
+  recheck: custodyRecheckSettings(config),
 });
+// Own-hosted subjects waiting for their documents are re-checked in the background.
+const custodyRecheck = new CustodyRecheckScheduler(custodyService, { tickSeconds: config.CUSTODY_RECHECK_TICK_SECONDS });
 
 // Agents and services created through the custody routes sign VPs,
 // delegations and consent grants through the KeyStore.
@@ -302,6 +306,7 @@ await app.register(entityCardRoutes, { source: createEntityCardSource({ host: co
 
 const shutdown = async (): Promise<void> => {
   app.log.info('Helix ID API shutting down...');
+  await custodyRecheck.stop();
   await app.close();
   (redis as Redis | null)?.disconnect();
   await prisma?.$disconnect();
@@ -315,6 +320,7 @@ process.on('SIGINT', () => void shutdown());
 const start = async (): Promise<void> => {
   try {
     await app.listen({ port: config.PORT, host: '0.0.0.0' });
+    if (config.CUSTODY_RECHECK_ENABLED) custodyRecheck.start();
   } catch (err) {
     app.log.error(err);
     process.exit(1);

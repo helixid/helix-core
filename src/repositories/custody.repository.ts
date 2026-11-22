@@ -54,11 +54,18 @@ export interface CustodyRecordRow {
   enrollmentUsedAt: Date | null;
   credentialVcId: string | null;
   activatedAt: Date | null;
+  /** Own hosting: when the subject started waiting for its documents (the background re-check stops a bounded time after). */
+  pendingResolutionSince: Date | null;
+  /** Background re-checks made so far; sets the backoff. */
+  recheckAttempts: number;
+  /** When the background re-check is next due; null when none is scheduled (active, or it gave up). */
+  nextRecheckAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
 }
 
-export type NewCustodyRecord = Omit<CustodyRecordRow, 'createdAt' | 'updatedAt'>;
+export type NewCustodyRecord = Omit<CustodyRecordRow, 'createdAt' | 'updatedAt' | 'pendingResolutionSince' | 'recheckAttempts' | 'nextRecheckAt'> &
+  Partial<Pick<CustodyRecordRow, 'pendingResolutionSince' | 'recheckAttempts' | 'nextRecheckAt'>>;
 export type CustodyRecordPatch = Partial<Omit<CustodyRecordRow, 'did' | 'subjectType' | 'createdAt' | 'updatedAt'>>;
 
 export interface CustodyKeyRow {
@@ -130,6 +137,30 @@ export class CustodyRepository {
   /** Marks the enrollment token used; false when another request used it first. */
   claimEnrollment(did: string, at: Date): Promise<boolean> {
     return this.driver.claimEnrollment(did, at);
+  }
+
+  /**
+   * Status compare-and-set: applies `patch` only while the record is still in
+   * `from`, and returns the updated row, or null when another request or API
+   * instance moved it first. Activation goes through this, so a subject is
+   * activated once.
+   */
+  transitionStatus(did: string, from: CustodyStatus, patch: CustodyRecordPatch): Promise<CustodyRecordRow | null> {
+    return this.driver.transitionStatus(did, from, patch);
+  }
+
+  /** `pending_resolution` subjects whose background re-check is due at `now`, soonest first, at most `limit`. */
+  listDueRechecks(now: Date, limit: number): Promise<CustodyRecordRow[]> {
+    return this.driver.listDueRechecks(now, limit);
+  }
+
+  /**
+   * Claims one due re-check: moves `nextRecheckAt` from `expected` to
+   * `next.nextRecheckAt` while the subject is still `pending_resolution`.
+   * False when another API instance claimed it first.
+   */
+  claimRecheck(did: string, expected: Date, next: { nextRecheckAt: Date | null; recheckAttempts: number }): Promise<boolean> {
+    return this.driver.claimRecheck(did, expected, next);
   }
 
   /** Oldest first. */

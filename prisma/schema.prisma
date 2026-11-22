@@ -221,11 +221,18 @@ model CustodyRecord {
   enrollmentUsedAt    DateTime?
   credentialVcId      String?
   activatedAt         DateTime?
+  // Own hosting: the background re-check of a subject waiting for its
+  // documents (pending_resolution): since when it waits, how many checks it
+  // had (the backoff), and when the next one is due (null: none scheduled).
+  pendingResolutionSince DateTime?
+  recheckAttempts     Int          @default(0)
+  nextRecheckAt       DateTime?
   createdAt           DateTime     @default(now())
   updatedAt           DateTime     @updatedAt
   keys                CustodyKey[]
 
   @@index([subjectType, keyCustody])
+  @@index([status, nextRecheckAt])
   @@map("custody_records")
 }
 

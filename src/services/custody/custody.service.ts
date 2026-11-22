@@ -100,6 +100,7 @@ import type {
   CustodyRecordFilter,
   CustodyRecordPatch,
   CustodyRecordRow,
+  CustodyStatus,
   NewCustodyKey,
   NewCustodyRecord,
 } from '../../repositories/custody.repository.js';
@@ -127,6 +128,9 @@ export interface CustodyRecords {
   findRecordByEnrollmentToken(tokenHash: string): Promise<CustodyRecordRow | null>;
   updateRecord(did: string, patch: CustodyRecordPatch): Promise<CustodyRecordRow>;
   claimEnrollment(did: string, at: Date): Promise<boolean>;
+  transitionStatus(did: string, from: CustodyStatus, patch: CustodyRecordPatch): Promise<CustodyRecordRow | null>;
+  listDueRechecks(now: Date, limit: number): Promise<CustodyRecordRow[]>;
+  claimRecheck(did: string, expected: Date, next: { nextRecheckAt: Date | null; recheckAttempts: number }): Promise<boolean>;
   listRecords(filter?: CustodyRecordFilter): Promise<CustodyRecordRow[]>;
   addKey(row: NewCustodyKey): Promise<CustodyKeyRow>;
   listKeys(did: string): Promise<CustodyKeyRow[]>;
@@ -188,8 +192,45 @@ export interface CustodyServiceOptions {
   outboundFetch?: (() => OutboundFetch) | undefined;
   enrollmentTtlSeconds?: number | undefined;
   rotationOverlapSeconds?: number | undefined;
+  /** The background re-check of own-hosted subjects waiting for their documents; see `recheckPending`. */
+  recheck?: { [K in keyof CustodyRecheckSettings]?: number | undefined } | undefined;
   clock?: (() => Date) | undefined;
 }
+
+/**
+ * The background re-check's schedule (config `CUSTODY_RECHECK_*`): the first
+ * check `initialIntervalSeconds` after the subject starts waiting, each next
+ * one twice as long after the last, at most `maxIntervalSeconds`; none once
+ * the subject waited `giveUpAfterSeconds` (manual activation still works).
+ * At most `batchSize` subjects per run, and one per owner host.
+ */
+export interface CustodyRecheckSettings {
+  initialIntervalSeconds: number;
+  maxIntervalSeconds: number;
+  giveUpAfterSeconds: number;
+  batchSize: number;
+}
+
+export const DEFAULT_RECHECK_SETTINGS: CustodyRecheckSettings = {
+  initialIntervalSeconds: 120,
+  maxIntervalSeconds: 3600,
+  giveUpAfterSeconds: 3 * 24 * 3600,
+  batchSize: 20,
+};
+
+/** What one background re-check run did. */
+export interface CustodyRecheckRun {
+  /** Subjects whose documents were read this run. */
+  checked: string[];
+  activated: OnboardingResult[];
+  /** Subjects whose re-checks stopped this run: they waited `giveUpAfterSeconds`. */
+  stopped: string[];
+  /** Due subjects left for the next run: another instance claimed them, or their host was already checked this run. */
+  deferred: string[];
+}
+
+/** The actor of activations the background re-check makes. */
+export const RECHECK_ACTOR = 'system';
 
 /** Per-call context the route supplies. */
 export interface CustodyContext {
@@ -380,13 +421,28 @@ function nextFragment(keys: CustodyKeyRow[]): { fragment: string; sequence: numb
   return { fragment: `key-${sequence}`, sequence };
 }
 
+function definedOnly<T extends object>(value: T): { [K in keyof T]?: Exclude<T[K], undefined> } {
+  return Object.fromEntries(Object.entries(value).filter(([, entry]) => entry !== undefined)) as { [K in keyof T]?: Exclude<T[K], undefined> };
+}
+
+/** The host a did:web's documents are read from: re-checks read one subject per host per run. */
+function hostOf(did: string): string {
+  try {
+    return new URL(didWebDocumentUrl(did)).host;
+  } catch {
+    return did;
+  }
+}
+
 export class CustodyService implements CustodialKeys {
   private readonly audit: CustodyAudit;
   private readonly hopReissuer: HopReissuer;
   private readonly clock: () => Date;
   private readonly outboundFetch: () => OutboundFetch;
+  private readonly recheckSettings: CustodyRecheckSettings;
 
   constructor(private readonly options: CustodyServiceOptions) {
+    this.recheckSettings = { ...DEFAULT_RECHECK_SETTINGS, ...definedOnly(options.recheck ?? {}) };
     this.audit = new CustodyAudit(options.auditLogger);
     this.hopReissuer = options.hopReissuer ?? pendingHopReissuer;
     this.clock = options.clock ?? ((): Date => new Date());
@@ -566,6 +622,75 @@ export class CustodyService implements CustodialKeys {
     if (!current) throw new CustodyStateInvalidError(`${did} has no registered key`);
     await this.checkResolution(did, current);
     return this.markActive(record, context, 'verified');
+  }
+
+  /**
+   * One run of the background re-check: own-hosted subjects waiting for their
+   * documents whose check is due are checked as `activate` checks them
+   * (SafeFetch; the document lists the registered key; the card is valid)
+   * and activated when they pass, audited with the actor `system`.
+   *
+   * Safe with several API instances: each due subject is claimed with a
+   * compare-and-set on its next check time before its documents are read,
+   * and activation itself is a compare-and-set on its status. Gentle on
+   * owners' domains: each subject backs off (see CustodyRecheckSettings), a
+   * run checks at most `batchSize` subjects and one per host, and checks stop
+   * a bounded time after the subject started waiting.
+   */
+  async recheckPending(onActivated?: (result: OnboardingResult, requestId: string) => Promise<void> | void): Promise<CustodyRecheckRun> {
+    const now = this.clock();
+    const settings = this.recheckSettings;
+    const run: CustodyRecheckRun = { checked: [], activated: [], stopped: [], deferred: [] };
+    const hosts = new Set<string>();
+    for (const record of await this.options.records.listDueRechecks(now, settings.batchSize)) {
+      const since = record.pendingResolutionSince ?? record.updatedAt;
+      if (now.getTime() - since.getTime() >= settings.giveUpAfterSeconds * 1000) {
+        if (await this.options.records.claimRecheck(record.did, record.nextRecheckAt!, { nextRecheckAt: null, recheckAttempts: record.recheckAttempts })) run.stopped.push(record.did);
+        continue;
+      }
+      const host = hostOf(record.did);
+      if (hosts.has(host)) {
+        run.deferred.push(record.did);
+        continue;
+      }
+      const attempts = record.recheckAttempts + 1;
+      const waitSeconds = Math.min(settings.initialIntervalSeconds * 2 ** attempts, settings.maxIntervalSeconds);
+      const claimed = await this.options.records.claimRecheck(record.did, record.nextRecheckAt!, {
+        nextRecheckAt: new Date(now.getTime() + waitSeconds * 1000),
+        recheckAttempts: attempts,
+      });
+      if (!claimed) {
+        run.deferred.push(record.did);
+        continue;
+      }
+      hosts.add(host);
+      run.checked.push(record.did);
+      const result = await this.recheckOne(record);
+      if (result) {
+        run.activated.push(result);
+        await onActivated?.(result, result.requestId);
+      }
+    }
+    return run;
+  }
+
+  private async recheckOne(record: CustodyRecordRow): Promise<(OnboardingResult & { requestId: string }) | undefined> {
+    const current = (await this.options.records.listKeys(record.did)).find((key) => key.kid === record.kid);
+    if (!current) return undefined;
+    try {
+      await this.checkResolution(record.did, current);
+    } catch {
+      // Not live yet, or not readable: the next check is already scheduled. One subject never stops the run.
+      return undefined;
+    }
+    const requestId = `custody-recheck:${randomBytes(8).toString('hex')}`;
+    try {
+      return { ...(await this.markActive(record, { requestId, actor: RECHECK_ACTOR }, 'verified')), requestId };
+    } catch (error) {
+      // Activated meanwhile by "Check and activate", helix init or another instance.
+      if (error instanceof CustodyStateInvalidError) return undefined;
+      throw error;
+    }
   }
 
   /** Whether `token` is the enrollment token this subject was created with (the CLI activates with it). */
@@ -904,17 +1029,34 @@ export class CustodyService implements CustodialKeys {
       const active = await this.markActive(record, context, 'helix-hosted');
       return { ...active, documents };
     }
-    const pending = await this.options.records.updateRecord(did, { status: 'pending_resolution' });
+    const now = this.clock();
+    const pending = await this.options.records.updateRecord(did, {
+      status: 'pending_resolution',
+      pendingResolutionSince: now,
+      recheckAttempts: 0,
+      nextRecheckAt: new Date(now.getTime() + this.recheckSettings.initialIntervalSeconds * 1000),
+    });
     return { ...(await this.view(pending)), documents, publishRequired: true };
   }
 
   private async markActive(record: CustodyRecordRow, context: CustodyContext, resolution: 'helix-hosted' | 'verified'): Promise<OnboardingResult> {
-    const vcId = record.subjectType === 'agent' ? await this.issueCredential(record, context) : undefined;
-    const active = await this.options.records.updateRecord(record.did, {
-      status: 'active',
-      activatedAt: this.clock(),
-      ...(vcId ? { credentialVcId: vcId } : {}),
-    });
+    // Compare-and-set first, so two requests or API instances (a manual
+    // activation and the background re-check) never both activate, nor both
+    // issue an identity credential.
+    let active = await this.options.records.transitionStatus(record.did, record.status, { status: 'active', activatedAt: this.clock(), nextRecheckAt: null });
+    if (!active) {
+      throw new CustodyStateInvalidError(`${record.did} was activated by another request`, { status: 'active' });
+    }
+    let vcId: string | undefined;
+    if (record.subjectType === 'agent') {
+      try {
+        vcId = await this.issueCredential(record, context);
+      } catch (error) {
+        await this.options.records.updateRecord(record.did, { status: record.status, activatedAt: null, nextRecheckAt: record.nextRecheckAt });
+        throw error;
+      }
+      active = await this.options.records.updateRecord(record.did, { credentialVcId: vcId });
+    }
     this.audit.activated({
       requestId: context.requestId,
       actor: context.actor,

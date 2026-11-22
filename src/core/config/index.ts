@@ -87,6 +87,22 @@ export const ConfigSchema = z.object({
     .optional(),
   HELIX_KEY_STORE_KEK_ID: z.string().min(1).optional(),
 
+  // KYA-OS story F-3: the background re-check of own-hosted subjects waiting
+  // for their DID document (pending_resolution). Every TICK seconds each API
+  // instance checks the subjects that are due: the first check INITIAL
+  // seconds after the subject starts waiting, then twice as long after each
+  // check up to MAX, at most BATCH_SIZE subjects and one per owner host per
+  // run, stopping GIVE_UP_AFTER seconds after the subject started waiting.
+  CUSTODY_RECHECK_ENABLED: z
+    .enum(['true', 'false'])
+    .default('true')
+    .transform((value) => value === 'true'),
+  CUSTODY_RECHECK_TICK_SECONDS: z.coerce.number().int().min(5).max(3600).default(60),
+  CUSTODY_RECHECK_INITIAL_INTERVAL_SECONDS: z.coerce.number().int().min(10).max(86400).default(120),
+  CUSTODY_RECHECK_MAX_INTERVAL_SECONDS: z.coerce.number().int().min(10).max(86400).default(3600),
+  CUSTODY_RECHECK_GIVE_UP_AFTER_SECONDS: z.coerce.number().int().min(60).max(30 * 86400).default(3 * 86400),
+  CUSTODY_RECHECK_BATCH_SIZE: z.coerce.number().int().min(1).max(500).default(20),
+
   // Hosted accounts & auth (Item #1, see the hosted-instance design).
   // All optional/defaulted so self-hosted deployments (which don't use
   // accounts at all — HELIX_ADMIN_API_KEY covers the single operator) never

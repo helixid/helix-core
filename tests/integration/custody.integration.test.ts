@@ -83,6 +83,29 @@ describe('custody on PostgreSQL', () => {
     expect(report.find((subject) => subject.did === agent.did)).toMatchObject({ keyCustody: 'self' });
   });
 
+  it('schedules, claims and activates the background re-check on PostgreSQL, once across two instances', async () => {
+    const first = service();
+    const second = service();
+    const did = `did:web:owner-${suffix}.example:agents:recheck`;
+    const created = await first.custody.createAgent({ name: `Recheck ${suffix}`, keyCustody: 'helix', didHosting: 'own', did }, context);
+    const row = (await first.records.findRecord(did))!;
+    expect(row).toMatchObject({ status: 'pending_resolution', recheckAttempts: 0 });
+    expect(row.nextRecheckAt!.getTime() - row.pendingResolutionSince!.getTime()).toBe(120_000);
+    expect((await first.records.listDueRechecks(row.nextRecheckAt!, 500)).map((due) => due.did)).toContain(did);
+    const claims = await Promise.all([
+      first.records.claimRecheck(did, row.nextRecheckAt!, { nextRecheckAt: new Date(row.nextRecheckAt!.getTime() + 240_000), recheckAttempts: 1 }),
+      second.records.claimRecheck(did, row.nextRecheckAt!, { nextRecheckAt: new Date(row.nextRecheckAt!.getTime() + 240_000), recheckAttempts: 1 }),
+    ]);
+    expect(claims.filter(Boolean)).toHaveLength(1);
+    const activations = await Promise.all([
+      first.records.transitionStatus(did, 'pending_resolution', { status: 'active', nextRecheckAt: null }),
+      second.records.transitionStatus(did, 'pending_resolution', { status: 'active', nextRecheckAt: null }),
+    ]);
+    expect(activations.filter(Boolean)).toHaveLength(1);
+    expect(await first.records.findRecord(did)).toMatchObject({ status: 'active', recheckAttempts: 1, nextRecheckAt: null });
+    expect(created.status).toBe('pending_resolution');
+  });
+
   it('stores requestedDomains and maxDelegationDepth on PostgreSQL', async () => {
     const { custody, records } = service();
     const agent = await custody.createAgent({ name: `Router ${suffix}`, keyCustody: 'helix', requestedDomains: ['orders.example'], maxDelegationDepth: 4 }, context);

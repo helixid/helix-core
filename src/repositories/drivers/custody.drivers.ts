@@ -23,6 +23,7 @@ import type {
   CustodyRecordFilter,
   CustodyRecordPatch,
   CustodyRecordRow,
+  CustodyStatus,
   NewCustodyKey,
   NewCustodyRecord,
   NewWrappedKey,
@@ -35,6 +36,9 @@ export interface CustodyStorageDriver {
   findRecordByEnrollmentToken(tokenHash: string): Promise<CustodyRecordRow | null>;
   updateRecord(did: string, patch: CustodyRecordPatch): Promise<CustodyRecordRow>;
   claimEnrollment(did: string, at: Date): Promise<boolean>;
+  transitionStatus(did: string, from: CustodyStatus, patch: CustodyRecordPatch): Promise<CustodyRecordRow | null>;
+  listDueRechecks(now: Date, limit: number): Promise<CustodyRecordRow[]>;
+  claimRecheck(did: string, expected: Date, next: { nextRecheckAt: Date | null; recheckAttempts: number }): Promise<boolean>;
   listRecords(filter: CustodyRecordFilter): Promise<CustodyRecordRow[]>;
   addKey(row: NewCustodyKey): Promise<CustodyKeyRow>;
   listKeys(did: string): Promise<CustodyKeyRow[]>;
@@ -60,6 +64,13 @@ function filterRecords(rows: CustodyRecordRow[], filter: CustodyRecordFilter): C
     .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime() || (a.did < b.did ? -1 : 1));
 }
 
+function dueRechecks(rows: CustodyRecordRow[], now: Date, limit: number): CustodyRecordRow[] {
+  return rows
+    .filter((row) => row.status === 'pending_resolution' && row.nextRecheckAt !== null && row.nextRecheckAt.getTime() <= now.getTime())
+    .sort((a, b) => a.nextRecheckAt!.getTime() - b.nextRecheckAt!.getTime() || (a.did < b.did ? -1 : 1))
+    .slice(0, limit);
+}
+
 // ---------------------------------------------------------------- memory
 
 export class InMemoryCustodyStorageDriver implements CustodyStorageDriver {
@@ -69,7 +80,7 @@ export class InMemoryCustodyStorageDriver implements CustodyStorageDriver {
   async createRecord(row: NewCustodyRecord): Promise<CustodyRecordRow> {
     if (this.records.has(row.did)) throw new Error(`custody record already exists: ${row.did}`);
     const now = new Date();
-    const record: CustodyRecordRow = { ...row, createdAt: now, updatedAt: now };
+    const record: CustodyRecordRow = { pendingResolutionSince: null, recheckAttempts: 0, nextRecheckAt: null, ...row, createdAt: now, updatedAt: now };
     this.records.set(row.did, record);
     return { ...record };
   }
@@ -96,6 +107,23 @@ export class InMemoryCustodyStorageDriver implements CustodyStorageDriver {
     const row = this.records.get(did);
     if (!row || row.enrollmentUsedAt) return false;
     this.records.set(did, { ...row, enrollmentUsedAt: at, updatedAt: new Date() });
+    return true;
+  }
+
+  async transitionStatus(did: string, from: CustodyStatus, patch: CustodyRecordPatch): Promise<CustodyRecordRow | null> {
+    const row = this.records.get(did);
+    if (!row || row.status !== from) return null;
+    return this.updateRecord(did, patch);
+  }
+
+  async listDueRechecks(now: Date, limit: number): Promise<CustodyRecordRow[]> {
+    return dueRechecks([...this.records.values()].map((row) => ({ ...row })), now, limit);
+  }
+
+  async claimRecheck(did: string, expected: Date, next: { nextRecheckAt: Date | null; recheckAttempts: number }): Promise<boolean> {
+    const row = this.records.get(did);
+    if (!row || row.status !== 'pending_resolution' || row.nextRecheckAt?.getTime() !== expected.getTime()) return false;
+    this.records.set(did, { ...row, ...next, updatedAt: new Date() });
     return true;
   }
 
@@ -239,6 +267,25 @@ export class PrismaCustodyStorageDriver implements CustodyStorageDriver {
     return result.count === 1;
   }
 
+  async transitionStatus(did: string, from: CustodyStatus, patch: CustodyRecordPatch): Promise<CustodyRecordRow | null> {
+    const result = await this.db.custodyRecord.updateMany({ where: { did, status: from }, data: recordData(patch) });
+    return result.count === 1 ? this.findRecord(did) : null;
+  }
+
+  async listDueRechecks(now: Date, limit: number): Promise<CustodyRecordRow[]> {
+    const rows = await this.db.custodyRecord.findMany({
+      where: { status: 'pending_resolution', nextRecheckAt: { lte: now } },
+      orderBy: [{ nextRecheckAt: 'asc' }, { did: 'asc' }],
+      take: limit,
+    });
+    return rows.map((row) => recordFromPrisma(row)!);
+  }
+
+  async claimRecheck(did: string, expected: Date, next: { nextRecheckAt: Date | null; recheckAttempts: number }): Promise<boolean> {
+    const result = await this.db.custodyRecord.updateMany({ where: { did, status: 'pending_resolution', nextRecheckAt: expected }, data: { ...next } });
+    return result.count === 1;
+  }
+
   async listRecords(filter: CustodyRecordFilter): Promise<CustodyRecordRow[]> {
     const rows = await this.db.custodyRecord.findMany({
       where: {
@@ -314,6 +361,9 @@ CREATE TABLE IF NOT EXISTS custody_records (
   enrollment_used_at TEXT,
   credential_vc_id TEXT,
   activated_at TEXT,
+  pending_resolution_since TEXT,
+  recheck_attempts INTEGER NOT NULL DEFAULT 0,
+  next_recheck_at TEXT,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );
@@ -361,6 +411,9 @@ const RECORD_COLUMNS: Record<keyof CustodyRecordPatch, string> = {
   enrollmentUsedAt: 'enrollment_used_at',
   credentialVcId: 'credential_vc_id',
   activatedAt: 'activated_at',
+  pendingResolutionSince: 'pending_resolution_since',
+  recheckAttempts: 'recheck_attempts',
+  nextRecheckAt: 'next_recheck_at',
 };
 
 type SqliteRow = Record<string, string | number | null>;
@@ -393,6 +446,9 @@ function recordFromSqlite(row: SqliteRow | undefined): CustodyRecordRow | null {
     enrollmentUsedAt: date(row['enrollment_used_at']),
     credentialVcId: text(row['credential_vc_id']),
     activatedAt: date(row['activated_at']),
+    pendingResolutionSince: date(row['pending_resolution_since']),
+    recheckAttempts: Number(row['recheck_attempts'] ?? 0),
+    nextRecheckAt: date(row['next_recheck_at']),
     createdAt: date(row['created_at'])!,
     updatedAt: date(row['updated_at'])!,
   };
@@ -437,6 +493,9 @@ function sqliteValue(column: string, value: unknown): string {
 const SQLITE_ADDED_RECORD_COLUMNS: [string, string][] = [
   ['requested_domains', 'TEXT'],
   ['max_delegation_depth', 'INTEGER NOT NULL DEFAULT 0'],
+  ['pending_resolution_since', 'TEXT'],
+  ['recheck_attempts', 'INTEGER NOT NULL DEFAULT 0'],
+  ['next_recheck_at', 'TEXT'],
 ];
 
 export class SqliteCustodyStorageDriver implements CustodyStorageDriver {
@@ -448,13 +507,14 @@ export class SqliteCustodyStorageDriver implements CustodyStorageDriver {
     }
   }
 
-  async createRecord(row: NewCustodyRecord): Promise<CustodyRecordRow> {
+  async createRecord(input: NewCustodyRecord): Promise<CustodyRecordRow> {
+    const row = { pendingResolutionSince: null, recheckAttempts: 0, nextRecheckAt: null, ...input };
     const now = new Date();
     const columns = ['did', 'subject_type', ...Object.values(RECORD_COLUMNS), 'created_at', 'updated_at'];
     const values = [
       sqliteLiteral(row.did),
       sqliteLiteral(row.subjectType),
-      ...Object.entries(RECORD_COLUMNS).map(([field, column]) => sqliteValue(column, row[field as keyof NewCustodyRecord])),
+      ...Object.entries(RECORD_COLUMNS).map(([field, column]) => sqliteValue(column, row[field as keyof typeof row])),
       sqliteLiteral(now),
       sqliteLiteral(now),
     ];
@@ -472,7 +532,7 @@ export class SqliteCustodyStorageDriver implements CustodyStorageDriver {
     );
   }
 
-  async updateRecord(did: string, patch: CustodyRecordPatch): Promise<CustodyRecordRow> {
+  private recordSets(patch: CustodyRecordPatch): string[] {
     const sets = Object.entries(patch)
       .filter(([field]) => field in RECORD_COLUMNS)
       .map(([field, value]) => {
@@ -480,6 +540,11 @@ export class SqliteCustodyStorageDriver implements CustodyStorageDriver {
         return `${column} = ${sqliteValue(column, value)}`;
       });
     sets.push(`updated_at = ${sqliteLiteral(new Date())}`);
+    return sets;
+  }
+
+  async updateRecord(did: string, patch: CustodyRecordPatch): Promise<CustodyRecordRow> {
+    const sets = this.recordSets(patch);
     const { changes } = this.sqlite.run(`UPDATE custody_records SET ${sets.join(', ')} WHERE did = ${sqliteLiteral(did)}`);
     if (changes === 0) throw notFound(`custody record ${did}`);
     return (await this.findRecord(did))!;
@@ -488,6 +553,27 @@ export class SqliteCustodyStorageDriver implements CustodyStorageDriver {
   async claimEnrollment(did: string, at: Date): Promise<boolean> {
     const { changes } = this.sqlite.run(
       `UPDATE custody_records SET enrollment_used_at = ${sqliteLiteral(at)} WHERE did = ${sqliteLiteral(did)} AND enrollment_used_at IS NULL`,
+    );
+    return changes === 1;
+  }
+
+  async transitionStatus(did: string, from: CustodyStatus, patch: CustodyRecordPatch): Promise<CustodyRecordRow | null> {
+    const sets = this.recordSets(patch);
+    const { changes } = this.sqlite.run(`UPDATE custody_records SET ${sets.join(', ')} WHERE did = ${sqliteLiteral(did)} AND status = ${sqliteLiteral(from)}`);
+    return changes === 1 ? this.findRecord(did) : null;
+  }
+
+  async listDueRechecks(now: Date, limit: number): Promise<CustodyRecordRow[]> {
+    const rows = this.sqlite
+      .query<SqliteRow>(`SELECT * FROM custody_records WHERE status = 'pending_resolution' AND next_recheck_at IS NOT NULL`)
+      .map((row) => recordFromSqlite(row)!);
+    return dueRechecks(rows, now, limit);
+  }
+
+  async claimRecheck(did: string, expected: Date, next: { nextRecheckAt: Date | null; recheckAttempts: number }): Promise<boolean> {
+    const { changes } = this.sqlite.run(
+      `UPDATE custody_records SET ${this.recordSets(next).join(', ')}
+       WHERE did = ${sqliteLiteral(did)} AND status = 'pending_resolution' AND next_recheck_at = ${sqliteLiteral(expected)}`,
     );
     return changes === 1;
   }
