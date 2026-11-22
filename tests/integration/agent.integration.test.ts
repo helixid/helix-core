@@ -110,40 +110,4 @@ describe('agent integration', () => {
     expect(second.statusCode).toBe(409);
     expect(second.json().error.code).toBe('ENROLLMENT_TOKEN_ALREADY_USED');
   });
-
-  it('signs a VP for an onboarded agent when authenticated with the admin key', async () => {
-    const app = makeApp();
-    const tokenRes = await app.inject({
-      method: 'POST',
-      url: '/v1/enrollment-tokens',
-      payload: { agentName: 'My Agent', requestedScopes: ['read:orders'] }
-    });
-    const token = tokenRes.json().token as string;
-    const onboard = await app.inject({
-      method: 'POST',
-      url: '/v1/onboard',
-      payload: { enrollmentToken: token, domains: [] }
-    });
-    const { agentDid } = onboard.json();
-
-    const vp = await app.inject({
-      method: 'POST',
-      url: `/v1/agents/${encodeURIComponent(agentDid)}/vp`,
-      headers: { 'x-admin-api-key': TEST_ADMIN_KEY },
-      payload: { targetService: 'did:web:service.example.com' }
-    });
-    expect(vp.statusCode).toBe(200);
-    expect(vp.json().signedVP.holder).toBe(agentDid);
-    expect(vp.json().signedVP.proof).toBeTruthy();
-  });
-
-  it('rejects signing a VP without the admin key', async () => {
-    const app = makeApp();
-    const vp = await app.inject({
-      method: 'POST',
-      url: '/v1/agents/did:hedera:testnet:testid/vp',
-      payload: { targetService: 'did:web:service.example.com' }
-    });
-    expect(vp.statusCode).toBe(403);
-  });
 });

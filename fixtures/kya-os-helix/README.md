@@ -32,3 +32,5 @@ For `credentials.json`: `tests/unit/core/credentials/fixtures.test.ts` here,
 helix-sdk-py's `tests/test_credentials.py` (sibling checkout or
 `HELIX_CORE_FIXTURES_DIR`), and the e2e spec
 `tests/suite/kya-os/f-1-credential-split.spec.ts`.
+
+The local verifier's fixtures (story F-2) are next door in `fixtures/verifier/` (see its README).
