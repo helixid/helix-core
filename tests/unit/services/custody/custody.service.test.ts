@@ -75,7 +75,7 @@ describe('full custodial onboarding (point 3)', () => {
     expect(document.service).toEqual([{ id: '#kya-os-card', type: 'KyaOsEntityCard', serviceEndpoint: `https://${HOST}/acme/${result.did.split(':').pop()}/card.json` }]);
     expect(result.documents!.card).toMatchObject({ id: result.did, entityType: 'agent', name: 'Serverless Bot', kid: `${result.did}#key-1` });
     expect(result.documents!.didDocumentUrl).toBe(`https://${HOST}/acme/${result.did.split(':').pop()}/did.json`);
-    expect(h.issued[0]!.input).toEqual({ subjectDid: result.did, subjectType: 'agent', privilegeScopes: ['read:orders'], agentName: 'Serverless Bot', keyCustody: 'helix', didHosting: 'helix' });
+    expect(h.issued[0]!.input).toEqual({ subjectDid: result.did, subjectType: 'agent', privilegeScopes: ['read:orders'], agentName: 'Serverless Bot', keyCustody: 'helix', didHosting: 'helix', delegationDepth: 0, maxDelegationDepth: 0 });
     expect(events(h, AuditEvents.CUSTODY_CHOSEN)).toEqual([
       expect.objectContaining({ actor: 'admin', did: result.did, subjectType: 'agent', keyCustody: 'helix', didHosting: 'helix', source: { keyCustody: 'override', didHosting: 'override' } }),
     ]);
@@ -283,6 +283,59 @@ describe('mixed custody per agent (point 4)', () => {
     const report = buildConformanceReport({ implementation: { name: 'Helix ID', version: '3', claims: [{ profile: 'core', level: 'L1' }] }, subjects: await h.service.conformanceSubjects() });
     expect(report.claimSet.map((entry) => entry.did)).toEqual([enrolled.did]);
     expect(report.excluded.map((entry) => [entry.did, entry.label])).toEqual([[custodial.did, 'custody: helix']]);
+  });
+});
+
+describe('requestedDomains and maxDelegationDepth on POST /v1/agents', () => {
+  it('a custodial agent: domains as #domain-N LinkedDomains entries before the card entry, depth on the identity credential', async () => {
+    const h = harness();
+    const agent = await h.service.createAgent(
+      { name: 'Router', scopes: ['read:orders'], keyCustody: 'helix', requestedDomains: ['orders.example', 'https://api.example/v1'], maxDelegationDepth: 2 },
+      h.context(),
+    );
+    const services = (await documentOf(h, agent.did)).service as { id: string; type: string; serviceEndpoint: string }[];
+    expect(services).toEqual([
+      { id: '#domain-1', type: 'LinkedDomains', serviceEndpoint: 'https://orders.example' },
+      { id: '#domain-2', type: 'LinkedDomains', serviceEndpoint: 'https://api.example/v1' },
+      expect.objectContaining({ id: '#kya-os-card', type: 'KyaOsEntityCard' }),
+    ]);
+    expect(agent.documents!.didDocument.service).toEqual(services);
+    expect(h.issued[0]!.input).toMatchObject({ delegationDepth: 0, maxDelegationDepth: 2 });
+    expect(await h.records.findRecord(agent.did)).toMatchObject({ requestedDomains: ['https://orders.example', 'https://api.example/v1'], maxDelegationDepth: 2 });
+  });
+
+  it('a self-custody agent gets them at enrollment, and a custody change keeps them', async () => {
+    const h = harness();
+    const { enrolled } = await onboardSelf(h, { requestedDomains: ['http://tools.example'], maxDelegationDepth: 5 });
+    expect(enrolled.documents!.didDocument.service).toEqual([
+      { id: '#domain-1', type: 'LinkedDomains', serviceEndpoint: 'http://tools.example' },
+      expect.objectContaining({ type: 'KyaOsEntityCard' }),
+    ]);
+    expect(h.issued[0]!.input).toMatchObject({ maxDelegationDepth: 5 });
+    const changed = await h.service.changeCustody(enrolled.did, { keyCustody: 'helix' }, h.context());
+    expect(changed.documents.didDocument.service).toEqual(enrolled.documents!.didDocument.service);
+    expect(h.issued[1]!.input).toMatchObject({ keyCustody: 'helix', maxDelegationDepth: 5 });
+  });
+
+  it('defaults to no domains and depth 0', async () => {
+    const h = harness();
+    const agent = await h.service.createAgent({ name: 'Plain', keyCustody: 'helix', requestedDomains: [] }, h.context());
+    expect((await documentOf(h, agent.did)).service).toEqual([expect.objectContaining({ type: 'KyaOsEntityCard' })]);
+    expect(h.issued[0]!.input).toMatchObject({ delegationDepth: 0, maxDelegationDepth: 0 });
+    expect(await h.records.findRecord(agent.did)).toMatchObject({ requestedDomains: null, maxDelegationDepth: 0 });
+  });
+
+  it('refuses what the agent-create route refused, before anything is created', async () => {
+    const h = harness();
+    const c = h.context();
+    await expect(h.service.createAgent({ name: 'x', requestedDomains: 'orders.example' as never }, c)).rejects.toThrow(/requestedDomains must be an array/);
+    await expect(h.service.createAgent({ name: 'x', requestedDomains: ['ftp://orders.example'] }, c)).rejects.toMatchObject({ code: 'INVALID_SERVICE_ENDPOINT_URL', httpStatus: 400 });
+    await expect(h.service.createAgent({ name: 'x', requestedDomains: ['  '] }, c)).rejects.toMatchObject({ code: 'INVALID_SERVICE_ENDPOINT_URL' });
+    await expect(h.service.createAgent({ name: 'x', requestedDomains: [42 as never] }, c)).rejects.toMatchObject({ code: 'INVALID_SERVICE_ENDPOINT_URL' });
+    for (const depth of [-1, 6, 1.5, '2', null]) {
+      await expect(h.service.createAgent({ name: 'x', maxDelegationDepth: depth as never }, c), String(depth)).rejects.toThrow(/maxDelegationDepth must be a whole number from 0 to 5/);
+    }
+    expect(await h.records.listRecords()).toEqual([]);
   });
 });
 

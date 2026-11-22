@@ -83,6 +83,17 @@ describe('custody on PostgreSQL', () => {
     expect(report.find((subject) => subject.did === agent.did)).toMatchObject({ keyCustody: 'self' });
   });
 
+  it('stores requestedDomains and maxDelegationDepth on PostgreSQL', async () => {
+    const { custody, records } = service();
+    const agent = await custody.createAgent({ name: `Router ${suffix}`, keyCustody: 'helix', requestedDomains: ['orders.example'], maxDelegationDepth: 4 }, context);
+    expect(await records.findRecord(agent.did)).toMatchObject({ requestedDomains: ['https://orders.example'], maxDelegationDepth: 4 });
+    const [row] = await prisma.$queryRawUnsafe<{ requestedDomains: unknown; maxDelegationDepth: number }[]>(
+      'SELECT "requestedDomains", "maxDelegationDepth" FROM custody_records WHERE did = $1',
+      agent.did,
+    );
+    expect(row).toEqual({ requestedDomains: ['https://orders.example'], maxDelegationDepth: 4 });
+  });
+
   it('a self-custody service and the record listing', async () => {
     const { custody, records } = service();
     const created = await custody.createService({ name: `svc-${suffix}`, domain: 'svc.example', requiredScopes: ['a'], keyCustody: 'self', publicKeyJwk: clientKey().publicKeyJwk }, context);

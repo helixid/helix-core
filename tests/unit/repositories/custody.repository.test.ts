@@ -29,6 +29,8 @@ function record(did: string, overrides: Partial<NewCustodyRecord> = {}): NewCust
     name: 'Bot',
     ownerDid: null,
     scopes: ['read:orders'],
+    requestedDomains: null,
+    maxDelegationDepth: 0,
     enrollmentTokenHash: `hash-${did}`,
     enrollmentExpiresAt: new Date('2026-12-01T00:00:00Z'),
     enrollmentNonce: null,
@@ -69,6 +71,15 @@ describe.each(backends)('custody repositories (%s)', (_name, make) => {
     expect((await custody.listRecords()).map((row) => row.did)).toEqual(['did:web:h:o:a', 'did:web:h:o:b']);
     expect((await custody.listRecords({ subjectType: 'service' })).map((row) => row.did)).toEqual(['did:web:h:o:b']);
     expect((await custody.listRecords({ dids: ['did:web:h:o:b', 'x'] })).map((row) => row.scopes)).toEqual([null]);
+  });
+
+  it('keeps requestedDomains and maxDelegationDepth (POST /v1/agents fields)', async () => {
+    const { custody } = make();
+    const created = await custody.createRecord(record('did:web:h:o:f', { requestedDomains: ['https://orders.example', 'https://api.example/v1'], maxDelegationDepth: 3 }));
+    expect(created).toMatchObject({ requestedDomains: ['https://orders.example', 'https://api.example/v1'], maxDelegationDepth: 3 });
+    expect(await custody.findRecord('did:web:h:o:f')).toMatchObject({ requestedDomains: ['https://orders.example', 'https://api.example/v1'], maxDelegationDepth: 3 });
+    expect((await custody.updateRecord('did:web:h:o:f', { maxDelegationDepth: 1 })).maxDelegationDepth).toBe(1);
+    expect((await custody.createRecord(record('did:web:h:o:g'))).requestedDomains).toBeNull();
   });
 
   it('claims an enrollment token once', async () => {
@@ -114,6 +125,23 @@ describe.each(backends)('custody repositories (%s)', (_name, make) => {
   });
 });
 
+describe('custody drivers (sqlite upgrade)', () => {
+  it('adds the requestedDomains and maxDelegationDepth columns to a custody_records table created before them', async () => {
+    const store = new SqliteStore(join(dir, 'upgrade.sqlite'));
+    store.execute(`CREATE TABLE custody_records (
+      did TEXT PRIMARY KEY, subject_type TEXT NOT NULL, key_custody TEXT NOT NULL, did_hosting TEXT NOT NULL, status TEXT NOT NULL,
+      kid TEXT, name TEXT, owner_did TEXT, scopes TEXT, enrollment_token_hash TEXT UNIQUE, enrollment_expires_at TEXT,
+      enrollment_nonce TEXT, enrollment_used_at TEXT, credential_vc_id TEXT, activated_at TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL)`);
+    store.execute(`INSERT INTO custody_records (did, subject_type, key_custody, did_hosting, status, created_at, updated_at)
+      VALUES ('did:web:h:o:old', 'agent', 'helix', 'helix', 'active', '2026-11-21T00:00:00.000Z', '2026-11-21T00:00:00.000Z')`);
+    const custody = new CustodyRepository(undefined, store);
+    expect(await custody.findRecord('did:web:h:o:old')).toMatchObject({ requestedDomains: null, maxDelegationDepth: 0 });
+    await custody.createRecord(record('did:web:h:o:new', { requestedDomains: ['https://a.example'], maxDelegationDepth: 2 }));
+    expect(await custody.findRecord('did:web:h:o:new')).toMatchObject({ requestedDomains: ['https://a.example'], maxDelegationDepth: 2 });
+    expect(new CustodyRepository(undefined, store)).toBeInstanceOf(CustodyRepository);
+  });
+});
+
 describe('custody drivers (postgres)', () => {
   function delegate(result: unknown) {
     return {
@@ -126,11 +154,14 @@ describe('custody drivers (postgres)', () => {
   }
 
   it('maps custody records and keys through Prisma', async () => {
-    const recordRow = { ...record('did:web:h:o:p'), scopes: 'not-an-array', createdAt: new Date(), updatedAt: new Date() };
+    const recordRow = { ...record('did:web:h:o:p'), scopes: 'not-an-array', requestedDomains: ['https://a.example'], createdAt: new Date(), updatedAt: new Date() };
     const keyRow = { id: 'k1', did: 'did:web:h:o:p', kid: 'did:web:h:o:p#key-1', location: 'helix', publicKeyJwk: JWK, status: 'active', sequence: 1, createdAt: new Date(), retiresAt: null, revokedAt: null };
     const prisma = { custodyRecord: delegate(recordRow), custodyKey: delegate(keyRow), wrappedKey: delegate(null) };
     const driver = new PrismaCustodyStorageDriver(prisma as unknown as PrismaClient);
     expect((await driver.createRecord(record('did:web:h:o:p')))!.scopes).toBeNull();
+    expect((await driver.findRecord('did:web:h:o:p'))!.requestedDomains).toEqual(['https://a.example']);
+    await driver.updateRecord('did:web:h:o:p', { requestedDomains: null });
+    expect(prisma.custodyRecord.update).toHaveBeenLastCalledWith({ where: { did: 'did:web:h:o:p' }, data: { requestedDomains: undefined } });
     expect(prisma.custodyRecord.create).toHaveBeenCalledWith({ data: expect.objectContaining({ did: 'did:web:h:o:p', scopes: ['read:orders'] }) });
     expect((await driver.findRecord('did:web:h:o:p'))?.did).toBe('did:web:h:o:p');
     expect((await driver.findRecordByEnrollmentToken('h'))?.did).toBe('did:web:h:o:p');

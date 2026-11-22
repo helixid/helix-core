@@ -181,8 +181,12 @@ interface CustodyPrisma {
 
 function recordFromPrisma(value: unknown): CustodyRecordRow | null {
   if (!value) return null;
-  const row = value as CustodyRecordRow & { scopes: unknown };
-  return { ...row, scopes: Array.isArray(row.scopes) ? (row.scopes as string[]) : null };
+  const row = value as CustodyRecordRow & { scopes: unknown; requestedDomains: unknown };
+  return {
+    ...row,
+    scopes: Array.isArray(row.scopes) ? (row.scopes as string[]) : null,
+    requestedDomains: Array.isArray(row.requestedDomains) ? (row.requestedDomains as string[]) : null,
+  };
 }
 
 function withoutId<T>(value: unknown): T {
@@ -203,6 +207,7 @@ function wrappedFromPrisma(value: unknown): WrappedKeyRow | null {
 function recordData(patch: CustodyRecordPatch | NewCustodyRecord): Record<string, unknown> {
   const data: Record<string, unknown> = { ...patch };
   if ('scopes' in patch) data['scopes'] = patch.scopes ?? undefined;
+  if ('requestedDomains' in patch) data['requestedDomains'] = patch.requestedDomains ?? undefined;
   return data;
 }
 
@@ -301,6 +306,8 @@ CREATE TABLE IF NOT EXISTS custody_records (
   name TEXT,
   owner_did TEXT,
   scopes TEXT,
+  requested_domains TEXT,
+  max_delegation_depth INTEGER NOT NULL DEFAULT 0,
   enrollment_token_hash TEXT UNIQUE,
   enrollment_expires_at TEXT,
   enrollment_nonce TEXT,
@@ -346,6 +353,8 @@ const RECORD_COLUMNS: Record<keyof CustodyRecordPatch, string> = {
   name: 'name',
   ownerDid: 'owner_did',
   scopes: 'scopes',
+  requestedDomains: 'requested_domains',
+  maxDelegationDepth: 'max_delegation_depth',
   enrollmentTokenHash: 'enrollment_token_hash',
   enrollmentExpiresAt: 'enrollment_expires_at',
   enrollmentNonce: 'enrollment_nonce',
@@ -376,6 +385,8 @@ function recordFromSqlite(row: SqliteRow | undefined): CustodyRecordRow | null {
     name: text(row['name']),
     ownerDid: text(row['owner_did']),
     scopes: typeof row['scopes'] === 'string' ? (JSON.parse(row['scopes']) as string[]) : null,
+    requestedDomains: typeof row['requested_domains'] === 'string' ? (JSON.parse(row['requested_domains']) as string[]) : null,
+    maxDelegationDepth: Number(row['max_delegation_depth'] ?? 0),
     enrollmentTokenHash: text(row['enrollment_token_hash']),
     enrollmentExpiresAt: date(row['enrollment_expires_at']),
     enrollmentNonce: text(row['enrollment_nonce']),
@@ -418,13 +429,23 @@ function wrappedFromSqlite(row: SqliteRow | undefined): WrappedKeyRow | null {
 }
 
 function sqliteValue(column: string, value: unknown): string {
-  if (column === 'scopes') return value === null || value === undefined ? 'NULL' : sqliteLiteral(JSON.stringify(value));
+  if (column === 'scopes' || column === 'requested_domains') return value === null || value === undefined ? 'NULL' : sqliteLiteral(JSON.stringify(value));
   return sqliteLiteral(value);
 }
+
+/** Columns added to custody_records after its first release; CREATE TABLE IF NOT EXISTS does not add them to an existing file. */
+const SQLITE_ADDED_RECORD_COLUMNS: [string, string][] = [
+  ['requested_domains', 'TEXT'],
+  ['max_delegation_depth', 'INTEGER NOT NULL DEFAULT 0'],
+];
 
 export class SqliteCustodyStorageDriver implements CustodyStorageDriver {
   constructor(private readonly sqlite: SqliteStore) {
     this.sqlite.execute(SQLITE_DDL);
+    const present = new Set(this.sqlite.query<{ name: string }>('PRAGMA table_info(custody_records)').map((column) => column.name));
+    for (const [column, type] of SQLITE_ADDED_RECORD_COLUMNS) {
+      if (!present.has(column)) this.sqlite.execute(`ALTER TABLE custody_records ADD COLUMN ${column} ${type}`);
+    }
   }
 
   async createRecord(row: NewCustodyRecord): Promise<CustodyRecordRow> {

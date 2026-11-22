@@ -102,7 +102,7 @@ import type {
   NewCustodyRecord,
 } from '../../repositories/custody.repository.js';
 import type { ServiceCreateData, ServiceRecord } from '../../repositories/service.repository.js';
-import { hashToken } from '../agent/agent.service.js';
+import { hashToken, normalizeDomain } from '../agent/agent.service.js';
 import { generateServiceId } from '../service-provider/service-provider.service.js';
 import { hostedUrls } from '../../routes/entity-card/index.js';
 import { CustodyAudit, type CustodyActor } from './custody-audit.js';
@@ -114,6 +114,8 @@ export const MAX_SIGN_PAYLOAD_BYTES = 64 * 1024;
 export const CUSTODY_DID_UPDATE_TYPE = 'custody_rotation';
 /** The org segment of a Helix-hosted did:web when the caller names none (`did:web:<host>:<org>:<slug>`, story C-A). */
 export const DEFAULT_CUSTODY_ORG = 'default';
+/** The bound the agent-create route's enrollment token documented for `maxDelegationDepth`. */
+export const MAX_DELEGATION_DEPTH_LIMIT = 5;
 
 /** What the service needs from the custody tables; `CustodyRepository` is the production one. */
 export interface CustodyRecords {
@@ -151,6 +153,8 @@ export interface CustodyCredentials {
       agentName: string;
       keyCustody: KeyCustodyMode;
       didHosting: DidHostingMode;
+      delegationDepth?: number;
+      maxDelegationDepth?: number;
     },
     requestId: string,
   ): Promise<{ vcId: string; vc: Record<string, unknown> }>;
@@ -204,6 +208,14 @@ interface ChoiceInput {
 export interface CreateAgentInput extends ChoiceInput {
   name: string;
   scopes?: string[] | undefined;
+  /**
+   * Domains the agent will call: bare hosts or http(s) URLs, normalized to
+   * `https://<host>` for a bare host and published in the agent's DID document
+   * as `#domain-N` LinkedDomains service entries, as the agent-create route did.
+   */
+  requestedDomains?: string[] | undefined;
+  /** How deep the agent may delegate: a whole number from 0 (the default) to 5, written on its identity credential. */
+  maxDelegationDepth?: number | undefined;
   ownerDid?: string | undefined;
   /** Enrollment token lifetime in whole days (self-custody). Default one day. */
   expiry?: number | undefined;
@@ -310,6 +322,36 @@ export interface ChangeCustodyResult extends CustodyView {
   vcId?: string;
 }
 
+/**
+ * `requestedDomains` as the agent-create route took it: an array of bare
+ * hosts or http(s) URLs, each normalized the same way; anything else is
+ * INVALID_SERVICE_ENDPOINT_URL. Null when none were given.
+ */
+function readRequestedDomains(value: unknown): string[] | null {
+  if (value === undefined) return null;
+  if (!Array.isArray(value)) throw new ValidationError('requestedDomains must be an array of domains');
+  const domains: string[] = [];
+  for (const domain of value) {
+    const normalized = typeof domain === 'string' ? normalizeDomain(domain) : null;
+    if (!normalized) throw new HelixError(ErrorCode.INVALID_SERVICE_ENDPOINT_URL, 'Invalid domain URL', 400);
+    domains.push(normalized);
+  }
+  return domains.length > 0 ? domains : null;
+}
+
+function readMaxDelegationDepth(value: unknown): number {
+  if (value === undefined) return 0;
+  if (typeof value !== 'number' || !Number.isInteger(value) || value < 0 || value > MAX_DELEGATION_DEPTH_LIMIT) {
+    throw new ValidationError(`maxDelegationDepth must be a whole number from 0 to ${MAX_DELEGATION_DEPTH_LIMIT}`);
+  }
+  return value;
+}
+
+/** The DID document's `#domain-N` LinkedDomains entries, as DIDService.createDID writes them. */
+function domainServices(domains: readonly string[] | null): { id: string; type: 'LinkedDomains'; serviceEndpoint: string }[] {
+  return (domains ?? []).map((serviceEndpoint, index) => ({ id: `#domain-${index + 1}`, type: 'LinkedDomains', serviceEndpoint }));
+}
+
 function slugify(name: string): string {
   const base = name
     .toLowerCase()
@@ -366,6 +408,8 @@ export class CustodyService {
     if (input.expiry !== undefined && !(Number.isInteger(input.expiry) && input.expiry > 0)) {
       throw new ValidationError('expiry must be a positive whole number of days');
     }
+    const requestedDomains = readRequestedDomains(input.requestedDomains);
+    const maxDelegationDepth = readMaxDelegationDepth(input.maxDelegationDepth);
     const choice = resolveCustodyChoice({ keyCustody: input.keyCustody, didHosting: input.didHosting }, context.defaults);
     const did = await this.subjectDid(choice.didHosting, input.did, name, context);
     const base: NewCustodyRecord = {
@@ -378,6 +422,8 @@ export class CustodyService {
       name,
       ownerDid: input.ownerDid ?? null,
       scopes,
+      requestedDomains,
+      maxDelegationDepth,
       enrollmentTokenHash: null,
       enrollmentExpiresAt: null,
       enrollmentNonce: null,
@@ -718,6 +764,8 @@ export class CustodyService {
       name,
       ownerDid: null,
       scopes: null,
+      requestedDomains: null,
+      maxDelegationDepth: 0,
       enrollmentTokenHash: null,
       enrollmentExpiresAt: null,
       enrollmentNonce: null,
@@ -859,6 +907,8 @@ export class CustodyService {
         privilegeScopes: record.scopes ?? [],
         agentName: record.name ?? record.did,
         ...custodyClaims(record),
+        delegationDepth: 0,
+        maxDelegationDepth: record.maxDelegationDepth,
       },
       context.requestId,
     );
@@ -893,6 +943,7 @@ export class CustodyService {
       publicKeyJwk: current!.publicKeyJwk,
       kid: current!.kid,
       alsoKnownAs: [didKeyFromPublicKey(currentBytes)],
+      service: domainServices(record.requestedDomains),
       cardServiceEndpoint: urls.card,
     });
     for (const other of others) {

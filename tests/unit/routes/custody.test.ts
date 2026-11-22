@@ -150,6 +150,20 @@ describe('custody routes', () => {
     expect(bad.json()).toMatchObject({ error: { code: 'CUSTODY_CHOICE_INVALID' } });
   });
 
+  it('POST /v1/agents takes requestedDomains and maxDelegationDepth and refuses bad values', async () => {
+    const a = await app();
+    const created = await post(a, '/v1/agents', { name: 'Router', scopes: ['read:orders'], keyCustody: 'helix', requestedDomains: ['orders.example'], maxDelegationDepth: 3 });
+    expect(created.statusCode, created.body).toBe(201);
+    expect(created.json().documents.didDocument.service[0]).toEqual({ id: '#domain-1', type: 'LinkedDomains', serviceEndpoint: 'https://orders.example' });
+    expect(a.h.issued.at(-1)!.input).toMatchObject({ maxDelegationDepth: 3, delegationDepth: 0 });
+    const badDomain = await post(a, '/v1/agents', { name: 'x', requestedDomains: ['not a url'] });
+    expect(badDomain.statusCode).toBe(400);
+    expect(badDomain.json()).toMatchObject({ error: { code: 'INVALID_SERVICE_ENDPOINT_URL' } });
+    const badDepth = await post(a, '/v1/agents', { name: 'x', maxDelegationDepth: 9 });
+    expect(badDepth.statusCode).toBe(400);
+    expect(badDepth.json()).toMatchObject({ error: { code: 'VALIDATION_ERROR' } });
+  });
+
   it('serves Helix-hosted documents through the C-A routes, named from the custody record', async () => {
     const a = await app();
     const { did } = (await post(a, '/v1/agents', { name: 'Hosted Bot', keyCustody: 'helix' })).json() as { did: string };

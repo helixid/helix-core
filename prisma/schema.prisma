@@ -210,6 +210,11 @@ model CustodyRecord {
   name                String?
   ownerDid            String?
   scopes              Json?
+  // What the agent-create route took on the enrollment token: the domains
+  // published as the DID document's LinkedDomains entries (#domain-N), and
+  // the maxDelegationDepth written on the identity credential.
+  requestedDomains    Json?
+  maxDelegationDepth  Int          @default(0)
   enrollmentTokenHash String?      @unique
   enrollmentExpiresAt DateTime?
   enrollmentNonce     String?

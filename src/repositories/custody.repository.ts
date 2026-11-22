@@ -44,6 +44,10 @@ export interface CustodyRecordRow {
   name: string | null;
   ownerDid: string | null;
   scopes: string[] | null;
+  /** Agents: normalized domain URLs, published as `#domain-N` LinkedDomains service entries. */
+  requestedDomains: string[] | null;
+  /** Agents: written on the identity credential (0 to 5). */
+  maxDelegationDepth: number;
   enrollmentTokenHash: string | null;
   enrollmentExpiresAt: Date | null;
   enrollmentNonce: string | null;

@@ -69,7 +69,7 @@ export function hashToken(token: string): string {
  * Accepts `http(s)://host[...]` or a bare host like `example.com` (assumed
  * https). Returns the normalized URL, or null if it isn't a usable web URL.
  */
-function normalizeDomain(domain: string): string | null {
+export function normalizeDomain(domain: string): string | null {
   const trimmed = domain.trim();
   if (!trimmed) return null;
   const candidate = /^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
