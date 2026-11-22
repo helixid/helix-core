@@ -128,36 +128,6 @@ const agentRoutes: FastifyPluginAsync<AgentRouteOptions> = async (fastify, optio
     }
   });
 
-  // POST /agents/:did/vp - sign a VP on behalf of a server-custody agent.
-  // The caller never has the agent's private key, so this has to be an API
-  // call rather than local VPBuilder.sign(). Gated by the admin key: OSS has
-  // no per-tenant credential narrower than that (unlike the hosted/
-  // enterprise build's per-account bearer token), so this is deliberately
-  // the same all-or-nothing trust already placed in the admin key for VC
-  // issuance/revocation — a known scoping reduction versus self-custody,
-  // where only the agent's own key could ever sign for itself.
-  fastify.post('/agents/:did/vp', async (request, reply) => {
-    try {
-      requireAdmin(request);
-      const params = request.params as { did: string };
-      const body = request.body as { targetService: string; userDid?: string };
-      const result = await options.agentService.signVP(
-        {
-          did: params.did,
-          targetService: body.targetService,
-          ...(body.userDid ? { userDid: body.userDid } : {}),
-        },
-        request.id,
-      );
-      return reply.code(200).send(result);
-    } catch (error) {
-      const mapped = mapAgentError(error);
-      return reply
-        .code(mapped.statusCode)
-        .send({ error: { code: mapped.code, message: mapped.message, requestId: request.id } });
-    }
-  });
-
   fastify.post('/challenges', async (request, reply) => {
     try {
       const result = await options.agentService.issueUserChallenge(

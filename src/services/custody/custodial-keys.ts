@@ -23,7 +23,7 @@ import type { Signer } from '../../core/index.js';
 /**
  * Which server-side path asks for the signature, and its request: each
  * signature is audited as CUSTODIAL_SIGNATURE. Consent grants are the only one:
- * VP signing is not extended to custody agents (F-2 removes it), and the old
+ * there is no VP signing any more (story F-2 removed it), and the old
  * delegation path is gone with story F-1; KYA-OS delegation hops and request
  * proofs are signed client side through the generic /sign route.
  */

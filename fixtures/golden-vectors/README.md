@@ -13,7 +13,7 @@ equality against them.
 | -------------------- | ---------------------------------------------------------------- |
 | `canonical-json.json`| `toCanonicalJson` / `hashCanonicalPayload` over representative and edge-case payloads (nested objects, arrays, unicode, numeric edge cases). |
 | `signing.json`       | `signData` / `verifySignature` over the same payload set, using a fixed (non-secret, test-only) keypair. |
-| `vp-builder.json`    | Full `VPBuilder.sign()` output — the actual wire shape of a signed VP — using injected `id`/`nonce`/`expiresAt`/`proofCreatedAt` overrides so the output is deterministic. |
+| `vp-builder.json`    | Frozen: full `VPBuilder.sign()` output of the retired VP path. KYA-OS story F-2 removed `VPBuilder` from helix-core, so this file is no longer regenerated; it stays for the SDK suites that still read it until they retire their own VP code. |
 
 ## Regenerating
 
@@ -21,8 +21,8 @@ equality against them.
 pnpm generate:golden-vectors
 ```
 
-Regenerate whenever `helix-core/src/crypto/vp.ts`, `crypto/keys.ts`,
-`proof.ts`, or `vp-builder.ts` change, and commit the resulting diff in the
+Regenerate whenever `helix-core/src/crypto/vp.ts`, `crypto/keys.ts` or
+`proof.ts` change, and commit the resulting diff in the
 same PR as the source change. Do not hand-edit these files — they're
 generated output.
 

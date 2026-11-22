@@ -22,10 +22,9 @@ export * from './net/outbound.js';
 export * from './card/index.js';
 export * from './custody/index.js';
 export * from './conformance/index.js';
+// proofKeyOf / verificationMethodOfKey: consent grants signed with a KeyStore key (story F-3); the VP builder and verifier went with story F-2.
 export { createEd25519Proof, verifyEd25519Proof, proofKeyOf, verificationMethodOfKey } from './proof.js';
 export type { LinkedDataProof, SigningKeyMaterial } from './proof.js';
-export { VPBuilder } from './vp-builder.js';
-export { verifyVP, fetchStatusList } from './vp-verifier.js';
 export { issueGrant, ACCEPT_TERMS_SCOPE } from './grant.js';
 export { normalizeScopes, scopeKey, vcLookupColumns } from './vc-lookup.js';
 export type { VcLookupColumns } from './vc-lookup.js';
@@ -33,6 +32,4 @@ export type {
   IssueGrantOptions,
   IssuerKeyMaterial,
 } from './grant.js';
-export type { VPBuilderOptions, VPBuilderSignOverrides } from './vp-builder.js';
-export type { StatusListResolver, VerifyVPOptions, VerifyVPResult } from './vp-verifier.js';
 export type { DelegationLink } from './delegation.js';

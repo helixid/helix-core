@@ -18,7 +18,9 @@
  * implementation (not hand-derived from a spec) covering:
  *   - toCanonicalJson / hashCanonicalPayload   (canonical-json.json)
  *   - signData / verifySignature               (signing.json)
- *   - full VPBuilder.sign() output              (vp-builder.json)
+ *
+ * vp-builder.json is no longer generated: the VP path was retired by KYA-OS
+ * story F-2. The file stays, frozen, for the SDK suites that still read it.
  *
  * Every SDK's test suite (helix-sdk-js today, helix-sdk-py once it exists)
  * asserts byte-for-byte equality against these fixtures, not against a
@@ -37,8 +39,6 @@ import {
   signData,
   derivePublicKey,
   verifySignature,
-  VPBuilder,
-  type SignedVC,
 } from '../helix-core/src/index.js';
 
 const OUT_DIR = fileURLToPath(new URL('../fixtures/golden-vectors/', import.meta.url));
@@ -129,117 +129,6 @@ async function buildSigningVectors() {
 }
 
 // ---------------------------------------------------------------------------
-// 3. Full VPBuilder.sign() vectors — deterministic via override hooks
-// ---------------------------------------------------------------------------
-
-function sampleAgentVC(overrides: Partial<Record<string, unknown>> = {}): SignedVC {
-  return {
-    '@context': ['https://www.w3.org/ns/credentials/v2', 'https://helixid.io/contexts/v1'],
-    id: 'vc:helix:agent:00000000-0000-4000-8000-000000000001',
-    type: ['VerifiableCredential', 'HelixAgentCredential'],
-    issuer: 'did:key:z6MkIssuerExample',
-    validFrom: '2026-01-01T00:00:00.000Z',
-    validUntil: '2026-12-31T23:59:59.000Z',
-    credentialSubject: {
-      id: 'did:key:z6MkAgentExample',
-      type: 'HelixAgent',
-      privilegeScopes: ['read:calendar', 'read:email'],
-      agentName: 'golden-vector-test-agent',
-    },
-    proof: {
-      type: 'Ed25519Signature2020',
-      created: '2026-01-01T00:00:00.000Z',
-      verificationMethod: TEST_VERIFICATION_METHOD,
-      proofPurpose: 'assertionMethod',
-      proofValue: 'zGoldenVectorPlaceholderProofValue',
-    },
-    ...overrides,
-  } as unknown as SignedVC;
-}
-
-interface VpBuilderCase {
-  name: string;
-  credentials: SignedVC[];
-  holderDid: string;
-  targetService: string;
-  userDid?: string;
-}
-
-const vpBuilderCases: VpBuilderCase[] = [
-  {
-    name: 'single_agent_credential_no_user',
-    credentials: [sampleAgentVC()],
-    holderDid: 'did:key:z6MkHolderExample',
-    targetService: 'https://api.example.invalid/v1/tools/lookup',
-  },
-  {
-    name: 'agent_plus_delegation_grant_with_user',
-    credentials: [
-      sampleAgentVC(),
-      sampleAgentVC({
-        id: 'vc:helix:grant:00000000-0000-4000-8000-000000000002',
-        type: ['VerifiableCredential', 'DelegationGrantCredential'],
-        credentialSubject: {
-          id: 'did:key:z6MkAgentExample',
-          type: 'HelixAgent',
-          privilegeScopes: ['read:calendar'],
-          agentName: 'golden-vector-test-agent',
-          delegatedFrom: 'did:key:z6MkParentAgentExample',
-          delegationDepth: 1,
-          maxDelegationDepth: 2,
-          parentVcId: 'vc:helix:agent:00000000-0000-4000-8000-000000000001',
-        },
-      }),
-    ],
-    holderDid: 'did:key:z6MkHolderExample',
-    targetService: 'https://api.example.invalid/v1/tools/calendar',
-    userDid: 'did:key:z6MkUserExample',
-  },
-];
-
-const FIXED_ID = 'vp:helix:00000000-0000-4000-8000-0000000000ff';
-const FIXED_NONCE = 'ab'.repeat(32);
-const FIXED_EXPIRES_AT = new Date('2026-01-01T00:05:00.000Z');
-const FIXED_PROOF_CREATED_AT = new Date('2026-01-01T00:00:00.000Z');
-
-async function buildVpBuilderVectors() {
-  const vectors = [];
-  for (const testCase of vpBuilderCases) {
-    const builder = new VPBuilder({
-      credentials: testCase.credentials,
-      holderDid: testCase.holderDid,
-      targetService: testCase.targetService,
-      userDid: testCase.userDid,
-    });
-    const signedVP = await builder.sign(TEST_PRIVATE_KEY_HEX, TEST_VERIFICATION_METHOD, {
-      id: FIXED_ID,
-      nonce: FIXED_NONCE,
-      expiresAt: FIXED_EXPIRES_AT,
-      proofCreatedAt: FIXED_PROOF_CREATED_AT,
-    });
-    vectors.push({
-      name: testCase.name,
-      input: {
-        credentials: testCase.credentials,
-        holderDid: testCase.holderDid,
-        targetService: testCase.targetService,
-        userDid: testCase.userDid,
-      },
-      overrides: {
-        id: FIXED_ID,
-        nonce: FIXED_NONCE,
-        expiresAt: FIXED_EXPIRES_AT.toISOString(),
-        proofCreatedAt: FIXED_PROOF_CREATED_AT.toISOString(),
-      },
-      private_key_hex: TEST_PRIVATE_KEY_HEX,
-      verification_method: TEST_VERIFICATION_METHOD,
-      signed_vp: signedVP,
-    });
-  }
-  return vectors;
-}
-
-// ---------------------------------------------------------------------------
 // Write fixtures
 // ---------------------------------------------------------------------------
 
@@ -248,8 +137,8 @@ async function main() {
     generated_from: 'helix-core',
     generator: 'scripts/generate-golden-vectors.ts',
     note:
-      'Regenerate whenever helix-core/src/crypto/vp.ts, crypto/keys.ts, proof.ts, or ' +
-      'vp-builder.ts change. Every SDK asserts byte-for-byte equality against these ' +
+      'Regenerate whenever helix-core/src/crypto/vp.ts, crypto/keys.ts or proof.ts ' +
+      'change. Every SDK asserts byte-for-byte equality against these ' +
       'fixtures — do not hand-edit.',
   };
 
@@ -264,15 +153,8 @@ async function main() {
     JSON.stringify({ ...meta, vectors: signingVectors }, null, 2) + '\n',
   );
 
-  const vpBuilderVectors = await buildVpBuilderVectors();
-  writeFileSync(
-    `${OUT_DIR}vp-builder.json`,
-    JSON.stringify({ ...meta, vectors: vpBuilderVectors }, null, 2) + '\n',
-  );
-
   console.log(`Wrote ${canonicalJsonVectors.length} canonical-json vectors`);
   console.log(`Wrote ${signingVectors.length} signing vectors`);
-  console.log(`Wrote ${vpBuilderVectors.length} vp-builder vectors`);
   console.log(`Output: ${OUT_DIR}`);
 }
 
