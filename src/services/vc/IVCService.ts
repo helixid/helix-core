@@ -2,12 +2,15 @@ import type { SignedVC } from '../../core/index.js';
 
 export type VCStatus = 'active' | 'revoked' | 'expired';
 
+/**
+ * A user credential (HelixUserCredential). Agents are not issued credentials
+ * here: onboarding gives them an AgentIdentityCredential and one
+ * CapabilityAttestationCredential per scope (story F-1, CredentialService).
+ */
 export interface IssueVCInput {
   subjectDid: string;
-  subjectType: 'agent' | 'user';
-  privilegeScopes?: string[];
-  agentName?: string;
-  userId?: string;
+  subjectType: 'user';
+  userId: string;
   expiresInSeconds?: number;
   expiresAt?: Date | null;
   revokeExisting?: boolean;

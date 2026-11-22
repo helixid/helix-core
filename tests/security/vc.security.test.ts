@@ -115,12 +115,12 @@ describe('VC Security', () => {
       method: 'POST',
       url: '/v1/vcs',
       headers: { 'x-admin-api-key': 'test-admin-key-0001' },
-      payload: { subjectDid: didId, subjectType: 'agent', agentName: 'Original', privilegeScopes: ['read:orders'] },
+      payload: { subjectDid: didId, subjectType: 'user', userId: 'original-user' },
     });
     const { vc } = JSON.parse(res.body);
 
     // Tamper with subject
-    vc.credentialSubject.agentName = 'TAMPERED';
+    vc.credentialSubject.userId = 'TAMPERED';
 
     const proofValue = vc.proof.proofValue;
     const signature = bs58.decode(proofValue);

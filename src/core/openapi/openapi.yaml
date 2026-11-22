@@ -329,9 +329,10 @@ paths:
       description: >
         Redeems an enrollment token in a single call: the server generates
         and holds the agent's keypair, creates its DID, and issues its
-        HelixAgentCredential. Agent self-custody is retired, so there is no
-        separate challenge/verify step any more -- just this one call after
-        POST /v1/enrollment-tokens.
+        AgentIdentityCredential plus one CapabilityAttestationCredential per
+        requested scope (story F-1). The response's vcId is the identity
+        credential. There is no separate challenge/verify step -- just this
+        one call after POST /v1/enrollment-tokens.
       requestBody:
         required: true
         content:
@@ -528,19 +529,18 @@ components:
             type: string
     IssueVCRequest:
       type: object
-      required: [subjectDid, subjectType, expiresInSeconds]
+      description: >
+        A user credential (HelixUserCredential). Agents are not issued
+        credentials here: onboarding gives them an AgentIdentityCredential and
+        one CapabilityAttestationCredential per scope (story F-1).
+      required: [subjectDid, subjectType, userId, expiresInSeconds]
+      additionalProperties: false
       properties:
         subjectDid:
           type: string
         subjectType:
           type: string
-          enum: [agent, user]
-        privilegeScopes:
-          type: array
-          items:
-            type: string
-        agentName:
-          type: string
+          enum: [user]
         userId:
           type: string
         expiresInSeconds:
