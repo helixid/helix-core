@@ -5,8 +5,9 @@
 //    http://www.apache.org/licenses/LICENSE-2.0
 
 /**
- * One verified link of the retired VP path's agent-credential chain, as
- * `verifyVP` still reports it until story F-2 replaces that verifier. The
+ * One verified link of the retired VP path's agent-credential chain. The
+ * verifier that reported it is gone with KYA-OS story F-2; the type stays for
+ * consumers that still name it (helix-server-enterprise). The
  * chain builder that used to live here (`buildDelegationVC`, `delegationDepth`
  * / `maxDelegationDepth`) is gone with KYA-OS story F-1: delegation is a
  * chain of `DelegationCredential` hops (src/core/credentials/hop.ts).
