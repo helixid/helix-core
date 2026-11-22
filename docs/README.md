@@ -67,51 +67,38 @@ The operator's private key (issuer signing key) never leaves the issuer service.
 
 ### AI Agent
 
-The agent holds no keys. Onboarding generates the agent's keypair server-side and keeps it encrypted in custody; the agent only ever handles its DID, its VC id, and the signed VPs it presents.
+The agent signs every tool call itself (KYA-OS story C-C): a per-request holder-of-key proof (`org.kya-os/proof.v1`) bound to the request body and the service, with its delegation chain beside it in `params._meta`. The private key stays wherever the agent's `Signer` keeps it; no request ever carries it. There is no Helix VP, `signVP()` or `verifyVP()`.
 
 ```typescript
-import { HelixClient } from '@helixid/sdk-js'
+import { kyaos } from '@helixid/sdk-js'
 
-const client = new HelixClient(process.env.HELIX_API_URL!, { apiKey: process.env.HELIX_API_KEY! })
+// the agent's own key, read from HELIX_SIGNING_KEY at each sign() call
+const signer = new kyaos.EnvSigner({ did: agentDid })
 
-// onboard once with the operator's enrollment token — no keypair, no wallet file
-const { agentDid } = await client.onboardAgent(process.env.ENROLLMENT_TOKEN!)
-
-// the server signs the VP with the agent's custodial key
-const vp = await client.signVP(agentDid, 'orders-service', { userDid: 'did:web:user.example.com' })
-
-// delegate a subset of scopes to a sub-agent, also signed server-side
-const childVC = await client.delegateAuthority(agentDid, 'did:web:sub-agent.example.com', ['read:orders'], 3600)
+// one proof per request, for this service only
+const request = await kyaos.withRequestProof(
+  { name: 'lookup_order', arguments: { orderId: 'ORD-1001' } },
+  signer,
+  { audience: 'did:web:orders.example.com', chain },
+)
+// send `request` as the MCP tools/call params (the proof rides params._meta)
 ```
 
 ### Service Provider
 
-`verifyVP()` calls the API's `POST /v1/vp/verify`, which checks the signature, delegation chain, expiry, target service, and revocation status server-side (and writes the `VP_VERIFIED`/`VP_REJECTED` audit event). There is no local verification path, so the verifier needs a `HelixClient`.
+The service verifies each call in-process with the local verifier (story F-2): the proof in the §11.2 order, the carried chain, status lists and the agent's Entity Card, from public documents only. The Helix API is never asked.
 
 ```typescript
-import { HelixClient, verifyVP, SessionManager } from '@helixid/sdk-js'
+import { helixidMCPMiddleware, createLocalVerifier, RedisNonceStore } from '@helixid/mcp-middleware'
 
-const client = new HelixClient(process.env.HELIX_API_URL!)
-const result = await verifyVP(incomingVP, client, {
-  expectedTargetService: 'orders-service',
+const verifier = createLocalVerifier({
+  serviceDid: 'did:web:orders.example.com',
+  trustedIssuers: '*',
+  nonceStore: new RedisNonceStore({ client: redis }), // replay protection, shared by every instance
 })
+const requireHelix = helixidMCPMiddleware({ verifier, toolScopes: { lookup_order: ['read:orders'] } })
 
-// replay protection — verifier owns this store
-const seen = await redis.get(`vpid:${result.vpId}`)
-if (seen) throw new Error('REPLAY_DETECTED')
-await redis.set(`vpid:${result.vpId}`, '1', 'EX', result.expiresInSeconds)
-
-// scope check
-if (!result.privilegeScopes.includes('read:orders')) throw new Error('INSUFFICIENT_SCOPE')
-
-// session handling — verifier's choice, both optional
-
-// Option A: issue a short-lived JWT, agent reuses it for subsequent calls
-const session = new SessionManager({ secret: process.env.JWT_SECRET!, ttl: 600 })
-const token = await session.issue({ agentDid: result.agentDid, scopes: result.privilegeScopes })
-
-// Option B: cache the VP result by vpId, skip re-verification on repeat calls
-await cache.set(`vp:${result.vpId}`, result, { ttl: result.expiresInSeconds })
+await requireHelix({ name, input: args, _meta: request.params._meta, request })
 ```
 
 Neither session option is required. The verifier can re-verify the VP on every call if preferred. The SDK supports all three paths.

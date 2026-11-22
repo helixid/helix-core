@@ -244,8 +244,8 @@ export async function enrollLiveService(api: LiveApi, name = 'amazon'): Promise<
 
 /**
  * A user's consent for an agent, issued by the service through
- * POST /v1/service-delegation-grants. signVP with a userDid refuses without
- * one, so any test that signs on a user's behalf issues it first.
+ * POST /v1/service-delegation-grants. Any test that acts on a user's behalf
+ * issues it first.
  */
 export async function issueLiveGrant(
   api: LiveApi,

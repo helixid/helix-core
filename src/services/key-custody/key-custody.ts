@@ -39,8 +39,8 @@ export interface IKeyCustody {
   /**
    * Decrypts, hands the plaintext private key hex to `use` for the duration
    * of that one call, and returns its result — for callers that need more
-   * than a raw `sign()` (e.g. VPBuilder.sign(), which needs the key plus a
-   * verificationMethodId to construct a whole signed VP). The plaintext key
+   * than a raw `sign()` (e.g. a whole linked-data proof, which needs the key
+   * plus a verificationMethodId). The plaintext key
    * only ever exists inside `use`'s stack frame; the caller never holds it.
    */
   signWith<T>(encrypted: EncryptedKeyMaterial, use: (privateKeyHex: string) => T | Promise<T>): Promise<T>;
