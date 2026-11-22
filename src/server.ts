@@ -43,6 +43,7 @@ import vcRoutes from './routes/vc/index.js';
 import statusListRoutes from './routes/status-list/index.js';
 import vpRoutes from './routes/vp/index.js';
 import agentRoutes from './routes/agent/index.js';
+import agentKeyRoutes from './routes/agent-keys/index.js';
 import auditLogRoutes from './routes/audit-log/index.js';
 import sessionRoutes from './routes/sessions/index.js';
 import serviceProviderRoutes from './routes/service-provider/index.js';
@@ -274,6 +275,7 @@ await app.register(agentRoutes, {
   credentialService,
   adminApiKey: config.HELIX_ADMIN_API_KEY,
 });
+await app.register(agentKeyRoutes, { prefix: '/v1', didRepository, didCache, adminApiKey: config.HELIX_ADMIN_API_KEY });
 await app.register(serviceProviderRoutes, {
   prefix: '/v1',
   serviceProviderService,

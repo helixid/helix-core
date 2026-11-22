@@ -34,7 +34,12 @@ export interface Signer {
 
 export interface EnvSignerOptions {
   did: string;
-  /** Verification-method fragment. Default `key-1`, which matches `buildDIDDocument`. */
+  /**
+   * Verification-method fragment (`key-1`, the default, which matches
+   * `buildDIDDocument`) or the full id the DID document publishes
+   * (`<did>#key-1`), so a did:web agent announces exactly the `kid` its
+   * document lists.
+   */
   kid?: string;
   /** Name of the variable holding the private key. Default `HELIX_SIGNING_KEY`. */
   envVar?: string;
@@ -63,10 +68,14 @@ export class EnvSigner implements Signer {
     if (!options.did.startsWith("did:")) {
       throw new Error("EnvSigner: did must be a DID");
     }
-    const kid = (options.kid ?? DEFAULT_KID_FRAGMENT).replace(/^#/, "");
+    // The fragment alone (`key-1`, `#key-1`) or the full verification-method
+    // id the DID document publishes (`<did>#key-1`), which must be this DID's.
+    let kid = options.kid ?? DEFAULT_KID_FRAGMENT;
+    if (kid.startsWith(`${options.did}#`)) kid = kid.slice(options.did.length + 1);
+    kid = kid.replace(/^#/, "");
     if (kid.length === 0 || kid.includes("#")) {
       throw new Error(
-        'EnvSigner: kid must be a verification-method fragment without "#"',
+        "EnvSigner: kid must be a verification-method fragment of this DID",
       );
     }
     this.did = options.did;

@@ -55,6 +55,7 @@
     "generate:golden-vectors": "tsx scripts/generate-golden-vectors.ts",
     "generate:kya-os-helix": "tsx scripts/generate-kya-os-helix-fixtures.ts",
     "generate:jws-fixtures": "tsx scripts/generate-jws-fixtures.ts",
+    "generate:did-fixtures": "tsx scripts/generate-did-fixtures.ts",
     "generate:credential-fixtures": "tsx scripts/generate-credential-fixtures.ts",
     "setup": "tsx scripts/setup.ts",
     "setup:hedera": "tsx scripts/setup-hedera.ts",

@@ -20,3 +20,4 @@ export {
 } from './vp.js';
 export * from './jwt.js';
 export { CanonicalJsonError, canonicalize, hashJson } from './jcs.js';
+export { decodeBase58btc, encodeBase58btc, isBase58btc } from './base58.js';
