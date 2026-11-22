@@ -1,6 +1,5 @@
 import { createHash, randomBytes } from 'node:crypto';
 import {
-  buildDelegationVC,
   AgentAlreadyOnboardedError,
   AgentActiveCredentialNotFoundError,
   AgentKeyNotFoundError,
@@ -10,7 +9,6 @@ import {
   ChallengeNotFoundError,
   ChallengeSignatureInvalidError,
   ConsentGrantNotFoundError,
-  DelegateeNotAnAgentError,
   ErrorCode,
   HelixError,
   EnrollmentTokenAlreadyUsedError,
@@ -22,8 +20,9 @@ import {
   signBytes,
   verifySignature,
   VPBuilder,
-  VPMultipleActiveVCError,
   type IAuditLogger,
+  type SignedCapabilityAttestation,
+  type SignedIdentityCredential,
   type SignedVC,
   type SignedVP,
 } from '../../core/index.js';
@@ -32,12 +31,8 @@ import type { DidKeyRepository } from '../../repositories/did-key.repository.js'
 import type { IDIDService } from '../did/IDIDService.js';
 import type { IVCService } from '../vc/IVCService.js';
 import type { IKeyCustody } from '../key-custody/key-custody.js';
-import type {
-  IAgentService,
-  ChallengeResult,
-  DelegateAuthorityResult,
-  DelegateAuthorityOptions,
-} from './IAgentService.js';
+import type { CredentialService } from '../credentials/credential.service.js';
+import type { IAgentService, ChallengeResult } from './IAgentService.js';
 
 type DIDVerificationMethodLike = {
   type?: unknown;
@@ -109,6 +104,8 @@ export class AgentService implements IAgentService {
     private readonly auditLogger: IAuditLogger,
     private readonly agentKeyRepository: DidKeyRepository,
     private readonly keyCustody: IKeyCustody,
+    /** Issues the split credentials of KYA-OS story F-1 at onboarding. */
+    private readonly credentialService: CredentialService,
     private readonly enrollmentTokenTtlSeconds = 900,
     private readonly challengeTtlSeconds = 300,
   ) {}
@@ -118,7 +115,6 @@ export class AgentService implements IAgentService {
       agentName: string;
       requestedScopes: string[];
       requestedDomains?: string[];
-      maxDelegationDepth?: number;
       /**
        * Whole days until the token expires, at the same time of day as now.
        * null, undefined or '' means the token has no expiry.
@@ -157,7 +153,7 @@ export class AgentService implements IAgentService {
       agentName: input.agentName,
       requestedScopes: JSON.stringify(requestedScopes),
       requestedDomains: JSON.stringify(input.requestedDomains ?? []),
-      maxDelegationDepth: input.maxDelegationDepth ?? 0,
+      maxDelegationDepth: 0,
       expiresAt: expiresAt ?? null,
     });
     this.auditLogger.log(AuditEvents.ENROLLMENT_TOKEN_GENERATED, {
@@ -181,9 +177,14 @@ export class AgentService implements IAgentService {
    * `agentKeyRepository`, never returned to the caller.
    */
   async onboardWithCustody(
-    input: { enrollmentToken: string; domains?: string[] },
+    input: { enrollmentToken: string; domains?: string[]; ownerDid?: string },
     requestId: string,
-  ): Promise<{ agentDid: string; vcId: string }> {
+  ): Promise<{
+    agentDid: string;
+    vcId: string;
+    identity: SignedIdentityCredential;
+    attestations: SignedCapabilityAttestation[];
+  }> {
     const { publicKey, encrypted } = this.keyCustody.generateAndEncrypt();
 
     const challenge = await this.processOnboardCreateChallenge(
@@ -211,11 +212,12 @@ export class AgentService implements IAgentService {
         ...(didCreateSignature ? { didCreateSignature } : {}),
       },
       requestId,
+      input.ownerDid === undefined ? {} : { ownerDid: input.ownerDid },
     );
 
     await this.agentKeyRepository.create({ did: result.agentDid, subjectType: 'agent', ...encrypted });
 
-    return { agentDid: result.agentDid, vcId: result.vcId };
+    return { agentDid: result.agentDid, vcId: result.vcId, identity: result.identity, attestations: result.attestations };
   }
 
   /**
@@ -254,21 +256,14 @@ export class AgentService implements IAgentService {
       throw new AgentActiveCredentialNotFoundError(input.did);
     }
 
-    let agentCredentials = agentVCs;
+    const agentCredentials = agentVCs;
     let grants: SignedVC[] = [];
-    let grantHolderDids: string[] = [];
     if (input.userDid) {
       grants = await this.vcService.listActiveGrants({
         agentDid: input.did,
         serviceDid: input.targetService,
         userDid: input.userDid,
       });
-      if (grants.length === 0) {
-        const inherited = await this.findDelegatorGrants(agentVCs, input.targetService, input.userDid);
-        if (inherited) {
-          ({ agentCredentials, grants, grantHolderDids } = inherited);
-        }
-      }
       if (grants.length === 0) {
         throw new ConsentGrantNotFoundError(input.did, input.targetService, input.userDid);
       }
@@ -291,181 +286,9 @@ export class AgentService implements IAgentService {
       ...(input.userDid ? { userDid: input.userDid } : {}),
       vcIds: agentCredentials.map((vc) => vc.id),
       grantVcIds: grants.map((grant) => grant.id),
-      ...(grantHolderDids.length > 0 ? { grantHolderDids } : {}),
     });
 
     return { signedVP };
-  }
-
-  /**
-   * Consent passes down a delegation: when the user consented to an agent
-   * that delegated to this one (directly or further up the chain), that
-   * consent covers this agent too, unless the grant says
-   * `allowDelegation: false` -- the verifier accepts a grant issued to any
-   * agent in the VP's delegation chain on the same terms.
-   *
-   * Only the delegated credentials whose chain reaches a consenting
-   * delegator are presented with its grants, never this agent's other
-   * credentials: the verifier intersects the grant with the union of every
-   * agent credential in the VP, so presenting e.g. this agent's own
-   * onboarding credential alongside would let it act for the user with
-   * scopes the delegator never delegated to it.
-   *
-   * Nearest delegator first; returns null if no delegator in any chain holds
-   * an active grant for (service, user).
-   */
-  private async findDelegatorGrants(
-    agentVCs: SignedVC[],
-    serviceDid: string,
-    userDid: string,
-  ): Promise<{ agentCredentials: SignedVC[]; grants: SignedVC[]; grantHolderDids: string[] } | null> {
-    const chainDidsOf = (vc: SignedVC): string[] => {
-      const chain = (vc as SignedVC & { delegationChain?: SignedVC[] }).delegationChain ?? [];
-      return chain
-        .map((link) => (link.credentialSubject as { id?: unknown } | undefined)?.id)
-        .filter((id): id is string => typeof id === 'string')
-        .reverse();
-    };
-
-    const grantsByHolder = new Map<string, SignedVC[]>();
-    for (const did of new Set(agentVCs.flatMap(chainDidsOf))) {
-      // A grant whose user did not let it pass to delegates stays with the
-      // agent it names.
-      const found = (await this.vcService.listActiveGrants({ agentDid: did, serviceDid, userDid })).filter(
-        (grant) => (grant.credentialSubject as { allowDelegation?: unknown }).allowDelegation !== false,
-      );
-      if (found.length > 0) grantsByHolder.set(did, found);
-    }
-    if (grantsByHolder.size === 0) return null;
-
-    const agentCredentials = agentVCs.filter((vc) => chainDidsOf(vc).some((did) => grantsByHolder.has(did)));
-    const grants = new Map<string, SignedVC>();
-    for (const found of grantsByHolder.values()) for (const grant of found) grants.set(grant.id, grant);
-    return { agentCredentials, grants: [...grants.values()], grantHolderDids: [...grantsByHolder.keys()] };
-  }
-
-  /**
-   * Delegates a slice of a server-custody agent's authority to another DID —
-   * the custodial counterpart to the SDK's local delegate(), which needs a
-   * wallet's own private key and so has had nothing legitimate to call since
-   * agent self-custody was retired (see helix-sdk-js's delegation.ts and
-   * helix-sdk-py's agent_delegation_demo.py for the prior state of that gap).
-   *
-   * Same key lookup as signVP(). The credential delegated from must be an
-   * active HelixAgentCredential the agent holds per the DB: picked by
-   * resolveDelegationSourceVC(), or pinned via vcId when more than one is
-   * eligible (e.g. this agent already holds a VC delegated to it, alongside
-   * its own onboarding VC).
-   */
-  async delegateAuthority(
-    input: { did: string; to: string; scopes: string[]; expiresIn: number; vcId?: string; revokeExisting?: boolean },
-    requestId: string,
-    options: DelegateAuthorityOptions = {},
-  ): Promise<DelegateAuthorityResult> {
-    const keyRecord = await this.agentKeyRepository.findByDid(input.did);
-    if (!keyRecord) {
-      throw new AgentKeyNotFoundError(input.did);
-    }
-
-    const fromVC = input.vcId
-      ? await this.vcService.findActiveByVcIdForSubject(input.vcId, input.did, 'HelixAgentCredential')
-      : await this.resolveDelegationSourceVC(input.did, input.scopes);
-    if (!fromVC) {
-      throw new AgentActiveCredentialNotFoundError(input.did);
-    }
-
-    // The delegatee must be an agent this server onboarded and that is still
-    // active -- the same rule a consent grant's delegatee follows. Checked
-    // before anything is signed, so delegating to an unknown DID is refused
-    // here rather than tripping the Vc -> Did foreign key on store.
-    const delegateeKey = await this.agentKeyRepository.findByDid(input.to);
-    const delegateeActive =
-      delegateeKey?.subjectType === 'agent' &&
-      (await this.vcService.listActiveBySubjectDid(input.to, 'HelixAgentCredential')).length > 0;
-    if (!delegateeActive) {
-      throw new DelegateeNotAnAgentError(input.to);
-    }
-    // The deployment's own rule on who may receive this authority (e.g. an
-    // account's private agent), now that the source credential is known.
-    await options.authorizeDelegatee?.({ to: input.to, fromVC: fromVC as SignedVC });
-
-    // Its own entry on this platform's status list, as a consent grant gets:
-    // revoking the delegation then reaches every verifier through the chain
-    // walk, including VPs signed before the revocation.
-    const entry = await this.vcService.claimStatusListEntry();
-    const credentialStatus = {
-      id: `${entry.statusListCredentialUrl}#${entry.statusListIndex}`,
-      type: 'BitstringStatusListEntry' as const,
-      statusPurpose: 'revocation' as const,
-      statusListIndex: entry.statusListIndex.toString(),
-      statusListCredential: entry.statusListCredentialUrl,
-    };
-
-    // buildDelegationVC() does the scope-subset and max-depth checks and
-    // signs with the custody-held key, all in-process -- there is no
-    // prepare/finalize round trip because nobody outside holds a key.
-    const delegatedVC = await this.keyCustody.signWith(keyRecord, (privateKeyHex) =>
-      buildDelegationVC(
-        { to: input.to, scopes: input.scopes, expiresIn: input.expiresIn, fromVC: fromVC as SignedVC, credentialStatus },
-        { did: input.did, privateKeyHex },
-      ),
-    );
-
-    // Without this, the delegate DID could never be looked up again by
-    // vcId/subjectDid, so a second hop of delegation would always fail.
-    // registerSignedVC() stores it as-is, already signed by the delegator,
-    // and applies the one-credential-per-scope-set rule against whatever
-    // this delegator already delegated to the same DID.
-    const reconciled = await this.vcService.registerSignedVC(delegatedVC, {
-      revokeExisting: input.revokeExisting,
-    });
-
-    this.auditLogger.log(AuditEvents.VC_DELEGATED, {
-      requestId,
-      delegatorDid: input.did,
-      delegateDid: input.to,
-      scopes: input.scopes,
-      delegatedVcId: delegatedVC.id,
-      ...reconciled,
-    });
-
-    return { delegatedVC, ...reconciled };
-  }
-
-  /**
-   * Picks which of `did`'s active HelixAgentCredentials to delegate from
-   * when the caller didn't pin one via vcId — needed once an agent can hold
-   * more than one (its own onboarding VC, plus whatever it's been delegated)
-   * for delegateAuthority()'s default, no-vcId path to still work past the
-   * first hop. Eligible means: covers every scope being delegated, and has
-   * remaining delegation budget (delegationDepth + 1 <= maxDelegationDepth).
-   * Exactly one eligible candidate is the expected, common case; zero means
-   * "no active credential lets you do this" (same AgentActiveCredentialNotFoundError
-   * the caller would see for a nonexistent VC); more than one is genuine
-   * ambiguity this can't resolve on the caller's behalf (e.g. two separately
-   * delegated grants both cover the requested scopes) -- vcId is how the
-   * caller breaks that tie explicitly.
-   */
-  private async resolveDelegationSourceVC(
-    did: string,
-    requestedScopes: string[],
-  ): Promise<Record<string, unknown> | null> {
-    const candidates = await this.vcService.listActiveBySubjectDid(did, 'HelixAgentCredential');
-    const eligible = candidates.filter((vc) => {
-      const subject = (vc as { credentialSubject?: Record<string, unknown> }).credentialSubject ?? {};
-      const scopes = Array.isArray(subject['privilegeScopes']) ? (subject['privilegeScopes'] as string[]) : [];
-      const hasAllScopes = requestedScopes.every((scope) => scopes.includes(scope));
-      const depth = typeof subject['delegationDepth'] === 'number' ? (subject['delegationDepth'] as number) : 0;
-      const maxDepth =
-        typeof subject['maxDelegationDepth'] === 'number' ? (subject['maxDelegationDepth'] as number) : 0;
-      return hasAllScopes && depth + 1 <= maxDepth;
-    });
-
-    if (eligible.length === 0) return null;
-    if (eligible.length === 1) return eligible[0]!;
-    throw new VPMultipleActiveVCError(
-      `Multiple eligible credentials found for ${did} to delegate ${requestedScopes.join(', ')} from -- pass vcId to pick one explicitly`,
-    );
   }
 
   async processOnboardCreateChallenge(
@@ -563,14 +386,24 @@ export class AgentService implements IAgentService {
     };
   }
 
+  /**
+   * Finishes onboarding: creates the DID, then issues the split credential
+   * set of KYA-OS story F-1 — one identity credential (no scopes) naming
+   * `ownerDid` as the responsible party, and one capability attestation per
+   * scope the enrollment token asked for, signed by the Helix issuer. The
+   * returned `vc` and `vcId` are the identity credential.
+   */
   async processOnboardVerify(
     input: { challengeId: string; signature: string; didCreateSignature?: string },
     requestId: string,
+    options: { ownerDid?: string } = {},
   ): Promise<{
     agentDid: string;
     vc: Record<string, unknown>;
     hederaTransactionId: string;
     vcId: string;
+    identity: SignedIdentityCredential;
+    attestations: SignedCapabilityAttestation[];
   }> {
     const challenge = await this.repository.findChallengeById(input.challengeId);
     if (!challenge || challenge.purpose !== 'agent_onboarding') {
@@ -634,16 +467,18 @@ export class AgentService implements IAgentService {
       ? (JSON.parse(enrollmentToken.requestedScopes) as string[])
       : ['read:orders'];
     const agentName = enrollmentToken?.agentName ?? 'Agent';
-    const vc = await this.vcService.issueVC(
+    const validUntil = enrollmentToken?.expiresAt ?? null;
+    const identity = await this.credentialService.issueIdentity(
       {
-        subjectDid: didResult.did,
-        subjectType: 'agent',
-        privilegeScopes: scopes,
-        agentName,
-        delegationDepth: 0,
-        maxDelegationDepth: enrollmentToken?.maxDelegationDepth ?? 0,
-        expiresAt: enrollmentToken?.expiresAt ?? null,
+        agentDid: didResult.did,
+        name: agentName,
+        ownerDid: options.ownerDid ?? this.credentialService.issuerDid,
+        validUntil,
       },
+      requestId,
+    );
+    const attestations = await this.credentialService.issueAttestations(
+      { agentDid: didResult.did, capabilities: scopes, validUntil },
       requestId,
     );
 
@@ -664,9 +499,11 @@ export class AgentService implements IAgentService {
 
     return {
       agentDid: didResult.did,
-      vc: vc.vc,
+      vc: identity as unknown as Record<string, unknown>,
       hederaTransactionId: didResult.hederaTransactionId,
-      vcId: vc.vcId,
+      vcId: identity.id,
+      identity,
+      attestations,
     };
   }
 

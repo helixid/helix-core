@@ -31,6 +31,7 @@ describe('AgentService Branch Coverage', () => {
   let auditLogger: any;
   let agentKeyRepository: any;
   let keyCustody: any;
+  let credentialService: any;
   let service: AgentService;
 
   beforeEach(() => {
@@ -60,6 +61,11 @@ describe('AgentService Branch Coverage', () => {
       sign: vi.fn(),
       signWith: vi.fn((_encrypted: unknown, use: (key: string) => unknown) => use('mock-private-key')),
     };
+    credentialService = {
+      issuerDid: 'did:key:z6MkHelixIssuer',
+      issueIdentity: vi.fn().mockResolvedValue({ id: 'urn:uuid:identity', credentialSubject: { id: 'did:1' } }),
+      issueAttestations: vi.fn().mockResolvedValue([{ id: 'urn:uuid:attestation' }]),
+    };
     service = new AgentService(
       repository,
       didService,
@@ -67,6 +73,7 @@ describe('AgentService Branch Coverage', () => {
       auditLogger,
       agentKeyRepository,
       keyCustody,
+      credentialService,
     );
     vi.mocked(verifySignature).mockReset();
   });
@@ -200,11 +207,55 @@ describe('AgentService Branch Coverage', () => {
         });
         vi.mocked(verifySignature).mockResolvedValue(true);
         didService.createDID.mockResolvedValue({ did: 'did:1', hederaTransactionId: 'tx' });
-        vcService.issueVC.mockResolvedValue({ vc: {}, vcId: 'v1' });
 
         const res = await service.processOnboardVerify({ challengeId: 'c1', signature: '0'.repeat(128) }, 'req-1');
         expect(res.agentDid).toBe('did:1');
-        expect(vcService.issueVC).toHaveBeenCalledWith(expect.objectContaining({ privilegeScopes: ['read:orders'] }), 'req-1');
+        expect(res.vcId).toBe('urn:uuid:identity');
+        expect(res.identity).toEqual({ id: 'urn:uuid:identity', credentialSubject: { id: 'did:1' } });
+        expect(res.attestations).toEqual([{ id: 'urn:uuid:attestation' }]);
+        // KYA-OS story F-1: the identity carries no scopes and names the Helix issuer as responsible party
+        // when the request names no owner; the fallback scope becomes one attestation.
+        expect(credentialService.issueIdentity).toHaveBeenCalledWith(
+          { agentDid: 'did:1', name: 'Agent', ownerDid: 'did:key:z6MkHelixIssuer', validUntil: null },
+          'req-1',
+        );
+        expect(credentialService.issueAttestations).toHaveBeenCalledWith(
+          { agentDid: 'did:1', capabilities: ['read:orders'], validUntil: null },
+          'req-1',
+        );
+        expect(vcService.issueVC).not.toHaveBeenCalled();
+    });
+
+    it('names the owner the request carries as the responsible party and attests every requested scope', async () => {
+        repository.findChallengeById.mockResolvedValue({
+            purpose: 'agent_onboarding',
+            expiresAt: new Date(Date.now() + 10000),
+            nonce: '00',
+            pendingPublicKeyHex: '00',
+            enrollmentTokenId: 'tok-1',
+        });
+        repository.findEnrollmentTokenById.mockResolvedValue({
+            agentName: 'billing-agent',
+            requestedScopes: JSON.stringify(['read:orders', 'write:orders']),
+            expiresAt: new Date('2027-01-01T00:00:00Z'),
+        });
+        vi.mocked(verifySignature).mockResolvedValue(true);
+        didService.createDID.mockResolvedValue({ did: 'did:1', hederaTransactionId: 'tx' });
+
+        const res = await service.processOnboardVerify(
+          { challengeId: 'c1', signature: '0'.repeat(128) },
+          'req-1',
+          { ownerDid: 'did:key:z6MkOwner' },
+        );
+        expect(res.agentDid).toBe('did:1');
+        expect(credentialService.issueIdentity).toHaveBeenCalledWith(
+          { agentDid: 'did:1', name: 'billing-agent', ownerDid: 'did:key:z6MkOwner', validUntil: new Date('2027-01-01T00:00:00Z') },
+          'req-1',
+        );
+        expect(credentialService.issueAttestations).toHaveBeenCalledWith(
+          { agentDid: 'did:1', capabilities: ['read:orders', 'write:orders'], validUntil: new Date('2027-01-01T00:00:00Z') },
+          'req-1',
+        );
     });
   });
 
