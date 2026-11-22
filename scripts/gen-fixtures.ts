@@ -21,6 +21,14 @@
  * Deterministic: fixed test keys (derived from labels, TEST-ONLY, never
  * reuse), a fixed clock and fixed ids and nonces.
  *
+ * Story C-C adds `fixtures/kya-os-helix/request-proof.json`: the per-request
+ * proof in the exact §11.2 order (a proof broken twice is refused for the
+ * earlier step), the carrier keys (canonical and legacy `_meta` keys, read
+ * from `input.meta`), and chains verified without a proof (`requireProof:
+ * false`). It lives outside fixtures/verifier/ so the F-2 harnesses, which
+ * read every file there, are unchanged; its expected verdicts also record
+ * `agentDid`, `proofFloor`, `proofAssurance` and `warnings`.
+ *
  * Run: pnpm generate:verifier-fixtures
  */
 
@@ -89,7 +97,8 @@ export type SeamSetting = {
 export interface FixtureCase {
   name: string;
   description: string;
-  input: { proof?: unknown; chain?: unknown; request?: unknown; card?: unknown };
+  /** `meta` (story C-C cases only): the request's `params._meta`, from which the proof and chain are read as a host reads them. */
+  input: { proof?: unknown; chain?: unknown; request?: unknown; card?: unknown; meta?: unknown };
   seams: SeamSetting;
   options: Record<string, unknown>;
   /** Epoch ms the fixed clock answers. */
@@ -100,6 +109,11 @@ export interface FixtureCase {
     effectiveScopes: string[];
     reasons: string[];
     chainSummary: Record<string, unknown>;
+    /** Story C-C cases only. */
+    agentDid?: string;
+    proofFloor?: boolean;
+    proofAssurance?: string;
+    warnings?: string[];
   };
 }
 
@@ -184,7 +198,7 @@ function withoutMember(value: object, member: string): Record<string, unknown> {
   return copy;
 }
 
-export async function buildVerifierFixtures(): Promise<{ environment: FixtureEnvironment; files: Record<string, FixtureCase[]> }> {
+export async function buildVerifierFixtures(): Promise<{ environment: FixtureEnvironment; files: Record<string, FixtureCase[]>; requestProof: FixtureCase[] }> {
   const keys = Object.fromEntries(KEY_LABELS.map((label) => [label, fixtureKey(label)])) as Record<KeyLabel, FixtureKey>;
   const signers = Object.fromEntries(
     KEY_LABELS.map((label) => [label, new EnvSigner({ did: keys[label].did, envVar: 'FIXTURE_KEY', env: { FIXTURE_KEY: keys[label].private_key_hex } })]),
@@ -310,7 +324,7 @@ export async function buildVerifierFixtures(): Promise<{ environment: FixtureEnv
   const agentJkt = verifier.jwkThumbprint({ kty: 'OKP', crv: 'Ed25519', x: Buffer.from(keys.agent.public_key_hex, 'hex').toString('base64url') });
 
   // ── cases ──────────────────────────────────────────────────────────────
-  const files: Record<string, FixtureCase[]> = { valid: [], proof: [], chain: [], status: [], seams: [] };
+  const files: Record<string, FixtureCase[]> = { valid: [], proof: [], chain: [], status: [], seams: [], 'request-proof': [] };
   const baseOptions = { expectedAudience: SERVICE, resource: SERVICE };
   const add = async (
     file: keyof typeof files,
@@ -323,7 +337,17 @@ export async function buildVerifierFixtures(): Promise<{ environment: FixtureEnv
     const options = { ...baseOptions, ...settings.options };
     const now = settings.now ?? NOW_MS;
     const environment: FixtureEnvironment = { generated_from: '', generator: '', note: '', now: NOW, keys, did_documents: didDocuments, status_lists: lists, cards };
-    const result = await verifier.verify(input as never, { ...fixtureSeams(environment, seams, new Set()), ...(seams.clock === 'missing' ? {} : { clock: (): number => now }) } as never, options as never);
+    const verifierInput =
+      input.meta === undefined
+        ? input
+        : {
+            proof: verifier.readRequestProof(input.meta),
+            ...(verifier.readCarriedChain(input.meta) === undefined ? {} : { chain: verifier.readCarriedChain(input.meta) }),
+            ...(input.request === undefined ? {} : { request: input.request }),
+            ...(input.card === undefined ? {} : { card: input.card }),
+          };
+    const result = await verifier.verify(verifierInput as never, { ...fixtureSeams(environment, seams, new Set()), ...(seams.clock === 'missing' ? {} : { clock: (): number => now }) } as never, options as never);
+    const cc = file === 'request-proof';
     files[file]!.push({
       name,
       description,
@@ -344,6 +368,14 @@ export async function buildVerifierFixtures(): Promise<{ environment: FixtureEnv
           allowedAction: result.chainSummary.allowedAction,
           fresh: result.chainSummary.fresh,
         },
+        ...(cc
+          ? {
+              ...(result.agentDid === undefined ? {} : { agentDid: result.agentDid }),
+              proofFloor: result.proofFloor,
+              ...(result.proofAssurance === undefined ? {} : { proofAssurance: result.proofAssurance }),
+              warnings: result.warnings,
+            }
+          : {}),
       },
     });
   };
@@ -469,6 +501,39 @@ export async function buildVerifierFixtures(): Promise<{ environment: FixtureEnv
   await seamCase('clock_seam_missing', 'without a clock nothing is dated', { clock: 'missing' });
   await seamCase('every_seam_missing', 'every missing seam is reported', { clock: 'missing', resolveDid: 'missing', resolveDidKeys: 'missing', nonceStore: 'missing' });
 
+
+  // request-proof (story C-C): the §11.2 order, the carrier keys, chains without a proof.
+  const cc = async (name: string, description: string, input: FixtureCase['input'], settings: { seams?: Partial<SeamSetting>; options?: Record<string, unknown> } = {}): Promise<void> =>
+    add('request-proof', name, description, input, settings);
+  const badSignature = (proof: kyaos.verifier.RequestProof): kyaos.verifier.RequestProof => ({ ...proof, jws: `${proof.jws.slice(0, -1)}${proof.jws.endsWith('A') ? 'B' : 'A'}` });
+  await cc('order_key_before_audience', 'step 4 (key membership) runs before step 5 (audience)', { proof: await proofBy('agent', { audience: keys.stranger.did }), chain, request, card: attestedCard }, { seams: { resolveDidKeys: 'empty' } });
+  await cc('order_key_unresolvable_before_audience', 'step 3 (the key kid names) runs before step 5 (audience)', { proof: { ...(await proofBy('agent', { audience: keys.stranger.did })), kid: `${AGENT}#key-9` }, chain, request, card: attestedCard });
+  await cc('order_audience_before_request_hash', 'step 5 (audience) runs before step 6 (requestHash)', { proof: await proofBy('agent', { audience: keys.stranger.did }), chain, request: { method: 'tools/call', params: { name: 'lookup_order', arguments: { orderId: 'ORD-9999' } } }, card: attestedCard });
+  await cc('order_request_hash_before_window', 'step 6 (requestHash) runs before step 7 (window)', { proof: await proofBy('agent', { now: NOW_MS - 120_000 }), chain, request: { method: 'tools/call', params: { name: 'lookup_order', arguments: { orderId: 'ORD-9999' } } }, card: attestedCard });
+  await cc('order_window_before_nonce', 'step 7 (window) runs before step 8 (nonce)', { proof: await proofBy('agent', { now: NOW_MS - 120_000 }), chain, request, card: attestedCard }, { seams: { nonceStore: 'replayed' } });
+  await cc('order_nonce_before_signature', 'step 8 (nonce) runs before step 9 (signature)', { proof: badSignature(await proofBy('agent')), chain, request, card: attestedCard }, { seams: { nonceStore: 'replayed' } });
+  await cc('order_signature_before_cnf', 'step 9 (signature) runs before step 10 (cnf fusion)', { proof: badSignature(await proofBy('agent')), chain, request, card: attestedCard }, { options: { tokenCnfJkt: agentJkt } });
+  await cc('order_nonce_seam_at_step_8', 'without a nonce store the proof is refused at step 8, after its earlier bindings held', { proof: await proofBy('agent', { audience: keys.stranger.did }), chain, request, card: attestedCard }, { seams: { nonceStore: 'missing' } });
+  await cc('canonical_key', 'the proof and chain read from _meta under the canonical keys', { meta: { 'org.kya-os/request-proof': await proofBy('agent'), 'org.kya-os/delegation-chain': chain }, request, card: attestedCard });
+  await cc('legacy_key', 'a proof under the legacy carrier key org.kya-os/proof@1 verifies for one major version', { meta: { 'org.kya-os/proof@1': await proofBy('agent'), 'org.kya-os/delegation-chain': chain }, request, card: attestedCard });
+  await cc('legacy_key_and_profile', 'the legacy carrier key with the legacy prf', { meta: { 'org.kya-os/proof@1': await proofBy('agent', { profile: 'org.kya-os/proof@1' }), 'org.kya-os/delegation-chain': chain }, request, card: attestedCard });
+  await cc('canonical_key_wins', 'with both keys present the canonical one is read, whatever the legacy one holds', { meta: { 'org.kya-os/request-proof': await proofBy('agent'), 'org.kya-os/proof@1': 'ignored', 'org.kya-os/delegation-chain': chain }, request, card: attestedCard });
+  await cc('canonical_key_wins_when_broken', 'with both keys present a broken canonical proof is not replaced by the legacy one', { meta: { 'org.kya-os/request-proof': { prf: 'org.kya-os/proof.v1' }, 'org.kya-os/proof@1': await proofBy('agent'), 'org.kya-os/delegation-chain': chain }, request, card: attestedCard });
+  await cc('meta_members_not_covered', 'host members added to params._meta leave requestHash unchanged', { proof: await proofBy('agent'), chain, request: { method: 'tools/call', params: { ...request.params, _meta: { progressToken: 7, 'vendor/x': { a: 1 } } } }, card: attestedCard });
+  await cc('cnf_fused_l3_assurance', 'the three thumbprints fuse: L3 assurance, no diagnostic', { proof: await proofBy('agent', { cnfJkt: agentJkt }), chain, request, card: attestedCard }, { options: { tokenCnfJkt: agentJkt } });
+  await cc('cnf_unfused_l3_minus', 'a proof cnf with no token cnf: L3-minus, with the cnf diagnostic', { proof: await proofBy('agent', { cnfJkt: agentJkt }), chain, request, card: attestedCard });
+  await cc('chain_without_proof_required', 'by default a chain without a proof is refused proof_missing', { chain, request, card: attestedCard });
+  await cc('chain_without_proof_l2', 'a chain without a proof, allowed to go without one: verified, L2, the leaf delegate as the agent', { chain, request, card: attestedCard }, { options: { requireProof: false } });
+  await cc('chain_without_proof_cached_l2', 'a chain without a proof on a cached status read stays L2, fresh false', { chain: [await rootVariant({ invoker: AGENT, id: 'urn:zcap:00000000-0000-4000-8000-00000000f311', statusEntry: entryOf('owner', 3, 'cached') })], request, card: attestedCard }, { options: { requireProof: false } });
+  await cc('chain_without_proof_unattested_l1', 'a chain without a proof and a card with a bare capability: L1', { chain, request, card: cards['one_bare'] }, { options: { requireProof: false } });
+  await cc('chain_without_proof_card_by_seam', 'a chain without a proof reads the leaf delegate\'s card from the seam', { chain, request }, { seams: { resolveCard: 'attested' }, options: { requireProof: false } });
+  await cc('chain_without_proof_broken', 'a chain without a proof is verified in full: a broadened leaf is refused', { chain: [root, await leafVariant({ allowedAction: ['read:orders', 'refund:orders'] })], request, card: attestedCard }, { options: { requireProof: false } });
+  await cc('chain_without_proof_revoked', 'a chain without a proof is checked for revocation: a revoked leaf is refused', { chain: [root, await leafVariant({ statusEntry: entryOf('parent', 9) })], request, card: attestedCard }, { options: { requireProof: false } });
+  await cc('chain_without_proof_card_mismatch', 'a chain without a proof and a card of another DID than the leaf delegate', { chain, request, card: cards['stranger_card'] }, { options: { requireProof: false } });
+  await cc('chain_without_proof_wrong_party', "a chain without a proof whose root issuer is not the card's responsibleParty", { chain, request, card: cards['stranger_responsible'] }, { options: { requireProof: false } });
+  await cc('nothing_presented', 'no proof and no chain is proof_missing even when a proof is optional', { request, card: attestedCard }, { options: { requireProof: false } });
+  await cc('proof_with_chain_optional', 'a proof present is verified in full when a proof is optional: a bad signature is refused', { proof: badSignature(await proofBy('agent')), chain, request, card: attestedCard }, { options: { requireProof: false } });
+
   const environment: FixtureEnvironment = {
     generated_from: 'helix-core scripts/gen-fixtures.ts with @helixid/sdk-js kyaos.verifier (the JavaScript reference)',
     generator: 'pnpm generate:verifier-fixtures',
@@ -479,12 +544,18 @@ export async function buildVerifierFixtures(): Promise<{ environment: FixtureEnv
     status_lists: lists,
     cards,
   };
-  return { environment, files };
+  const { 'request-proof': requestProof, ...verifierFiles } = files;
+  return { environment, files: verifierFiles, requestProof: requestProof! };
+}
+
+/** The text of fixtures/kya-os-helix/request-proof.json (story C-C): its cases, on the F-2 environment. */
+export function requestProofFile(environment: FixtureEnvironment, cases: FixtureCase[]): string {
+  return `${JSON.stringify({ generated_from: environment.generated_from, environment: 'fixtures/verifier/environment.json', cases }, null, 2)}\n`;
 }
 
 const isMain = process.argv[1] !== undefined && fileURLToPath(import.meta.url) === process.argv[1];
 if (isMain) {
-  const { environment, files } = await buildVerifierFixtures();
+  const { environment, files, requestProof } = await buildVerifierFixtures();
   const dir = fileURLToPath(new URL('../fixtures/verifier/', import.meta.url));
   mkdirSync(dir, { recursive: true });
   writeFileSync(`${dir}environment.json`, `${JSON.stringify(environment, null, 2)}\n`);
@@ -494,4 +565,8 @@ if (isMain) {
     total += cases.length;
   }
   console.log(`fixtures/verifier: environment.json and ${Object.keys(files).length} case files, ${total} cases`);
+  // Story C-C: beside the F-2 set, on the same environment (fixtures/verifier/environment.json).
+  const helixDir = fileURLToPath(new URL('../fixtures/kya-os-helix/', import.meta.url));
+  writeFileSync(`${helixDir}request-proof.json`, requestProofFile(environment, requestProof));
+  console.log(`fixtures/kya-os-helix/request-proof.json: ${requestProof.length} cases`);
 }
