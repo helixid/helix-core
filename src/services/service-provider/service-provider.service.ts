@@ -28,6 +28,9 @@ import {
   findScopeProblem,
   normalizeScopes,
   parseScopes,
+  CAPABILITY_ATTESTATION_TYPE,
+  IDENTITY_CREDENTIAL_TYPE,
+  attestedCapabilities,
   jsonDigest,
   publicDid,
   type AuditEventInput,
@@ -92,7 +95,7 @@ export interface IServiceProviderService {
   getAgentScopes(agentDid: string): Promise<AgentScopesResult>;
 }
 
-/** The scopes an agent holds as itself, which bound what any consent to it may grant. */
+/** The scopes an agent is attested for (story F-1), which bound what any consent to it may grant. */
 export interface AgentScopesResult {
   agentDid: string;
   scopes: string[];
@@ -224,9 +227,10 @@ export class ServiceProviderService implements IServiceProviderService {
       throw new ServiceKeyNotFoundError(input.serviceDid);
     }
 
-    // The delegatee must be an onboarded agent with an active credential of
-    // its own, and the grant may only carry scopes that credential holds:
-    // consent cannot hand an agent authority it was never onboarded with.
+    // The delegatee must be an onboarded agent with an active identity
+    // credential, and the grant may only carry scopes it holds an active
+    // capability attestation for: consent cannot hand an agent authority it
+    // is not attested for.
     const { scopes: agentScopes } = await this.getAgentScopes(input.agentDid);
     const scopes = normalizeScopes(input.scopes);
     const held = new Set(agentScopes);
@@ -264,36 +268,31 @@ export class ServiceProviderService implements IServiceProviderService {
   }
 
   /**
-   * The agent's own scopes: the union over its active, non-delegated
-   * HelixAgentCredentials. Credentials delegated to it are left out, since
-   * those are authority held on another agent's behalf, which that agent can
-   * withdraw; consent given to this agent directly must not rest on them.
+   * The agent's scopes (story F-1): the capabilities named by its active
+   * CapabilityAttestationCredentials, Helix-issued at onboarding or
+   * owner-signed and registered since, each once in issuance order. The agent
+   * must also hold an active AgentIdentityCredential: a grant to an agent
+   * whose identity is revoked or expired could never be honoured. "Active"
+   * is per the database (not revoked, not expired).
    */
   async getAgentScopes(agentDid: string): Promise<AgentScopesResult> {
     if (typeof agentDid !== 'string' || !agentDid.startsWith('did:')) {
       throw new HelixError(ErrorCode.VALIDATION_ERROR, 'agentDid must be a DID', 400);
     }
-    // An agent this server onboarded (so holds a key for). Only such an
-    // agent can ever present a grant, since presenting means the server
-    // signing a VP with that key.
+    // An agent this server onboarded, so holds a key for.
     const agentKey = await this.didKeyRepository.findByDid(agentDid);
     if (!agentKey || agentKey.subjectType !== 'agent') {
       throw new DelegateeNotAnAgentError(agentDid);
     }
-    // ...and that still holds an active credential of its own per the DB: a
-    // grant to a revoked or expired agent could never be presented anyway.
-    const agentVCs = await this.vcService.listActiveBySubjectDid(agentDid, 'HelixAgentCredential');
-    const ownVCs = agentVCs.filter(
-      (vc) => !(vc.credentialSubject as { delegatedFrom?: unknown }).delegatedFrom,
-    );
-    if (ownVCs.length === 0) {
+    const identities = await this.vcService.listActiveBySubjectDid(agentDid, IDENTITY_CREDENTIAL_TYPE);
+    if (identities.length === 0) {
       throw new AgentActiveCredentialNotFoundError(agentDid);
     }
-    const scopes = new Set<string>();
-    for (const vc of ownVCs) {
-      const held = (vc.credentialSubject as { privilegeScopes?: unknown }).privilegeScopes;
-      if (Array.isArray(held)) for (const scope of held) if (typeof scope === 'string') scopes.add(scope);
-    }
-    return { agentDid, scopes: [...scopes] };
+    const attestations = await this.vcService.listActiveBySubjectDid(agentDid, CAPABILITY_ATTESTATION_TYPE);
+    const named = attestations.filter(
+      (vc): vc is { credentialSubject: { capability: string } } & Record<string, unknown> =>
+        typeof (vc['credentialSubject'] as { capability?: unknown } | undefined)?.capability === 'string',
+    );
+    return { agentDid, scopes: attestedCapabilities(named) };
   }
 }

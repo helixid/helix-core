@@ -39,9 +39,10 @@ export interface IKeyCustody {
   /**
    * Decrypts, hands the plaintext private key hex to `use` for the duration
    * of that one call, and returns its result — for callers that need more
-   * than a raw `sign()` (e.g. VPBuilder.sign(), which needs the key plus a
-   * verificationMethodId to construct a whole signed VP). The plaintext key
-   * only ever exists inside `use`'s stack frame; the caller never holds it.
+   * than a raw `sign()` (e.g. CustodySigner, which signs the Data Integrity
+   * proof of a credential or delegation hop for a Helix-held key, or a
+   * service signing a DelegationGrantCredential). The plaintext key only
+   * ever exists inside `use`'s stack frame; the caller never holds it.
    */
   signWith<T>(encrypted: EncryptedKeyMaterial, use: (privateKeyHex: string) => T | Promise<T>): Promise<T>;
 }

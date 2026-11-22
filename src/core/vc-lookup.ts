@@ -46,8 +46,9 @@ export function vcLookupColumns(vc: unknown): VcLookupColumns {
   const record = asRecord(vc);
   const types = asStringArray(record['type']) ?? [];
   const subject = asRecord(record['credentialSubject']);
-  // A grant names its scopes `scopes`; agent credentials use `privilegeScopes`.
-  const scopes = asStringArray(subject['scopes']) ?? asStringArray(subject['privilegeScopes']);
+  // A grant names its scopes `scopes`. Other credentials carry no scope set
+  // here: an attestation names one capability, an identity none.
+  const scopes = asStringArray(subject['scopes']);
   return {
     vcType: types.find((type) => type !== 'VerifiableCredential') ?? null,
     issuerDid: typeof record['issuer'] === 'string' ? record['issuer'] : null,

@@ -47,16 +47,6 @@ export const VCCredentialStatusSchema = z.object({
 });
 
 /**
- * Helix Agent Credential Subject
- */
-export const AgentCredentialSubjectSchema = z.object({
-  id: z.string(), // Agent DID
-  type: z.literal('HelixAgent'),
-  privilegeScopes: z.array(z.string()),
-  agentName: z.string(),
-});
-
-/**
  * Helix User Credential Subject
  */
 export const UserCredentialSubjectSchema = z.object({
@@ -79,18 +69,6 @@ export const VCBaseSchema = z.object({
 });
 
 /**
- * Full Agent VC Schema
- */
-export const AgentVCSchema = VCBaseSchema.extend({
-  type: z.array(z.string()).superRefine((val, ctx) => {
-    if (!val.includes('VerifiableCredential') || !val.includes('HelixAgentCredential')) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Invalid Agent VC types' });
-    }
-  }),
-  credentialSubject: AgentCredentialSubjectSchema,
-});
-
-/**
  * Full User VC Schema
  */
 export const UserVCSchema = VCBaseSchema.extend({
@@ -102,9 +80,13 @@ export const UserVCSchema = VCBaseSchema.extend({
   credentialSubject: UserCredentialSubjectSchema,
 });
 
-export type AgentVC = z.infer<typeof AgentVCSchema>;
 export type UserVC = z.infer<typeof UserVCSchema>;
-export type HelixVC = AgentVC | UserVC | DelegationGrantVC;
+/**
+ * What the VC service signs and stores in the legacy envelope: user
+ * credentials and service-issued grants. Agents hold an AgentIdentityCredential
+ * and CapabilityAttestationCredentials instead (story F-1, src/core/credentials).
+ */
+export type HelixVC = UserVC | DelegationGrantVC;
 
 export type SignedVC<T extends HelixVC = HelixVC> = T & {
   proof: VCProof;
