@@ -324,6 +324,45 @@ describe('CredentialService', () => {
       expect((await service.listAgentCredentials(childDid)).identity).toMatchObject({ vcId: second.id, status: 'active' });
     });
   });
+  describe('audit (KYA-OS A-1)', () => {
+    function withTrail(trail: { record: (input: unknown) => Promise<unknown> }) {
+      return new CredentialService(
+        vcRepo,
+        statusStore as unknown as CredentialStatusStore,
+        didService as unknown as ConstructorParameters<typeof CredentialService>[2],
+        helixSigner,
+        keyRepo,
+        custody,
+        trail as unknown as ConstructorParameters<typeof CredentialService>[6],
+      );
+    }
+
+    it('never fails an issuance because the event could not be recorded, rejected or thrown', async () => {
+      const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+      try {
+        const rejecting = withTrail({ record: async () => { throw new Error('sink down'); } });
+        expect((await rejecting.issueIdentity({ agentDid: childDid, name: 'a', ownerDid }, 'req-r')).id).toMatch(/^urn:uuid:/);
+        const throwing = withTrail({ record: () => { throw 'not an error'; } });
+        expect((await throwing.issueIdentity({ agentDid: childDid, name: 'b', ownerDid }, 'req-t')).id).toMatch(/^urn:uuid:/);
+        await vi.waitFor(() => expect(errors).toHaveBeenCalledWith('AUDIT_RECORD_FAILED', 'sink down'));
+        expect(errors).toHaveBeenCalledWith('AUDIT_RECORD_FAILED', 'not an error');
+      } finally {
+        errors.mockRestore();
+      }
+    });
+
+    it('names no party that is not a DID, and a credential that shows no id as unknown, with no digest', async () => {
+      const unsigned = { issuer: 'not a did' };
+      (service as unknown as { auditIssued(c: unknown, s: string, n: string, r: string): void }).auditIssued(unsigned, 'not a did either', 'issued', 'req-u');
+      await audit.flush();
+      const [event] = audit.ofType('delegation.issued');
+      expect(event).toBeDefined();
+      expect(event).not.toHaveProperty('actor');
+      expect(event).not.toHaveProperty('resource');
+      expect(event!.authorization).not.toHaveProperty('delegationCredentialDigest');
+      expect(event!.details).toMatchObject({ delegationRef: 'unknown' });
+    });
+  });
 });
 
 describe('CustodySigner', () => {

@@ -30,7 +30,7 @@ import {
   buildIdentityCredential,
   credentialDigest,
   delegationRef,
-  delegationReference,
+  UNKNOWN_DELEGATION_REF,
   evaluateDelegationChain,
   publicDid,
   resolveDID as resolveDIDCore,
@@ -183,7 +183,7 @@ export class CredentialService {
    */
   private auditIssued(credential: unknown, subjectDid: string, name: 'issued' | 'registered' | 'renewed', requestId: string, parentRef?: string): void {
     const record = credential as Record<string, unknown>;
-    const ref = delegationRef(credential) ?? delegationReference(String(record['id']));
+    const ref = delegationRef(credential) ?? UNKNOWN_DELEGATION_REF;
     const digest = credentialDigest(credential);
     const actor = didRef(record['issuer']);
     const resource = didRef(subjectDid);
