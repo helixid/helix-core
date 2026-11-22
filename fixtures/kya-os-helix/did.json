@@ -71,14 +71,6 @@
           "did:key:z6Mkr9XVJHgr8os96FL5UUrkdS226nfM3RuAMsqxKk1BJ8N2#z6Mkr9XVJHgr8os96FL5UUrkdS226nfM3RuAMsqxKk1BJ8N2"
         ]
       },
-      "registration_body": {
-        "publicKeyJwk": {
-          "kty": "OKP",
-          "crv": "Ed25519",
-          "x": "rcFAEfgtHFbZVqpPnXPYhYNhpgYEhSXg0Ixjjcdd2Mc"
-        },
-        "kid": "key-1"
-      },
       "resolved": {
         "raw_key_hex": "adc14011f82d1c56d956aa4f9d73d8858361a606048525e0d08c638dc75dd8c7",
         "jwk": {
@@ -157,14 +149,6 @@
         "assertionMethod": [
           "did:key:z6MkrfWUyG88gWr5RJPWgc3X74LNEkpQw5HBD5B2X51LDdZx#z6MkrfWUyG88gWr5RJPWgc3X74LNEkpQw5HBD5B2X51LDdZx"
         ]
-      },
-      "registration_body": {
-        "publicKeyJwk": {
-          "kty": "OKP",
-          "crv": "Ed25519",
-          "x": "tW-JlikW6kScVt6Eeu8cnFsAJ7sCDKdRY6s8ZIlke5c"
-        },
-        "kid": "kya-os-2026"
       },
       "resolved": {
         "raw_key_hex": "b56f89962916ea449c56de847aef1c9c5b0027bb020ca75163ab3c6489647b97",

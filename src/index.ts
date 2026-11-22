@@ -121,8 +121,6 @@ export { default as vcRoutes, type VcRouteOptions } from './routes/vc/index.js';
 export { default as statusListRoutes } from './routes/status-list/index.js';
 export { default as vpRoutes } from './routes/vp/index.js';
 export { default as agentRoutes } from './routes/agent/index.js';
-export { default as agentKeyRoutes, readRegisterAgentKeyBody, AGENT_KEY_UPDATE_TYPE } from './routes/agent-keys/index.js';
-export type { AgentKeyRouteOptions, RegisterAgentKeyBody, RegisterAgentKeyResult } from './routes/agent-keys/index.js';
 export { default as entityCardRoutes, hostedUrls } from './routes/entity-card/index.js';
 export type { EntityCardRouteOptions, EntityCardSource, EntityCardRecord } from './routes/entity-card/index.js';
 export { createEntityCardSource, assertionKeyOf } from './services/entity-card/entity-card.source.js';
