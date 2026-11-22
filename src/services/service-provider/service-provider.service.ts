@@ -28,10 +28,13 @@ import {
   findScopeProblem,
   normalizeScopes,
   parseScopes,
-  AuditEvents,
+  jsonDigest,
+  publicDid,
+  type AuditEventInput,
+  type AuditTrail,
+  type Digest,
   type SignedVC,
 } from '../../core/index.js';
-import type { IAuditLogger } from '../../core/audit/index.js';
 import type { DidKeyRepository } from '../../repositories/did-key.repository.js';
 import type { ServiceRecord, ServiceRepository } from '../../repositories/service.repository.js';
 import type { IDIDService } from '../did/IDIDService.js';
@@ -103,6 +106,10 @@ export function generateServiceId(): string {
   return `svc:${randomBytes(6).toString('hex')}`;
 }
 
+function reportAuditFailure(error: unknown): void {
+  console.error('AUDIT_RECORD_FAILED', error instanceof Error ? error.message : String(error));
+}
+
 export class ServiceProviderService implements IServiceProviderService {
   constructor(
     private readonly didService: Pick<IDIDService, 'createDID'>,
@@ -110,8 +117,17 @@ export class ServiceProviderService implements IServiceProviderService {
     private readonly serviceRepository: ServiceRepository,
     private readonly didKeyRepository: DidKeyRepository,
     private readonly keyCustody: IKeyCustody,
-    private readonly auditLogger: IAuditLogger,
+    private readonly auditTrail: AuditTrail,
   ) {}
+
+  /** Records one typed audit event; a failure to record never breaks the request. */
+  private audit(input: AuditEventInput): void {
+    try {
+      this.auditTrail.record(input).catch(reportAuditFailure);
+    } catch (error) {
+      reportAuditFailure(error);
+    }
+  }
 
   async enroll(input: EnrollServiceInput, requestId: string): Promise<ServiceRecord> {
     const name = input.name?.trim();
@@ -142,11 +158,17 @@ export class ServiceProviderService implements IServiceProviderService {
       framework: input.framework?.trim() || null,
     });
 
-    this.auditLogger.log(AuditEvents.SERVICE_ENROLLED, {
-      requestId,
-      serviceId: record.id,
-      serviceDid: created.did,
-      serviceName: name,
+    this.audit({
+      eventType: 'configuration.changed',
+      action: { category: 'service', name: 'enrolled' },
+      outcome: 'succeeded',
+      correlationId: requestId,
+      resource: publicDid(created.did),
+      details: {
+        family: 'key',
+        phase: 'configuration_changed',
+        configurationDigest: jsonDigest({ serviceId: record.id, serviceDid: created.did }) as Digest,
+      },
     });
 
     return record;

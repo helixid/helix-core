@@ -20,11 +20,10 @@ import {
 } from './core/index.js';
 
 import { errorHandler } from './middleware/errorHandler.js';
-import { ApiAuditLogger } from './audit/index.js';
+import { createApiAudit, createApiAuditStore } from './audit/index.js';
 import { createHederaClient } from './hedera/createHederaClient.js';
 import { DidRepository } from './repositories/did.repository.js';
 import { VcRepository } from './repositories/vc.repository.js';
-import { AuditLogRepository } from './repositories/audit-log.repository.js';
 import { AgentRepository } from './repositories/agent.repository.js';
 import { DidKeyRepository } from './repositories/did-key.repository.js';
 import { ServiceRepository } from './repositories/service.repository.js';
@@ -83,10 +82,10 @@ const redis: RedisLike | null =
     ? new Redis(config.REDIS_URL)
     : null;
 
-const auditLogger = new ApiAuditLogger(prisma, config, sqlite);
+const auditStore = createApiAuditStore({ prisma, sqlite });
+const { trail: auditTrail } = createApiAudit(config, auditStore);
 const didRepository = new DidRepository(prisma, sqlite);
 const vcRepository = new VcRepository(prisma, sqlite);
-const auditLogRepository = new AuditLogRepository(prisma, sqlite);
 const agentRepository = new AgentRepository(prisma, sqlite);
 const didKeyRepository = new DidKeyRepository(prisma, sqlite);
 const serviceRepository = new ServiceRepository(prisma, sqlite);
@@ -102,7 +101,7 @@ const jwtSessionKeyPair = generateKeyPair();
 const didService = new DIDService(
   didRepository,
   hederaClient,
-  auditLogger,
+  auditTrail,
   didCache,
   config.DID_CACHE_L1_TTL_SECONDS,
   didMethod,
@@ -111,7 +110,7 @@ const didService = new DIDService(
 const vcService = new VCService(
   vcRepository,
   didService,
-  auditLogger,
+  auditTrail,
   config.HELIX_SIGNING_KEY,
   config.HELIX_ISSUER_DID,
   config.API_BASE_URL,
@@ -135,13 +134,13 @@ const credentialService = new CredentialService(
   new EnvSigner({ did: config.HELIX_ISSUER_DID }),
   didKeyRepository,
   keyCustody,
-  auditLogger,
+  auditTrail,
 );
 const agentService = new AgentService(
   agentRepository,
   didService,
   vcService,
-  auditLogger,
+  auditTrail,
   didKeyRepository,
   keyCustody,
   credentialService,
@@ -154,7 +153,7 @@ const serviceProviderService = new ServiceProviderService(
   serviceRepository,
   didKeyRepository,
   keyCustody,
-  auditLogger,
+  auditTrail,
 );
 
 const app = Fastify({
@@ -260,8 +259,7 @@ await app.register(sessionRoutes, {
 });
 await app.register(auditLogRoutes, {
   prefix: '/v1/audit-log',
-  auditLogRepository,
-  auditLogger,
+  auditStore,
   adminApiKey: config.HELIX_ADMIN_API_KEY,
 });
 await app.register(agentRoutes, {
