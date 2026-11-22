@@ -150,6 +150,35 @@ describe('custody routes', () => {
     expect(bad.json()).toMatchObject({ error: { code: 'CUSTODY_CHOICE_INVALID' } });
   });
 
+  it('POST /v1/agents with an enrollmentToken goes unchanged to story F-1 token onboarding, without the custody authorization', async () => {
+    const onboardWithCustody = vi.fn(async () => ({ agentDid: 'did:web:h:agents:t', vcId: 'vc:1', identity: { id: 'vc:1' }, attestations: [{ id: 'att:1' }] }));
+    const { enrollmentOnboardingHandler } = await import('../../../src/routes/agent/index.js');
+    const a = await app({ enrollmentOnboarding: enrollmentOnboardingHandler({ onboardWithCustody } as never) });
+    const onboarded = await post(a, '/v1/agents', { enrollmentToken: 'tok', domains: ['orders.example'], ownerDid: 'did:web:owner.example' }, {});
+    expect(onboarded.statusCode, onboarded.body).toBe(201);
+    expect(onboarded.json()).toEqual({ agentDid: 'did:web:h:agents:t', identity: { id: 'vc:1' }, attestations: [{ id: 'att:1' }] });
+    expect(onboardWithCustody).toHaveBeenCalledWith({ enrollmentToken: 'tok', domains: ['orders.example'], ownerDid: 'did:web:owner.example' }, expect.any(String));
+    // A custody create still needs the admin key, and never reaches the token onboarding.
+    expect((await post(a, '/v1/agents', { name: 'NoKey', keyCustody: 'helix' }, {})).statusCode).toBe(403);
+    expect((await post(a, '/v1/agents', { name: 'Custodial', keyCustody: 'helix' })).statusCode).toBe(201);
+    expect(onboardWithCustody).toHaveBeenCalledTimes(1);
+    // Without the handler, an enrollmentToken body is a custody create like any other (and needs a name).
+    const plain = await app();
+    expect((await post(plain, '/v1/agents', { enrollmentToken: 'tok' })).statusCode).toBe(400);
+  });
+
+  it('the agent routes register POST /agents only when the custody routes do not own it', async () => {
+    const { default: agentRoutes } = await import('../../../src/routes/agent/index.js');
+    for (const [createAgentRoute, expected] of [[false, 404], [undefined, 201]] as const) {
+      const instance = Fastify({ logger: false });
+      const agentService = { onboardWithCustody: vi.fn(async () => ({ agentDid: 'd', vcId: 'v', identity: {}, attestations: [] })) };
+      await instance.register(agentRoutes, { prefix: '/v1', agentService: agentService as never, ...(createAgentRoute === undefined ? {} : { createAgentRoute }) });
+      const res = await instance.inject({ method: 'POST', url: '/v1/agents', payload: { enrollmentToken: 'tok' } });
+      expect(res.statusCode, String(createAgentRoute)).toBe(expected);
+      await instance.close();
+    }
+  });
+
   it('POST /v1/agents takes requestedDomains and maxDelegationDepth and refuses bad values', async () => {
     const a = await app();
     const created = await post(a, '/v1/agents', { name: 'Router', scopes: ['read:orders'], keyCustody: 'helix', requestedDomains: ['orders.example'], maxDelegationDepth: 3 });
