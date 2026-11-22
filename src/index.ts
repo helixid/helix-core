@@ -141,6 +141,8 @@ export { default as revocationRoutes } from './routes/revocations/index.js';
 export { default as eventRoutes } from './routes/events/index.js';
 export type { VerifyRouteOptions } from './routes/verify/index.js';
 export { default as agentRoutes } from './routes/agent/index.js';
+export { default as agentKeyRoutes, readRegisterAgentKeyBody, AGENT_KEY_UPDATE_TYPE } from './routes/agent-keys/index.js';
+export type { AgentKeyRouteOptions, RegisterAgentKeyBody, RegisterAgentKeyResult } from './routes/agent-keys/index.js';
 export { default as auditLogRoutes } from './routes/audit-log/index.js';
 export { default as sessionRoutes } from './routes/sessions/index.js';
 export { default as serviceProviderRoutes } from './routes/service-provider/index.js';
