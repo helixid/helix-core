@@ -174,6 +174,11 @@ const custodyService = new CustodyService({
   didCache,
 });
 
+// Agents and services created through the custody routes sign VPs,
+// delegations and consent grants through the KeyStore.
+agentService.attachCustodialKeys(custodyService);
+serviceProviderService.attachCustodialKeys(custodyService);
+
 const app = Fastify({
   logger: {
     level: config.NODE_ENV === 'production' ? 'info' : 'debug',

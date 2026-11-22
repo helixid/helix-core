@@ -65,6 +65,7 @@ import {
   findScopeProblem,
   getOutboundFetch,
   isConformantCustody,
+  KeyStoreSigner,
   isCustodySubjectType,
   isKeyCustodyMode,
   parseDidWeb,
@@ -91,6 +92,7 @@ import {
   type OutboundFetch,
   type PublicKeyJwk,
   type ConformanceSubject,
+  type Signer,
 } from '../../core/index.js';
 import type { IAuditLogger } from '../../core/audit/index.js';
 import type {
@@ -107,6 +109,7 @@ import { generateServiceId } from '../service-provider/service-provider.service.
 import { hostedUrls } from '../../routes/entity-card/index.js';
 import { CustodyAudit, type CustodyActor } from './custody-audit.js';
 import { pendingHopReissuer, type HopReissueResult, type HopReissuer } from './hop-reissue.js';
+import type { CustodialKeys, CustodialSigningUse } from './custodial-keys.js';
 
 export const DEFAULT_ENROLLMENT_TTL_SECONDS = 24 * 60 * 60;
 export const DEFAULT_ROTATION_OVERLAP_SECONDS = 24 * 60 * 60;
@@ -377,7 +380,7 @@ function nextFragment(keys: CustodyKeyRow[]): { fragment: string; sequence: numb
   return { fragment: `key-${sequence}`, sequence };
 }
 
-export class CustodyService {
+export class CustodyService implements CustodialKeys {
   private readonly audit: CustodyAudit;
   private readonly hopReissuer: HopReissuer;
   private readonly clock: () => Date;
@@ -738,6 +741,33 @@ export class CustodyService {
     }));
   }
 
+  /**
+   * The KeyStore signer of an active custodial agent or service, for the
+   * pre-KYA-OS signing paths (VP signing, delegation, consent grants): only
+   * a `keyCustody: helix` subject has one; a self-custody key never reaches Helix.
+   */
+  async signerFor(did: string, subjectType: 'agent' | 'service', use: CustodialSigningUse): Promise<Signer | undefined> {
+    const record = await this.options.records.findRecord(did);
+    if (!record || record.subjectType !== subjectType || record.keyCustody !== 'helix' || record.status !== 'active' || !record.kid) return undefined;
+    const signer = new KeyStoreSigner(this.options.keyStore, did, record.kid);
+    const kid = signer.verificationMethodId;
+    return {
+      did,
+      kid: signer.kid,
+      sign: async (payload: Uint8Array): Promise<Uint8Array> => {
+        const signature = await signer.sign(payload);
+        this.audit.signature({ requestId: use.requestId, actor: `custodial-${use.purpose}`, subjectType, did, kid, payload });
+        return signature;
+      },
+    };
+  }
+
+  /** Whether `did` is an active agent created through the custody routes, whoever holds its key. */
+  async isActiveAgent(did: string): Promise<boolean> {
+    const record = await this.options.records.findRecord(did);
+    return record?.subjectType === 'agent' && record.status === 'active';
+  }
+
   /** Card details for story C-A's entity-card source: the name Helix recorded for the subject. */
   async cardDetails(did: string): Promise<{ name: string } | undefined> {
     const record = await this.options.records.findRecord(did);
@@ -895,6 +925,10 @@ export class CustodyService {
       kid: record.kid!,
       resolution,
     });
+    if (record.subjectType === 'agent') {
+      // The same enrollment event the agent service logs when an agent is onboarded.
+      this.audit.agentOnboarded({ requestId: context.requestId, agentDid: record.did, agentName: record.name ?? record.did, keyCustody: record.keyCustody, didHosting: record.didHosting });
+    }
     return { ...(await this.view(active)), ...(vcId ? { vcId } : {}) };
   }
 

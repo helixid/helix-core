@@ -1,6 +1,8 @@
 import { createHash, randomBytes } from 'node:crypto';
 import {
   buildDelegationVC,
+  proofKeyOf,
+  verificationMethodOfKey,
   AgentAlreadyOnboardedError,
   AgentActiveCredentialNotFoundError,
   AgentKeyNotFoundError,
@@ -26,7 +28,9 @@ import {
   type IAuditLogger,
   type SignedVC,
   type SignedVP,
+  type SigningKeyMaterial,
 } from '../../core/index.js';
+import type { CustodialKeys } from '../custody/custodial-keys.js';
 import type { AgentRepository } from '../../repositories/agent.repository.js';
 import type { DidKeyRepository } from '../../repositories/did-key.repository.js';
 import type { IDIDService } from '../did/IDIDService.js';
@@ -101,7 +105,12 @@ function extractPublicKeyHex(doc: Awaited<ReturnType<IDIDService['resolveDID']>>
   throw new ChallengeSignatureInvalidError();
 }
 
+/** Runs `use` with an agent's signing key, wherever Helix holds it; the plaintext of a did_keys key lives only inside that call. */
+type AgentKeyUse = <T>(use: (key: SigningKeyMaterial) => T | Promise<T>) => Promise<T>;
+
 export class AgentService implements IAgentService {
+  private custodialKeys: CustodialKeys | undefined;
+
   constructor(
     private readonly repository: AgentRepository,
     private readonly didService: IDIDService,
@@ -112,6 +121,40 @@ export class AgentService implements IAgentService {
     private readonly enrollmentTokenTtlSeconds = 900,
     private readonly challengeTtlSeconds = 300,
   ) {}
+
+  /**
+   * KYA-OS story F-3: agents created through POST /v1/agents keep their key
+   * in the KeyStore, not in did_keys. With this attached, VP signing and
+   * delegation sign for them through a KeyStoreSigner (stories rule 8), and
+   * the delegatee check accepts them as onboarded agents.
+   */
+  attachCustodialKeys(keys: CustodialKeys): void {
+    this.custodialKeys = keys;
+  }
+
+  /**
+   * The agent's signing key: its did_keys key (agents onboarded before F-3),
+   * else its KeyStore key (custodial agents created through POST /v1/agents),
+   * else AGENT_KEY_NOT_FOUND. Never both: each agent's key lives in one place.
+   */
+  private async agentKey(did: string, requestId: string, purpose: 'vp' | 'delegation'): Promise<AgentKeyUse> {
+    const record = await this.agentKeyRepository.findByDid(did);
+    if (record) {
+      return (use) => this.keyCustody.signWith(record, (privateKeyHex) => use({ did, privateKeyHex }));
+    }
+    const signer = await this.custodialKeys?.signerFor(did, 'agent', { requestId, purpose });
+    if (signer) {
+      return async (use) => use({ did, signer });
+    }
+    throw new AgentKeyNotFoundError(did);
+  }
+
+  /** Whether `did` is an agent this server onboarded: a did_keys agent, or an active agent created through the custody routes. */
+  private async isOnboardedAgent(did: string): Promise<boolean> {
+    const record = await this.agentKeyRepository.findByDid(did);
+    if (record) return record.subjectType === 'agent';
+    return (await this.custodialKeys?.isActiveAgent(did)) ?? false;
+  }
 
   async generateEnrollmentToken(
     input: {
@@ -244,10 +287,7 @@ export class AgentService implements IAgentService {
       throw new HelixError(ErrorCode.VALIDATION_ERROR, 'targetService must be the service DID', 400);
     }
 
-    const keyRecord = await this.agentKeyRepository.findByDid(input.did);
-    if (!keyRecord) {
-      throw new AgentKeyNotFoundError(input.did);
-    }
+    const withKey = await this.agentKey(input.did, requestId, 'vp');
 
     const agentVCs = (await this.vcService.listActiveBySubjectDid(input.did, 'HelixAgentCredential')) as SignedVC[];
     if (agentVCs.length === 0) {
@@ -275,13 +315,13 @@ export class AgentService implements IAgentService {
     }
 
     const credentials = [...agentCredentials, ...grants];
-    const signedVP = await this.keyCustody.signWith(keyRecord, (privateKeyHex) =>
+    const signedVP = await withKey((key) =>
       new VPBuilder({
         credentials,
         holderDid: input.did,
         ...(input.userDid ? { userDid: input.userDid } : {}),
         targetService: input.targetService,
-      }).sign(privateKeyHex, `${input.did}#key-1`),
+      }).sign(proofKeyOf(key), verificationMethodOfKey(key)),
     );
 
     this.auditLogger.log(AuditEvents.AGENT_VP_SIGNED, {
@@ -362,10 +402,7 @@ export class AgentService implements IAgentService {
     requestId: string,
     options: DelegateAuthorityOptions = {},
   ): Promise<DelegateAuthorityResult> {
-    const keyRecord = await this.agentKeyRepository.findByDid(input.did);
-    if (!keyRecord) {
-      throw new AgentKeyNotFoundError(input.did);
-    }
+    const withKey = await this.agentKey(input.did, requestId, 'delegation');
 
     const fromVC = input.vcId
       ? await this.vcService.findActiveByVcIdForSubject(input.vcId, input.did, 'HelixAgentCredential')
@@ -378,9 +415,8 @@ export class AgentService implements IAgentService {
     // active -- the same rule a consent grant's delegatee follows. Checked
     // before anything is signed, so delegating to an unknown DID is refused
     // here rather than tripping the Vc -> Did foreign key on store.
-    const delegateeKey = await this.agentKeyRepository.findByDid(input.to);
     const delegateeActive =
-      delegateeKey?.subjectType === 'agent' &&
+      (await this.isOnboardedAgent(input.to)) &&
       (await this.vcService.listActiveBySubjectDid(input.to, 'HelixAgentCredential')).length > 0;
     if (!delegateeActive) {
       throw new DelegateeNotAnAgentError(input.to);
@@ -404,10 +440,10 @@ export class AgentService implements IAgentService {
     // buildDelegationVC() does the scope-subset and max-depth checks and
     // signs with the custody-held key, all in-process -- there is no
     // prepare/finalize round trip because nobody outside holds a key.
-    const delegatedVC = await this.keyCustody.signWith(keyRecord, (privateKeyHex) =>
+    const delegatedVC = await withKey((key) =>
       buildDelegationVC(
         { to: input.to, scopes: input.scopes, expiresIn: input.expiresIn, fromVC: fromVC as SignedVC, credentialStatus },
-        { did: input.did, privateKeyHex },
+        key,
       ),
     );
 

@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { createEd25519Proof } from './proof.js';
+import { createEd25519Proof, proofKeyOf, verificationMethodOfKey, type SigningKeyMaterial } from './proof.js';
 import {
   MaxDelegationDepthExceededError,
   ScopeEscalationDeniedError,
@@ -58,7 +58,7 @@ function assertSubset(parentScopes: string[], childScopes: string[]): void {
 
 export async function buildDelegationVC(
   options: DelegateOptions,
-  wallet: { did: string; privateKeyHex: string },
+  wallet: SigningKeyMaterial,
 ): Promise<SignedVC> {
   if (options.to === wallet.did) {
     throw new SelfDelegationNotAllowedError(wallet.did);
@@ -99,6 +99,6 @@ export async function buildDelegationVC(
 
   return {
     ...payload,
-    proof: await createEd25519Proof(payload, wallet.privateKeyHex, `${wallet.did}#key-1`),
+    proof: await createEd25519Proof(payload, proofKeyOf(wallet), verificationMethodOfKey(wallet)),
   };
 }

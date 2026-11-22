@@ -131,6 +131,7 @@ export type { EntityCardSourceOptions, EntityCardDetails } from './services/enti
 export { default as custodyRoutes } from './routes/custody/index.js';
 export type { CustodyAction, CustodyRouteOptions } from './routes/custody/index.js';
 export * from './services/custody/custody.service.js';
+export type { CustodialKeys } from './services/custody/custodial-keys.js';
 export { DbKeyStore, resolveKeyEncryptionKey, DB_KEY_STORE_ALGORITHM } from './services/custody/db-key-store.js';
 export type { DbKeyStoreOptions, WrappedKeyTable, KeyEncryptionKeyConfig } from './services/custody/db-key-store.js';
 export { CustodyAudit, payloadDigest } from './services/custody/custody-audit.js';

@@ -53,6 +53,11 @@ export class CustodyAudit {
     void this.logger.log(AuditEvents.CUSTODY_ACTIVATED, { ...event });
   }
 
+  /** AGENT_ONBOARDED, the enrollment event the agent service logs for an onboarded agent, with the same fields. */
+  agentOnboarded(event: { requestId: string; agentDid: string; agentName: string; keyCustody: KeyCustodyMode; didHosting: DidHostingMode }): void {
+    void this.logger.log(AuditEvents.AGENT_ONBOARDED, { ...event });
+  }
+
   changed(event: Base & {
     from: KeyCustodyMode;
     to: KeyCustodyMode;

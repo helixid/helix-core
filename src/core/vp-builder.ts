@@ -1,5 +1,6 @@
 import { randomBytes, randomUUID } from 'node:crypto';
 import { createEd25519Proof } from './proof.js';
+import type { Signer } from './crypto/signer.js';
 import { VPInvalidStructureError } from './errors/HelixError.js';
 import type { SignedVC } from './schemas/vc.js';
 import type { SignedVP } from './schemas/vp.js';
@@ -61,7 +62,8 @@ export class VPBuilder {
   }
 
   async sign(
-    privateKeyHex: string,
+    /** A raw private key (hex), or a Signer (a Helix KeyStore key, KYA-OS story F-3). */
+    privateKeyHex: string | Signer,
     verificationMethodId: string,
     overrides?: VPBuilderSignOverrides,
   ): Promise<SignedVP> {
