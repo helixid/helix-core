@@ -37,3 +37,5 @@ For `audit-events.json`:
 `tests/unit/core/audit/*.test.ts` and `tests/unit/kya-os/audit-vectors.test.ts` here, helix-sdk-js's
 `tests/unit/audit/*.test.ts`, helix-sdk-py's `tests/test_audit.py`, and the e2e spec
 `tests/suite/kya-os/a-1-audit-events.spec.ts`.
+
+The local verifier's fixtures (story F-2) are next door in `fixtures/verifier/` (see its README).

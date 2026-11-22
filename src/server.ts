@@ -32,7 +32,6 @@ import { createDidCache, createStatusListCache } from './cache/cacheFactory.js';
 import { extractEd25519PublicKeyHexFromDIDDocument } from './services/did/publicKey.js';
 import { DIDService } from './services/did/did.service.js';
 import { VCService } from './services/vc/vc.service.js';
-import { VPService } from './services/vp/vp.service.js';
 import { AgentService } from './services/agent/agent.service.js';
 import { CredentialService } from './services/credentials/credential.service.js';
 import { ServiceProviderService } from './services/service-provider/service-provider.service.js';
@@ -40,7 +39,7 @@ import didRoutes from './routes/did/index.js';
 import didWebRoutes from './routes/did-web/index.js';
 import vcRoutes from './routes/vc/index.js';
 import statusListRoutes from './routes/status-list/index.js';
-import vpRoutes from './routes/vp/index.js';
+import verifyRoutes from './routes/verify/index.js';
 import agentRoutes from './routes/agent/index.js';
 import agentKeyRoutes from './routes/agent-keys/index.js';
 import auditLogRoutes from './routes/audit-log/index.js';
@@ -118,11 +117,6 @@ const vcService = new VCService(
   statusListCache,
   config.STATUS_LIST_CACHE_L1_TTL_SECONDS,
 );
-const vpService = new VPService(vcService, auditTrail, config.API_BASE_URL, {
-  signingKey: jwtSessionKeyPair.privateKey,
-  issuerDid: config.HELIX_ISSUER_DID,
-  ttlSeconds: config.JWT_SESSION_TTL_SECONDS,
-});
 // Agent self-custody has been retired — every agent's private key is now
 // generated and held here, encrypted with this one shared master key. Unset
 // in dev falls back to a random per-process key (fine for local dev; means
@@ -257,7 +251,8 @@ await app.register(statusListRoutes, {
   vcService,
   adminApiKey: config.HELIX_ADMIN_API_KEY,
 });
-await app.register(vpRoutes, { prefix: '/v1/vp', vpService });
+// KYA-OS story F-2: the local verifier over HTTP; /v1/vp/verify is retired. It reads no database.
+await app.register(verifyRoutes, { prefix: '/v1/verify', allowLoopbackHttp: config.NODE_ENV !== 'production' });
 await app.register(sessionRoutes, {
   prefix: '/v1/sessions',
   publicKeyHex: jwtSessionKeyPair.publicKey,

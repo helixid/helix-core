@@ -102,7 +102,7 @@ describe('agent security', () => {
     expect(allLogs.includes(token)).toBe(false);
   });
 
-  it('rejects VP signing for an agent DID that has no server-held key', async () => {
+  it('serves no VP-signing route: the VP path is retired (story F-2)', async () => {
     const { app } = makeApp();
     const vp = await app.inject({
       method: 'POST',
@@ -111,6 +111,5 @@ describe('agent security', () => {
       payload: { targetService: 'did:web:svc.example.com' }
     });
     expect(vp.statusCode).toBe(404);
-    expect(vp.json().error.code).toBe('AGENT_KEY_NOT_FOUND');
   });
 });

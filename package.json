@@ -58,6 +58,7 @@
     "generate:audit-fixtures": "tsx scripts/generate-audit-fixtures.ts",
     "generate:did-fixtures": "tsx scripts/generate-did-fixtures.ts",
     "generate:credential-fixtures": "tsx scripts/generate-credential-fixtures.ts",
+    "generate:verifier-fixtures": "tsx scripts/gen-fixtures.ts",
     "setup": "tsx scripts/setup.ts",
     "setup:hedera": "tsx scripts/setup-hedera.ts",
     "changeset": "changeset",
@@ -68,6 +69,7 @@
     "@fastify/sensible": "^6.0.5",
     "@fastify/swagger": "^9.8.1",
     "@fastify/swagger-ui": "^5.2.6",
+    "@helixid/sdk-js": "link:../helix-sdk-js/helix-sdk-js",
     "@noble/curves": "^1.9.7",
     "@noble/ed25519": "^2.3.0",
     "@noble/hashes": "^1.8.0",
@@ -103,7 +105,6 @@
   "devDependencies": {
     "@changesets/cli": "^3.0.2",
     "@helixid/did-hedera": "^0.1.2",
-    "@helixid/sdk-js": "^0.2.0",
     "@types/better-sqlite3": "^7.6.13",
     "@types/bs58": "^5.0.0",
     "@types/node": "^20.19.43",
