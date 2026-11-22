@@ -21,7 +21,8 @@
 
 import { didWebCardUrl, parseDidWeb } from '../did/web.js';
 import { KYA_OS_CARD_META_KEY, KYA_OS_CARD_REF_KEY } from './resolve.js';
-import { capabilityName, type BitstringStatusListEntry, type EntityCard, type EntityType } from './schema.js';
+import { capabilityName } from '../credentials/card-level.js';
+import type { BitstringStatusListEntry, EntityCard, EntityType } from './schema.js';
 
 export interface EntityCardSummary {
   id: string;

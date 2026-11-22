@@ -10,8 +10,8 @@ import {
   capabilityName,
   parseEntityCard,
   publicKeyBytesToJwk,
+  validateCardJsonSchema as validateJsonSchema,
   validateEntityCard,
-  validateJsonSchema,
 } from '../../../../src/core/index.js';
 
 const VENDORED = fileURLToPath(new URL('../../../../fixtures/kya-os/schemas/kya-os-card.schema.json', import.meta.url));

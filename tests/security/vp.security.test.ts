@@ -18,7 +18,7 @@
 
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import Fastify, { type FastifyInstance } from 'fastify';
-import { buildDelegationVC, type SignedVP } from '../../src/core/index.js';
+import type { SignedVP } from '../../src/core/index.js';
 import { VPService } from '../../src/services/vp/vp.service.js';
 import vpRoutes from '../../src/routes/vp/index.js';
 import { TestAuditLogger } from '../utils/TestAuditLogger.js';
@@ -37,6 +37,7 @@ import {
   signVC,
   stubFetch,
   type Actor,
+  makeLegacyDelegationVC,
 } from '../utils/vp-fixtures.js';
 
 const USER_EMAIL = 'user@example.com';
@@ -102,7 +103,7 @@ describe('POST /v1/vp/verify — grant matrix (§9.4 A1)', () => {
     const spList = makeSpStatusList(sp);
     stubFetch({ [SP_LIST_URL]: spList });
     const parentVC = await makeAgentVC(issuer, parent.did, ['book:flights']);
-    const childVC = await buildDelegationVC(
+    const childVC = await makeLegacyDelegationVC(
       { to: sub.did, scopes: ['book:flights'], expiresIn: 3600, fromVC: parentVC },
       parent,
     );
@@ -388,7 +389,7 @@ describe('POST /v1/vp/verify — grant matrix (§9.4 A1)', () => {
     const spList = makeSpStatusList(sp);
     stubFetch({ [SP_LIST_URL]: spList });
     const parentVC = await makeAgentVC(issuer, parent.did, ['book:flights']);
-    const childVC = await buildDelegationVC(
+    const childVC = await makeLegacyDelegationVC(
       { to: sub.did, scopes: ['book:flights'], expiresIn: 3600, fromVC: parentVC },
       parent,
     );
@@ -409,7 +410,7 @@ describe('POST /v1/vp/verify — grant matrix (§9.4 A1)', () => {
     const spList = makeSpStatusList(sp);
     stubFetch({ [SP_LIST_URL]: spList });
     const parentVC = await makeAgentVC(issuer, parent.did, ['book:flights', 'cancel:flights']);
-    const childVC = await buildDelegationVC(
+    const childVC = await makeLegacyDelegationVC(
       { to: sub.did, scopes: ['book:flights'], expiresIn: 3600, fromVC: parentVC },
       parent,
     );

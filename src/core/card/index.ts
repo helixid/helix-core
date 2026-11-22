@@ -13,4 +13,6 @@ export * from './resolve.js';
 export * from './projection.js';
 export * from './status-list-checker.js';
 export { KYA_OS_CARD_SCHEMA } from './card-schema.js';
-export { validateJsonSchema, type SchemaIssue } from './json-schema-lite.js';
+// Not re-exported as validateJsonSchema: F-1's credentials module owns that name, and its evaluator
+// refuses the card schema's `minimum`. The card's lite evaluator is reached through validateEntityCard.
+export { validateJsonSchema as validateCardJsonSchema, type SchemaIssue } from './json-schema-lite.js';

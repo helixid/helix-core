@@ -20,14 +20,13 @@
 
 import { EntityCardInvalidError } from '../errors/HelixError.js';
 import { KYA_OS_CARD_SCHEMA } from './card-schema.js';
+import type { ConformanceLevel } from '../credentials/card-level.js';
 import { validateJsonSchema, type JsonSchema, type SchemaIssue } from './json-schema-lite.js';
 
 export const PROOF_PROFILE_V1 = 'org.kya-os/proof.v1';
 
 export type EntityType = 'mcp' | 'agent' | 'client' | 'verifier' | 'human';
 export const ENTITY_TYPES: readonly EntityType[] = ['mcp', 'agent', 'client', 'verifier', 'human'];
-
-export type ConformanceLevel = 'L1' | 'L2' | 'L3';
 
 export interface CapabilityAttestationRef {
   vc: string | Record<string, unknown>;
@@ -101,9 +100,4 @@ export function parseEntityCard(value: unknown): EntityCard {
     throw new EntityCardInvalidError(`Entity Card is invalid: ${first.path || '/'} ${first.message}`, { issues });
   }
   return value as EntityCard;
-}
-
-/** The name of a capability, whether declared bare (L1) or with attestations (L2). */
-export function capabilityName(capability: Capability): string {
-  return typeof capability === 'string' ? capability : capability.name;
 }
