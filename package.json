@@ -59,6 +59,8 @@
     "generate:kya-os-helix": "tsx scripts/generate-kya-os-helix-fixtures.ts",
     "generate:jws-fixtures": "tsx scripts/generate-jws-fixtures.ts",
     "generate:audit-fixtures": "tsx scripts/generate-audit-fixtures.ts",
+    "generate:did-fixtures": "tsx scripts/generate-did-fixtures.ts",
+    "generate:credential-fixtures": "tsx scripts/generate-credential-fixtures.ts",
     "audit": "tsx src/cli/audit-bin.ts",
     "audit:verify": "tsx src/cli/audit-bin.ts verify",
     "setup": "tsx scripts/setup.ts",

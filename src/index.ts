@@ -98,8 +98,20 @@ export type {
   OnboardWithCustodyResult,
   SignVPResult,
   UserChallengeVerifyResult,
-  DelegateAuthorityOptions,
 } from './services/agent/IAgentService.js';
+export { CredentialService } from './services/credentials/credential.service.js';
+export type {
+  AgentCredentials,
+  CredentialStatus,
+  CredentialStatusStore,
+  CredentialVcRepository,
+  IssueAttestationsInput,
+  IssueHopInput,
+  IssueIdentityInput,
+  IssueRootHopInput,
+  StoredCredential,
+} from './services/credentials/credential.service.js';
+export { CustodySigner } from './services/credentials/custody-signer.js';
 export { AesGcmKeyCustody } from './services/key-custody/key-custody.js';
 export type { IKeyCustody, EncryptedKeyMaterial } from './services/key-custody/key-custody.js';
 export {
@@ -119,6 +131,8 @@ export { default as vcRoutes, type VcRouteOptions } from './routes/vc/index.js';
 export { default as statusListRoutes } from './routes/status-list/index.js';
 export { default as vpRoutes } from './routes/vp/index.js';
 export { default as agentRoutes } from './routes/agent/index.js';
+export { default as agentKeyRoutes, readRegisterAgentKeyBody, AGENT_KEY_UPDATE_TYPE } from './routes/agent-keys/index.js';
+export type { AgentKeyRouteOptions, RegisterAgentKeyBody, RegisterAgentKeyResult } from './routes/agent-keys/index.js';
 export { default as auditLogRoutes, type AuditLogRouteOptions } from './routes/audit-log/index.js';
 export { default as auditRoutes, requireAuditOperator, type AuditRouteOptions, type AuditSubmissionAuthorizer } from './routes/audit/index.js';
 export { runAuditCli, verifyAuditLedgerExport, type AuditCliIo, type AuditLedgerExport } from './cli/audit.js';

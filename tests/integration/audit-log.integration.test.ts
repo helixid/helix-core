@@ -123,8 +123,9 @@ describe('audit log routes (KYA-OS A-1)', () => {
       ['POST', '/v1/audit-log/evidence'],
       ['GET', '/v1/audit-log/evidence/x'],
     ] as const) {
-      expect((await app.inject({ method, url, payload: method === 'POST' ? {} : undefined })).statusCode, url).toBe(403);
-      expect((await app.inject({ method, url, headers: { 'x-admin-api-key': ['wrong'] }, payload: method === 'POST' ? {} : undefined })).statusCode, url).toBe(403);
+      const body = method === 'POST' ? { payload: {} } : {};
+      expect((await app.inject({ method, url, ...body })).statusCode, url).toBe(403);
+      expect((await app.inject({ method, url, headers: { 'x-admin-api-key': ['wrong'] }, ...body })).statusCode, url).toBe(403);
     }
     const noKey = Fastify({ logger: false });
     noKey.setErrorHandler(errorHandler);

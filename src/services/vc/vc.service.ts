@@ -44,9 +44,6 @@ import { extractEd25519PublicKeyHexFromDIDDocument } from '../did/publicKey.js';
 type CredentialSubject = {
   agentName?: string;
   userId?: string;
-  delegatedFrom?: string;
-  delegationDepth?: number;
-  maxDelegationDepth?: number;
   parentVcId?: string;
 };
 
@@ -76,10 +73,6 @@ export interface IssueVCParams extends ReconcileOptions {
   expiresInSeconds?: number | undefined;
   /** Explicit expiry. `null` issues a VC with no validUntil. Takes precedence over expiresInSeconds. */
   expiresAt?: Date | null | undefined;
-  delegatedFrom?: string | undefined;
-  delegationDepth?: number | undefined;
-  maxDelegationDepth?: number | undefined;
-  parentVcId?: string | undefined;
 }
 
 export interface IssueVCResult extends Partial<ReconcileResult> {
@@ -458,9 +451,6 @@ export class VCService implements IVCService {
       privilegeScopes: subject.privilegeScopes,
       statusListIndex: Number.isInteger(ownIndex) ? ownIndex : 0,
       expiresAt: validUntil ? new Date(validUntil) : null,
-      delegatedFrom: subject.delegatedFrom,
-      delegationDepth: subject.delegationDepth,
-      maxDelegationDepth: subject.maxDelegationDepth,
       parentVcId: subject.parentVcId,
       ...vcLookupColumns(vc),
     });
@@ -673,14 +663,6 @@ export class VCService implements IVCService {
               type: 'HelixAgent',
               privilegeScopes: params.privilegeScopes!,
               agentName: params.agentName!,
-              ...(params.delegatedFrom ? { delegatedFrom: params.delegatedFrom } : {}),
-              ...(params.delegationDepth === undefined
-                ? {}
-                : { delegationDepth: params.delegationDepth }),
-              ...(params.maxDelegationDepth === undefined
-                ? {}
-                : { maxDelegationDepth: params.maxDelegationDepth }),
-              ...(params.parentVcId ? { parentVcId: params.parentVcId } : {}),
             },
           }
         : {
@@ -710,10 +692,6 @@ export class VCService implements IVCService {
       privilegeScopes: params.privilegeScopes,
       statusListIndex: claimedIndex,
       expiresAt,
-      delegatedFrom: params.delegatedFrom,
-      delegationDepth: params.delegationDepth,
-      maxDelegationDepth: params.maxDelegationDepth,
-      parentVcId: params.parentVcId,
       ...vcLookupColumns(signedVc),
     });
 
@@ -723,7 +701,6 @@ export class VCService implements IVCService {
       'issued',
       params.subjectDid,
       delegationRef(signedVc) ?? delegationReference(vcId),
-      typeof params.parentVcId === 'string' ? params.parentVcId : undefined,
     );
 
     const reconciled = await this.reconcileActive(
