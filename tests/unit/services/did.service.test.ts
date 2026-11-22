@@ -1,12 +1,13 @@
 // Copyright 2026 DgVerse LLP
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { DIDService } from '../../../src/services/did/did.service.js';
-import { ErrorCode, HelixError } from '../../../src/core/index.js';
+import { ErrorCode, HelixError, hashJson } from '../../../src/core/index.js';
+import { TestAuditTrail } from '../../utils/TestAuditTrail.js';
 
 describe('DIDService Branch Coverage', () => {
   let repository: any;
   let hedera: any;
-  let audit: any;
+  let audit: TestAuditTrail;
   let service: DIDService;
 
   beforeEach(() => {
@@ -23,7 +24,7 @@ describe('DIDService Branch Coverage', () => {
       prepareDIDCreation: vi.fn(),
       submitDIDCreation: vi.fn(),
     };
-    audit = { log: vi.fn() };
+    audit = new TestAuditTrail();
     service = new DIDService(repository, hedera, audit);
   });
 
@@ -159,10 +160,15 @@ describe('DIDService Branch Coverage', () => {
           updateType: 'add_service_endpoint',
           hederaTransactionId: 'tx-add',
         }));
-        expect(audit.log).toHaveBeenCalledWith(expect.objectContaining({
-          event: 'DID_UPDATED',
-          updateType: 'add_service_endpoint',
-        }));
+        await audit.flush();
+        expect(audit.ofType('configuration.changed')).toHaveLength(1);
+        expect(audit.ofType('configuration.changed')[0]).toMatchObject({
+          action: { category: 'did', name: 'add_service_endpoint' },
+          outcome: 'succeeded',
+          correlationId: 'req-1',
+          resource: { kind: 'public_did', did: 'did:1' },
+          details: { family: 'key', phase: 'configuration_changed', configurationDigest: hashJson(result) },
+        });
     });
   });
 
