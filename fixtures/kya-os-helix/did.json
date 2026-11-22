@@ -1,0 +1,267 @@
+{
+  "generated_from": "helix-core",
+  "generator": "scripts/generate-did-fixtures.ts",
+  "note": "KYA-OS story L1-A. Regenerate (pnpm generate:did-fixtures) whenever src/core/did/* or the key helpers change; helix-core, helix-sdk-js, helix-sdk-py and e2e-playwright assert byte-for-byte against this file. Test keys only; never real secrets.",
+  "keys": {
+    "agent": {
+      "private_key_hex": "4142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f60",
+      "public_key_hex": "adc14011f82d1c56d956aa4f9d73d8858361a606048525e0d08c638dc75dd8c7",
+      "public_key_jwk": {
+        "kty": "OKP",
+        "crv": "Ed25519",
+        "x": "rcFAEfgtHFbZVqpPnXPYhYNhpgYEhSXg0Ixjjcdd2Mc"
+      },
+      "public_key_multibase": "z6Mkr9XVJHgr8os96FL5UUrkdS226nfM3RuAMsqxKk1BJ8N2",
+      "did_key": "did:key:z6Mkr9XVJHgr8os96FL5UUrkdS226nfM3RuAMsqxKk1BJ8N2",
+      "did_web": "did:web:agents.helix.test:agents:fixture-agent",
+      "kid_fragment": "key-1",
+      "kid": "did:web:agents.helix.test:agents:fixture-agent#key-1",
+      "did_web_document": {
+        "@context": [
+          "https://www.w3.org/ns/did/v1",
+          "https://w3id.org/security/suites/ed25519-2020/v1"
+        ],
+        "id": "did:web:agents.helix.test:agents:fixture-agent",
+        "alsoKnownAs": [
+          "did:key:z6Mkr9XVJHgr8os96FL5UUrkdS226nfM3RuAMsqxKk1BJ8N2"
+        ],
+        "verificationMethod": [
+          {
+            "id": "did:web:agents.helix.test:agents:fixture-agent#key-1",
+            "type": "Ed25519VerificationKey2020",
+            "controller": "did:web:agents.helix.test:agents:fixture-agent",
+            "publicKeyJwk": {
+              "kty": "OKP",
+              "crv": "Ed25519",
+              "x": "rcFAEfgtHFbZVqpPnXPYhYNhpgYEhSXg0Ixjjcdd2Mc"
+            },
+            "publicKeyMultibase": "z6Mkr9XVJHgr8os96FL5UUrkdS226nfM3RuAMsqxKk1BJ8N2"
+          }
+        ],
+        "authentication": [
+          "did:web:agents.helix.test:agents:fixture-agent#key-1"
+        ],
+        "assertionMethod": [
+          "did:web:agents.helix.test:agents:fixture-agent#key-1"
+        ]
+      },
+      "did_key_document": {
+        "@context": [
+          "https://www.w3.org/ns/did/v1",
+          "https://w3id.org/security/suites/ed25519-2020/v1"
+        ],
+        "id": "did:key:z6Mkr9XVJHgr8os96FL5UUrkdS226nfM3RuAMsqxKk1BJ8N2",
+        "verificationMethod": [
+          {
+            "id": "did:key:z6Mkr9XVJHgr8os96FL5UUrkdS226nfM3RuAMsqxKk1BJ8N2#z6Mkr9XVJHgr8os96FL5UUrkdS226nfM3RuAMsqxKk1BJ8N2",
+            "type": "Ed25519VerificationKey2020",
+            "controller": "did:key:z6Mkr9XVJHgr8os96FL5UUrkdS226nfM3RuAMsqxKk1BJ8N2",
+            "publicKeyJwk": {
+              "kty": "OKP",
+              "crv": "Ed25519",
+              "x": "rcFAEfgtHFbZVqpPnXPYhYNhpgYEhSXg0Ixjjcdd2Mc"
+            },
+            "publicKeyMultibase": "z6Mkr9XVJHgr8os96FL5UUrkdS226nfM3RuAMsqxKk1BJ8N2"
+          }
+        ],
+        "authentication": [
+          "did:key:z6Mkr9XVJHgr8os96FL5UUrkdS226nfM3RuAMsqxKk1BJ8N2#z6Mkr9XVJHgr8os96FL5UUrkdS226nfM3RuAMsqxKk1BJ8N2"
+        ],
+        "assertionMethod": [
+          "did:key:z6Mkr9XVJHgr8os96FL5UUrkdS226nfM3RuAMsqxKk1BJ8N2#z6Mkr9XVJHgr8os96FL5UUrkdS226nfM3RuAMsqxKk1BJ8N2"
+        ]
+      },
+      "registration_body": {
+        "publicKeyJwk": {
+          "kty": "OKP",
+          "crv": "Ed25519",
+          "x": "rcFAEfgtHFbZVqpPnXPYhYNhpgYEhSXg0Ixjjcdd2Mc"
+        },
+        "kid": "key-1"
+      },
+      "resolved": {
+        "raw_key_hex": "adc14011f82d1c56d956aa4f9d73d8858361a606048525e0d08c638dc75dd8c7",
+        "jwk": {
+          "kty": "OKP",
+          "crv": "Ed25519",
+          "x": "rcFAEfgtHFbZVqpPnXPYhYNhpgYEhSXg0Ixjjcdd2Mc"
+        },
+        "did_web_kid": "did:web:agents.helix.test:agents:fixture-agent#key-1",
+        "did_key_kid": "did:key:z6Mkr9XVJHgr8os96FL5UUrkdS226nfM3RuAMsqxKk1BJ8N2#z6Mkr9XVJHgr8os96FL5UUrkdS226nfM3RuAMsqxKk1BJ8N2"
+      }
+    },
+    "other": {
+      "private_key_hex": "a09f9e9d9c9b9a999897969594939291908f8e8d8c8b8a898887868584838281",
+      "public_key_hex": "b56f89962916ea449c56de847aef1c9c5b0027bb020ca75163ab3c6489647b97",
+      "public_key_jwk": {
+        "kty": "OKP",
+        "crv": "Ed25519",
+        "x": "tW-JlikW6kScVt6Eeu8cnFsAJ7sCDKdRY6s8ZIlke5c"
+      },
+      "public_key_multibase": "z6MkrfWUyG88gWr5RJPWgc3X74LNEkpQw5HBD5B2X51LDdZx",
+      "did_key": "did:key:z6MkrfWUyG88gWr5RJPWgc3X74LNEkpQw5HBD5B2X51LDdZx",
+      "did_web": "did:web:other.helix.test",
+      "kid_fragment": "kya-os-2026",
+      "kid": "did:web:other.helix.test#kya-os-2026",
+      "did_web_document": {
+        "@context": [
+          "https://www.w3.org/ns/did/v1",
+          "https://w3id.org/security/suites/ed25519-2020/v1"
+        ],
+        "id": "did:web:other.helix.test",
+        "alsoKnownAs": [
+          "did:key:z6MkrfWUyG88gWr5RJPWgc3X74LNEkpQw5HBD5B2X51LDdZx"
+        ],
+        "verificationMethod": [
+          {
+            "id": "did:web:other.helix.test#kya-os-2026",
+            "type": "Ed25519VerificationKey2020",
+            "controller": "did:web:other.helix.test",
+            "publicKeyJwk": {
+              "kty": "OKP",
+              "crv": "Ed25519",
+              "x": "tW-JlikW6kScVt6Eeu8cnFsAJ7sCDKdRY6s8ZIlke5c"
+            },
+            "publicKeyMultibase": "z6MkrfWUyG88gWr5RJPWgc3X74LNEkpQw5HBD5B2X51LDdZx"
+          }
+        ],
+        "authentication": [
+          "did:web:other.helix.test#kya-os-2026"
+        ],
+        "assertionMethod": [
+          "did:web:other.helix.test#kya-os-2026"
+        ]
+      },
+      "did_key_document": {
+        "@context": [
+          "https://www.w3.org/ns/did/v1",
+          "https://w3id.org/security/suites/ed25519-2020/v1"
+        ],
+        "id": "did:key:z6MkrfWUyG88gWr5RJPWgc3X74LNEkpQw5HBD5B2X51LDdZx",
+        "verificationMethod": [
+          {
+            "id": "did:key:z6MkrfWUyG88gWr5RJPWgc3X74LNEkpQw5HBD5B2X51LDdZx#z6MkrfWUyG88gWr5RJPWgc3X74LNEkpQw5HBD5B2X51LDdZx",
+            "type": "Ed25519VerificationKey2020",
+            "controller": "did:key:z6MkrfWUyG88gWr5RJPWgc3X74LNEkpQw5HBD5B2X51LDdZx",
+            "publicKeyJwk": {
+              "kty": "OKP",
+              "crv": "Ed25519",
+              "x": "tW-JlikW6kScVt6Eeu8cnFsAJ7sCDKdRY6s8ZIlke5c"
+            },
+            "publicKeyMultibase": "z6MkrfWUyG88gWr5RJPWgc3X74LNEkpQw5HBD5B2X51LDdZx"
+          }
+        ],
+        "authentication": [
+          "did:key:z6MkrfWUyG88gWr5RJPWgc3X74LNEkpQw5HBD5B2X51LDdZx#z6MkrfWUyG88gWr5RJPWgc3X74LNEkpQw5HBD5B2X51LDdZx"
+        ],
+        "assertionMethod": [
+          "did:key:z6MkrfWUyG88gWr5RJPWgc3X74LNEkpQw5HBD5B2X51LDdZx#z6MkrfWUyG88gWr5RJPWgc3X74LNEkpQw5HBD5B2X51LDdZx"
+        ]
+      },
+      "registration_body": {
+        "publicKeyJwk": {
+          "kty": "OKP",
+          "crv": "Ed25519",
+          "x": "tW-JlikW6kScVt6Eeu8cnFsAJ7sCDKdRY6s8ZIlke5c"
+        },
+        "kid": "kya-os-2026"
+      },
+      "resolved": {
+        "raw_key_hex": "b56f89962916ea449c56de847aef1c9c5b0027bb020ca75163ab3c6489647b97",
+        "jwk": {
+          "kty": "OKP",
+          "crv": "Ed25519",
+          "x": "tW-JlikW6kScVt6Eeu8cnFsAJ7sCDKdRY6s8ZIlke5c"
+        },
+        "did_web_kid": "did:web:other.helix.test#kya-os-2026",
+        "did_key_kid": "did:key:z6MkrfWUyG88gWr5RJPWgc3X74LNEkpQw5HBD5B2X51LDdZx#z6MkrfWUyG88gWr5RJPWgc3X74LNEkpQw5HBD5B2X51LDdZx"
+      }
+    }
+  },
+  "base58btc": [
+    {
+      "bytes_hex": "",
+      "base58btc": ""
+    },
+    {
+      "bytes_hex": "00",
+      "base58btc": "1"
+    },
+    {
+      "bytes_hex": "000102",
+      "base58btc": "15T"
+    },
+    {
+      "bytes_hex": "0000ff",
+      "base58btc": "115Q"
+    },
+    {
+      "bytes_hex": "61",
+      "base58btc": "2g"
+    },
+    {
+      "bytes_hex": "626262",
+      "base58btc": "a3gV"
+    },
+    {
+      "bytes_hex": "636363",
+      "base58btc": "aPEr"
+    },
+    {
+      "bytes_hex": "48656c6c6f",
+      "base58btc": "9Ajdvzr"
+    },
+    {
+      "bytes_hex": "73696d706c792061206c6f6e6720737472696e67",
+      "base58btc": "2cFupjhnEsSn59qHXstmK2ffpLv2"
+    },
+    {
+      "bytes_hex": "00eb15231dfceb60925886b67d065299925915aeb172c06647",
+      "base58btc": "1NS17iag9jJgTHD1VXjvLCEnZuQ3rJDE9L"
+    },
+    {
+      "bytes_hex": "ffffffff",
+      "base58btc": "7YXq9G"
+    },
+    {
+      "bytes_hex": "ed01adc14011f82d1c56d956aa4f9d73d8858361a606048525e0d08c638dc75dd8c7",
+      "base58btc": "6Mkr9XVJHgr8os96FL5UUrkdS226nfM3RuAMsqxKk1BJ8N2"
+    },
+    {
+      "bytes_hex": "ed012a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a",
+      "base58btc": "6MkhHrTbtosB4xyyJM217fS4ry35F7JhZ5oA9uVHErBJDL5"
+    }
+  ],
+  "did_key_rejections": [
+    {
+      "name": "not_multibase_z",
+      "did": "did:key:6Mkr9XVJHgr8os96FL5UUrkdS226nfM3RuAMsqxKk1BJ8N2",
+      "reason": "no multibase z prefix"
+    },
+    {
+      "name": "invalid_base58",
+      "did": "did:key:z6MkNOTVALIDbase58!!!!",
+      "reason": "characters outside the base58btc alphabet"
+    },
+    {
+      "name": "wrong_multicodec",
+      "did": "did:key:z6LSoNScEMFGtj6R58s9KZQs6vgW8MvcL9pxYqehyvgh6HMQ",
+      "reason": "multicodec is not 0xed01 (Ed25519)"
+    },
+    {
+      "name": "truncated_key",
+      "did": "did:key:z2DQXcv8KRAwBNwrs8KpgkvQw28wAvPjbzJFosVJyMcqYyV",
+      "reason": "fewer than 32 key bytes"
+    },
+    {
+      "name": "empty",
+      "did": "did:key:z",
+      "reason": "nothing after the multibase prefix"
+    },
+    {
+      "name": "did_web",
+      "did": "did:web:agents.helix.test:agents:fixture-agent",
+      "reason": "not did:key"
+    }
+  ]
+}

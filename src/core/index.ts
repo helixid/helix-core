@@ -13,6 +13,8 @@ export * from './errors/index.js';
 export * from './audit/index.js';
 export * from './status-list/index.js';
 export { resolveDID, clearDIDCache, evictDIDCache } from './did-resolver.js';
+export * from './did/document.js';
+export * from './did/resolve.js';
 export { createEd25519Proof, verifyEd25519Proof } from './proof.js';
 export type { LinkedDataProof } from './proof.js';
 export { VPBuilder } from './vp-builder.js';
