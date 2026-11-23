@@ -43,6 +43,7 @@ import {
   publicKeyToMultibaseOf,
   type AgentDidDocument,
 } from './document.js';
+import { RotationSequenceGuard } from './rotation.js';
 
 export interface ResolvedKey {
   did: string;
@@ -59,7 +60,15 @@ export interface ResolvedKey {
 export interface ResolveDidOptions {
   /** The verification method wanted, as fragment or full id. Default: the first assertion method. */
   kid?: string;
+  /**
+   * Story C-E point 2: refuses (throws `StaleDidDocumentError`) a did:web
+   * document whose `rotationSequence` is lower than one already seen.
+   * Default one guard for this process.
+   */
+  sequenceGuard?: RotationSequenceGuard;
 }
+
+const processGuard = new RotationSequenceGuard();
 
 /** The document a did:key resolves to (conformance L1.6); throws for anything but an Ed25519 did:key. */
 export function didKeyDocument(did: string): AgentDidDocument {
@@ -129,6 +138,7 @@ export async function resolveDidWeb(did: string, options: ResolveDidOptions = {}
     throw new UnsupportedDIDMethodError(did);
   }
   const document = (await resolveDID(did)) as unknown as JwsDidDocument;
+  await (options.sequenceGuard ?? processGuard).assertCurrent(did, document);
   return keyFromDocument(document, did, options.kid);
 }
 

@@ -237,6 +237,9 @@ const custodyService = new CustodyService({
   didCache,
   recheck: custodyRecheckSettings(config),
   credentialDetails: credentialCardDetails(vcService),
+  // KYA-OS story C-E: rotations keep both keys for the overlap, then reissue and expire hops bound to the old kid.
+  rotationOverlapSeconds: config.KEY_ROTATION_OVERLAP_SECONDS,
+  hopReissuer: credentialService,
 });
 // Own-hosted subjects waiting for their documents are re-checked in the background.
 const custodyRecheck = new CustodyRecheckScheduler(custodyService, { tickSeconds: config.CUSTODY_RECHECK_TICK_SECONDS });

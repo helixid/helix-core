@@ -139,6 +139,10 @@ export const ConfigSchema = z.object({
     .enum(['true', 'false'])
     .default('true')
     .transform((value) => value === 'true'),
+  // KYA-OS story C-E: how long a superseded key stays usable beside the new
+  // one after a rotation (the overlap window); 0 ends it at once. A request
+  // may set its own.
+  KEY_ROTATION_OVERLAP_SECONDS: z.coerce.number().int().min(0).max(30 * 86400).default(86400),
   CUSTODY_RECHECK_TICK_SECONDS: z.coerce.number().int().min(5).max(3600).default(60),
   CUSTODY_RECHECK_INITIAL_INTERVAL_SECONDS: z.coerce.number().int().min(10).max(86400).default(120),
   CUSTODY_RECHECK_MAX_INTERVAL_SECONDS: z.coerce.number().int().min(10).max(86400).default(3600),

@@ -19,6 +19,7 @@ import {
   didWebFromPath,
   isLoopbackHost,
   parseDidWeb,
+  projectJwks,
   withKyaOsCardService,
   type BuildEntityCardInput,
   type EntityCard,
@@ -29,6 +30,11 @@ import {
  *
  *   GET /{path}/did.json                  the DID document of did:web:<host>:{path}
  *   GET /{path}/card.json                 its card
+ *   GET /{path}/jwks.json                 story C-E: its keys as a JWK Set, the
+ *                                        mechanical projection of the document's
+ *                                        verificationMethod[] (kid preserved),
+ *                                        with each key's validity and the
+ *                                        document's rotationSequence and updated
  *   GET /.well-known/kya-os-card.json     the bare-host org's card (did:web:<host>)
  *
  * `{path}` is any depth. Helix builds `<kind>/<hex>` (`agents/<hex>`,
@@ -101,11 +107,14 @@ const entityCardRoutes: FastifyPluginAsync<EntityCardRouteOptions> = async (fast
   }
 
   fastify.get('/*', async (request, reply) => {
-    const pathname = new URL(request.url, 'http://placeholder').pathname;
+    let pathname = new URL(request.url, 'http://placeholder').pathname;
+    const jwks = pathname.endsWith('/jwks.json');
+    if (jwks) pathname = `${pathname.slice(0, -'jwks.json'.length)}did.json`;
     const target = didWebFromPath(host, pathname);
-    if (target === undefined) return reply.callNotFound();
+    if (target === undefined || (jwks && target.document !== 'did')) return reply.callNotFound();
     try {
-      const body = await serve(target.did, target.document);
+      const served = await serve(target.did, target.document);
+      const body = jwks ? projectJwks(served as Parameters<typeof projectJwks>[0]) : served;
       return reply.type('application/json').header('Cache-Control', 'public, max-age=300').send(body);
     } catch (error) {
       if (error instanceof HelixError) {

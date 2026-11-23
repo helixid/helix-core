@@ -151,6 +151,9 @@ export const ErrorCodes = {
   KEY_STORE_KEY_NOT_FOUND: 'KEY_STORE_KEY_NOT_FOUND',
   KEY_STORE_KEY_SHREDDED: 'KEY_STORE_KEY_SHREDDED',
   KEY_STORE_UNAVAILABLE: 'KEY_STORE_UNAVAILABLE',
+
+  // KYA-OS story C-E: key rotation; lost-key recovery waits for story L3-H
+  KEY_RECOVERY_UNAVAILABLE: 'KEY_RECOVERY_UNAVAILABLE',
 } as const;
 
 export const ErrorCode = ErrorCodes;

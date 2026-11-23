@@ -65,6 +65,10 @@ export type AgentVerificationMethod = {
   controller: string;
   publicKeyJwk: PublicKeyJwk;
   publicKeyMultibase: string;
+  /** Story C-E: a superseded key's last valid instant (the end of its overlap window). */
+  validUntil?: string;
+  /** Story C-E: a compromised key's revocation instant; nothing it signed is accepted. */
+  revoked?: string;
 };
 
 export type AgentDidDocument = {
@@ -75,6 +79,10 @@ export type AgentDidDocument = {
   authentication: string[];
   assertionMethod: string[];
   service?: unknown[];
+  /** Story C-E: monotonic version of the key set, 1 for the first key. */
+  rotationSequence?: number;
+  /** Story C-E: when this version was published. */
+  updated?: string;
 };
 
 export interface BuildDidDocumentOptions {

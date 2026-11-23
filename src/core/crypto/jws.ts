@@ -25,7 +25,9 @@
  * Refusals: any `alg` but EdDSA, a missing or malformed `kid`, a `kid`
  * naming a key of a DID other than the claimed signer (the `iss` claim, the
  * resolved document, or `expectedDid`), a key or signature that is not
- * strict base64url, a signature that does not verify.
+ * strict base64url, a signature that does not verify, and (story C-E) a
+ * key the document marks `revoked` or one whose `validUntil` is before the
+ * JWS's `iat`.
  *
  * Cross-border rule (stories, rule 4): the verify path reads only the JWS,
  * the key it is given or the DID document the resolver returns. It never
@@ -37,6 +39,11 @@ import { InvalidJWSError } from "../errors/HelixError.js";
 import { base58btcDecode } from "./vp.js";
 import { multibaseToPublicKeyHex } from "./keys.js";
 import type { Signer } from "./signer.js";
+import {
+  keyValidityProblem,
+  proofTime,
+  type KeyValidityReason,
+} from "../did/key-validity.js";
 
 export const JWS_ALG = "EdDSA";
 
@@ -58,6 +65,12 @@ export const JwsReasons = {
   KEY_AMBIGUOUS: "jws_key_ambiguous",
   KEY_FOREIGN_CONTROLLER: "jws_key_foreign_controller",
   KEY_UNSUPPORTED: "jws_key_unsupported",
+  /** Story C-E: the key carries `revoked`; nothing it signed is accepted. */
+  KEY_REVOKED: "jws_key_revoked",
+  /** Story C-E: the JWS was made (`iat`) outside the key's validity. */
+  KEY_SUPERSEDED: "jws_key_superseded",
+  /** Story C-E: the key's validity members are not RFC 3339 instants. */
+  KEY_VALIDITY_MALFORMED: "jws_key_validity_malformed",
 } as const;
 
 export type JwsReason = (typeof JwsReasons)[keyof typeof JwsReasons];
@@ -89,6 +102,13 @@ export interface VerifyJwsOptions {
   expectedKid?: string;
   /** The DID the `kid` must belong to, when the caller knows it. */
   expectedDid?: string;
+  /**
+   * Story C-E, `verifyJwsByKid` only: when the JWS was made, epoch ms, checked
+   * against the key's validity. Default the payload's `iat`, else now.
+   */
+  at?: number;
+  /** Epoch ms for a JWS that states no time; default `Date.now()`. */
+  now?: number;
 }
 
 export interface JwsVerification {
@@ -559,5 +579,15 @@ export async function verifyJwsByKid(
   }
   const method = selectAssertionMethod(document, did, kid);
   const jwk = verificationMethodToJwk(method);
-  return verifyJws(jws, { ...jwk, kid }, { ...options, expectedDid: did });
+  const verified = verifyJws(jws, { ...jwk, kid }, { ...options, expectedDid: did });
+  const iat = (verified.payload as { iat?: unknown } | undefined)?.iat;
+  const problem = keyValidityProblem(method, options.at ?? proofTime(iat), options.now);
+  if (problem) throw new InvalidJWSError(JWS_KEY_VALIDITY_REASONS[problem.reason], problem.message);
+  return verified;
 }
+
+const JWS_KEY_VALIDITY_REASONS: Record<KeyValidityReason, JwsReason> = {
+  key_revoked: JwsReasons.KEY_REVOKED,
+  key_superseded: JwsReasons.KEY_SUPERSEDED,
+  key_validity_malformed: JwsReasons.KEY_VALIDITY_MALFORMED,
+};

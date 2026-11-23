@@ -17,6 +17,7 @@ export { resolveDID, clearDIDCache, evictDIDCache } from './did-resolver.js';
 export * from './did/document.js';
 export * from './did/resolve.js';
 export * from './did/web.js';
+export * from './did/rotation.js';
 export * from './net/safe-fetch.js';
 export * from './net/outbound.js';
 export * from './card/index.js';

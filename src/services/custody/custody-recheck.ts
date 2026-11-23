@@ -16,6 +16,10 @@
  * Every `tickSeconds` it runs one re-check, never two at once in this
  * process; the per-subject backoff, the batch and host limits, the cutoff
  * and the guard against several API instances are in `recheckPending`.
+ *
+ * Story C-E: the same tick ends key-rotation overlaps that are due
+ * (`finalizeDueRotations`), so an old key and the hops bound to it expire
+ * on time even when nobody calls the subject.
  */
 
 import type { CustodyRecheckRun, CustodyRecheckSettings, OnboardingResult } from './custody.service.js';
@@ -37,6 +41,8 @@ export function custodyRecheckSettings(config: {
 
 export interface CustodyRecheckTarget {
   recheckPending(onActivated?: (result: OnboardingResult, requestId: string) => Promise<void> | void): Promise<CustodyRecheckRun>;
+  /** Story C-E: ends the rotation overlaps that are due; resolves to the subjects finalized. */
+  finalizeDueRotations?(): Promise<string[]>;
 }
 
 export interface CustodyRecheckSchedulerOptions {
@@ -67,10 +73,12 @@ export class CustodyRecheckScheduler {
     if (this.running) return this.running;
     this.running = this.target
       .recheckPending(this.options.onActivated)
-      .then((run) => {
+      .then(async (run) => {
         if (run.checked.length > 0 || run.stopped.length > 0) {
           this.options.log?.info({ checked: run.checked.length, activated: run.activated.map((result) => result.did), stopped: run.stopped }, 'custody re-check run');
         }
+        const finalized = (await this.target.finalizeDueRotations?.()) ?? [];
+        if (finalized.length > 0) this.options.log?.info({ finalized }, 'key rotation overlaps ended');
         return run;
       })
       .catch((error: unknown) => {

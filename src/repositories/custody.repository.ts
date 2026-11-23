@@ -31,7 +31,13 @@ export const CUSTODY_STATUSES = ['pending_key', 'pending_resolution', 'active'] 
 export type CustodyStatus = (typeof CUSTODY_STATUSES)[number];
 
 export type CustodyKeyLocation = 'self' | 'helix';
-export type CustodyKeyStatus = 'active' | 'retiring' | 'revoked';
+/**
+ * `active`: current; `retiring`: superseded, inside its overlap window;
+ * `retired`: superseded, overlap over (story C-E: it stays in the DID
+ * document with `validUntil`); `revoked`: compromised (it stays with
+ * `revoked`, and nothing it signed is accepted).
+ */
+export type CustodyKeyStatus = 'active' | 'retiring' | 'retired' | 'revoked';
 
 export interface CustodyRecordRow {
   did: string;
@@ -175,6 +181,11 @@ export class CustodyRepository {
   /** In sequence order. */
   listKeys(did: string): Promise<CustodyKeyRow[]> {
     return this.driver.listKeys(did);
+  }
+
+  /** Story C-E: the subjects with a retiring key whose overlap ended by `now`, at most `limit`. */
+  listRetiringDue(now: Date, limit: number): Promise<string[]> {
+    return this.driver.listRetiringDue(now, limit);
   }
 
   updateKey(did: string, kid: string, patch: CustodyKeyPatch): Promise<CustodyKeyRow> {

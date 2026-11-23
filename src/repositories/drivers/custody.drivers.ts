@@ -42,6 +42,8 @@ export interface CustodyStorageDriver {
   listRecords(filter: CustodyRecordFilter): Promise<CustodyRecordRow[]>;
   addKey(row: NewCustodyKey): Promise<CustodyKeyRow>;
   listKeys(did: string): Promise<CustodyKeyRow[]>;
+  /** Story C-E: DIDs with a retiring key whose `retiresAt` is at or before `now`, oldest first, at most `limit`. */
+  listRetiringDue(now: Date, limit: number): Promise<string[]>;
   updateKey(did: string, kid: string, patch: CustodyKeyPatch): Promise<CustodyKeyRow>;
 }
 
@@ -72,6 +74,14 @@ function dueRechecks(rows: CustodyRecordRow[], now: Date, limit: number): Custod
 }
 
 // ---------------------------------------------------------------- memory
+
+/** The distinct DIDs of retiring keys due by `now`, earliest `retiresAt` first. */
+function retiringDue(keys: readonly CustodyKeyRow[], now: Date, limit: number): string[] {
+  const due = keys
+    .filter((key) => key.status === 'retiring' && key.retiresAt !== null && key.retiresAt.getTime() <= now.getTime())
+    .sort((a, b) => a.retiresAt!.getTime() - b.retiresAt!.getTime() || a.did.localeCompare(b.did));
+  return [...new Set(due.map((key) => key.did))].slice(0, limit);
+}
 
 export class InMemoryCustodyStorageDriver implements CustodyStorageDriver {
   private readonly records = new Map<string, CustodyRecordRow>();
@@ -141,6 +151,10 @@ export class InMemoryCustodyStorageDriver implements CustodyStorageDriver {
 
   async listKeys(did: string): Promise<CustodyKeyRow[]> {
     return (this.keys.get(did) ?? []).map((key) => ({ ...key })).sort((a, b) => a.sequence - b.sequence);
+  }
+
+  async listRetiringDue(now: Date, limit: number): Promise<string[]> {
+    return retiringDue([...this.keys.values()].flat(), now, limit);
   }
 
   async updateKey(did: string, kid: string, patch: CustodyKeyPatch): Promise<CustodyKeyRow> {
@@ -304,6 +318,11 @@ export class PrismaCustodyStorageDriver implements CustodyStorageDriver {
   async listKeys(did: string): Promise<CustodyKeyRow[]> {
     const rows = await this.db.custodyKey.findMany({ where: { did }, orderBy: { sequence: 'asc' } });
     return rows.map(keyFromPrisma);
+  }
+
+  async listRetiringDue(now: Date, limit: number): Promise<string[]> {
+    const rows = await this.db.custodyKey.findMany({ where: { status: 'retiring', retiresAt: { lte: now } }, orderBy: [{ retiresAt: 'asc' }, { did: 'asc' }] });
+    return retiringDue(rows.map(keyFromPrisma), now, limit);
   }
 
   async updateKey(did: string, kid: string, patch: CustodyKeyPatch): Promise<CustodyKeyRow> {
@@ -597,6 +616,11 @@ export class SqliteCustodyStorageDriver implements CustodyStorageDriver {
     return this.sqlite
       .query<SqliteRow>(`SELECT * FROM custody_keys WHERE did = ${sqliteLiteral(did)} ORDER BY sequence ASC`)
       .map(keyFromSqlite);
+  }
+
+  async listRetiringDue(now: Date, limit: number): Promise<string[]> {
+    const rows = this.sqlite.query<SqliteRow>(`SELECT * FROM custody_keys WHERE status = 'retiring' AND retires_at IS NOT NULL`).map(keyFromSqlite);
+    return retiringDue(rows, now, limit);
   }
 
   async updateKey(did: string, kid: string, patch: CustodyKeyPatch): Promise<CustodyKeyRow> {
