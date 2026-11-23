@@ -21,7 +21,6 @@ import {
   signJws,
   verifyJwsByKid,
 } from '../../../src/core/index.js';
-import { readRegisterAgentKeyBody } from '../../../src/routes/agent-keys/index.js';
 import { buildDidFixtures, serializeDidFixtures, type DidFixtures } from '../../../scripts/generate-did-fixtures.js';
 
 const FIXTURE_PATH = fileURLToPath(new URL('../../../fixtures/kya-os-helix/did.json', import.meta.url));
@@ -53,16 +52,6 @@ describe('fixtures/kya-os-helix/did.json', () => {
       expect(key.did_web_document.assertionMethod).toEqual([key.kid]);
       expect(key.did_web_document.authentication).toEqual([key.kid]);
       expect(key.did_web_document.alsoKnownAs).toEqual([key.did_key]);
-    });
-
-    it(`key ${name}: the registration body carries the public JWK only, and the route accepts it`, () => {
-      expect(Object.keys(key.registration_body).sort()).toEqual(['kid', 'publicKeyJwk']);
-      expect(Object.keys(key.registration_body.publicKeyJwk).sort()).toEqual(['crv', 'kty', 'x']);
-      expect(JSON.stringify(key.registration_body)).not.toContain(key.private_key_hex);
-      expect(JSON.stringify(key.registration_body)).not.toMatch(/"d"/);
-      const read = readRegisterAgentKeyBody(key.registration_body);
-      expect(Buffer.from(read.publicKey).toString('hex')).toBe(key.public_key_hex);
-      expect(read.kid).toBe(key.kid_fragment);
     });
 
     it(`key ${name}: did:web and did:key resolve to the same raw key and JWK, and a JWS with kid <did>#<fragment> verifies by kid`, async () => {

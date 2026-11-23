@@ -11,7 +11,7 @@
 // limitations under the License.
 
 import { randomUUID } from 'node:crypto';
-import { createEd25519Proof } from './proof.js';
+import { createEd25519Proof, proofKeyOf, verificationMethodOfKey, type SigningKeyMaterial } from './proof.js';
 import { ValidationError } from './errors/HelixError.js';
 import { DelegationGrantVCSchema } from './schemas/delegation-grant.js';
 import { VC_CONTEXTS, type SignedVC } from './schemas/vc.js';
@@ -30,10 +30,8 @@ import { getStatusListLength, type StatusListCredential } from './status-list/in
  */
 export const ACCEPT_TERMS_SCOPE = 'accept-terms';
 
-export interface IssuerKeyMaterial {
-  did: string;
-  privateKeyHex: string;
-}
+/** The issuing service's key: a raw private key, or a Signer over its Helix KeyStore key (KYA-OS story F-3). */
+export type IssuerKeyMaterial = SigningKeyMaterial;
 
 export interface IssueGrantOptions {
   agentDid: string;
@@ -107,7 +105,7 @@ export async function issueGrant(
 
   const grantVC = {
     ...payload,
-    proof: await createEd25519Proof(payload, issuerWallet.privateKeyHex, `${issuerWallet.did}#key-1`),
+    proof: await createEd25519Proof(payload, proofKeyOf(issuerWallet), verificationMethodOfKey(issuerWallet)),
   } as SignedVC;
 
   // Issuance does not set bits — only revocation does, same as the existing

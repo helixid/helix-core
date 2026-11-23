@@ -62,6 +62,7 @@
     "generate:did-fixtures": "tsx scripts/generate-did-fixtures.ts",
     "generate:credential-fixtures": "tsx scripts/generate-credential-fixtures.ts",
     "generate:entity-card-fixtures": "tsx scripts/generate-entity-card-fixtures.ts",
+    "generate:custody-fixtures": "tsx scripts/generate-custody-fixtures.ts",
     "generate:verifier-fixtures": "tsx scripts/gen-fixtures.ts",
     "audit": "tsx src/cli/audit-bin.ts",
     "audit:verify": "tsx src/cli/audit-bin.ts verify",

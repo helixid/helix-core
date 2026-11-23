@@ -37,7 +37,9 @@ import {
   type AuditTrail,
   type Digest,
   type SignedVC,
+  type SigningKeyMaterial,
 } from '../../core/index.js';
+import type { CustodialKeys } from '../custody/custodial-keys.js';
 import type { DidKeyRepository } from '../../repositories/did-key.repository.js';
 import type { ServiceRecord, ServiceRepository } from '../../repositories/service.repository.js';
 import type { IDIDService } from '../did/IDIDService.js';
@@ -114,6 +116,8 @@ function reportAuditFailure(error: unknown): void {
 }
 
 export class ServiceProviderService implements IServiceProviderService {
+  private custodialKeys: CustodialKeys | undefined;
+
   constructor(
     private readonly didService: Pick<IDIDService, 'createDID'>,
     private readonly vcService: GrantVCStore,
@@ -122,6 +126,28 @@ export class ServiceProviderService implements IServiceProviderService {
     private readonly keyCustody: IKeyCustody,
     private readonly auditTrail: AuditTrail,
   ) {}
+
+  /**
+   * KYA-OS story F-3: services and agents created through the custody routes
+   * keep their key in the KeyStore, not in did_keys. With this attached, a
+   * custodial service signs consent grants through a KeyStoreSigner (stories
+   * rule 8), and such agents can receive grants.
+   */
+  attachCustodialKeys(keys: CustodialKeys): void {
+    this.custodialKeys = keys;
+  }
+
+  /** The service's signing key: its did_keys key, else its KeyStore key, else SERVICE_KEY_NOT_FOUND. */
+  private async serviceKey(serviceDid: string, requestId: string): Promise<<T>(use: (key: SigningKeyMaterial) => T | Promise<T>) => Promise<T>> {
+    const record = await this.didKeyRepository.findByDid(serviceDid);
+    if (record) {
+      if (record.subjectType !== 'service') throw new ServiceKeyNotFoundError(serviceDid);
+      return (use) => this.keyCustody.signWith(record, (privateKeyHex) => use({ did: serviceDid, privateKeyHex }));
+    }
+    const signer = await this.custodialKeys?.signerFor(serviceDid, 'service', { requestId, purpose: 'grant' });
+    if (signer) return async (use) => use({ did: serviceDid, signer });
+    throw new ServiceKeyNotFoundError(serviceDid);
+  }
 
   /** Records one typed audit event; a failure to record never breaks the request. */
   private audit(input: AuditEventInput): void {
@@ -222,10 +248,7 @@ export class ServiceProviderService implements IServiceProviderService {
     if (service.revokedAt) {
       throw new ServiceRevokedError(input.serviceDid);
     }
-    const keyRecord = await this.didKeyRepository.findByDid(input.serviceDid);
-    if (!keyRecord || keyRecord.subjectType !== 'service') {
-      throw new ServiceKeyNotFoundError(input.serviceDid);
-    }
+    const withKey = await this.serviceKey(input.serviceDid, requestId);
 
     // The delegatee must be an onboarded agent with an active identity
     // credential, and the grant may only carry scopes it holds an active
@@ -243,7 +266,7 @@ export class ServiceProviderService implements IServiceProviderService {
     }
 
     const entry = await this.vcService.claimStatusListEntry();
-    const { grantVC } = await this.keyCustody.signWith(keyRecord, (privateKeyHex) =>
+    const { grantVC } = await withKey((key) =>
       issueGrant(
         {
           agentDid: input.agentDid,
@@ -256,7 +279,7 @@ export class ServiceProviderService implements IServiceProviderService {
           statusListCredentialUrl: entry.statusListCredentialUrl,
           statusListIndex: entry.statusListIndex,
         },
-        { did: input.serviceDid, privateKeyHex },
+        key,
       ),
     );
 
@@ -279,9 +302,12 @@ export class ServiceProviderService implements IServiceProviderService {
     if (typeof agentDid !== 'string' || !agentDid.startsWith('did:')) {
       throw new HelixError(ErrorCode.VALIDATION_ERROR, 'agentDid must be a DID', 400);
     }
-    // An agent this server onboarded, so holds a key for.
+    // An agent this server onboarded: one whose key it holds in did_keys
+    // (onboarded before F-3), or an active agent created through the custody
+    // routes (KYA-OS story F-3), whose key is in the KeyStore or with its owner.
     const agentKey = await this.didKeyRepository.findByDid(agentDid);
-    if (!agentKey || agentKey.subjectType !== 'agent') {
+    const onboarded = agentKey ? agentKey.subjectType === 'agent' : ((await this.custodialKeys?.isActiveAgent(agentDid)) ?? false);
+    if (!onboarded) {
       throw new DelegateeNotAnAgentError(agentDid);
     }
     const identities = await this.vcService.listActiveBySubjectDid(agentDid, IDENTITY_CREDENTIAL_TYPE);

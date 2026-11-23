@@ -16,8 +16,8 @@
  * fixtures/kya-os-helix/did.json, and consumed byte for byte by helix-core,
  * helix-sdk-js, helix-sdk-py and e2e-playwright. For each test key: the
  * seed, the public key, its JWK, its did:key, its did:web document with the
- * verification-method id that is the agent's `kid`, the registration body
- * the SDK sends (public JWK only), and what resolving either DID must give.
+ * verification-method id that is the agent's `kid`, and what resolving
+ * either DID must give.
  * Plus base58btc vectors (L1.9) and malformed did:key cases.
  *
  * Run: pnpm generate:did-fixtures
@@ -52,8 +52,6 @@ export interface DidFixtureKey {
   kid: string;
   did_web_document: AgentDidDocument;
   did_key_document: AgentDidDocument;
-  /** The body of POST /v1/agents/{did}/keys: the public JWK and the kid, nothing else. */
-  registration_body: { publicKeyJwk: PublicKeyJwk; kid: string };
   /** What resolveDid gives for did_web and for did_key: the same raw key and JWK. */
   resolved: {
     raw_key_hex: string;
@@ -105,7 +103,6 @@ function fixtureKey(privateKeyHex: string, didWeb: string, kidFragment: string):
     kid,
     did_web_document: didWebDocument,
     did_key_document: didKeyDocument(didKey),
-    registration_body: { publicKeyJwk, kid: kidFragment },
     resolved: {
       raw_key_hex: Buffer.from(fromDidKey.rawKey).toString('hex'),
       jwk: { kty: 'OKP', crv: 'Ed25519', x: fromDidKey.jwk.x },

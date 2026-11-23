@@ -40,8 +40,7 @@ import didWebRoutes from './routes/did-web/index.js';
 import vcRoutes from './routes/vc/index.js';
 import statusListRoutes from './routes/status-list/index.js';
 import verifyRoutes from './routes/verify/index.js';
-import agentRoutes from './routes/agent/index.js';
-import agentKeyRoutes from './routes/agent-keys/index.js';
+import agentRoutes, { enrollmentOnboardingHandler } from './routes/agent/index.js';
 import entityCardRoutes from './routes/entity-card/index.js';
 import { createEntityCardSource } from './services/entity-card/entity-card.source.js';
 import auditLogRoutes from './routes/audit-log/index.js';
@@ -50,6 +49,11 @@ import sessionRoutes from './routes/sessions/index.js';
 import serviceProviderRoutes from './routes/service-provider/index.js';
 import type { RedisLike } from './cache/RedisCache.js';
 import { SqliteStore } from './storage/sqlite.js';
+import { CustodyRepository, WrappedKeyRepository } from './repositories/custody.repository.js';
+import { DbKeyStore, resolveKeyEncryptionKey } from './services/custody/db-key-store.js';
+import { CustodyService } from './services/custody/custody.service.js';
+import { CustodyRecheckScheduler, custodyRecheckSettings } from './services/custody/custody-recheck.js';
+import custodyRoutes from './routes/custody/index.js';
 
 const config = loadConfigFromEnv();
 const storageAdapter =
@@ -163,6 +167,33 @@ const serviceProviderService = new ServiceProviderService(
   keyCustody,
   auditTrail,
 );
+
+// KYA-OS story F-3: custody preference. Helix-held keys live in the DbKeyStore
+// (wrapped_keys, AES-256-GCM under HELIX_KEY_STORE_KEK); self-custody keys
+// never reach Helix.
+const keyEncryption = resolveKeyEncryptionKey(config);
+const keyStore = new DbKeyStore({
+  table: new WrappedKeyRepository(prisma, sqlite),
+  keyEncryptionKey: keyEncryption.keyEncryptionKey,
+  keyEncryptionKeyId: keyEncryption.keyEncryptionKeyId,
+});
+const custodyService = new CustodyService({
+  records: new CustodyRepository(prisma, sqlite),
+  keyStore,
+  didRepository,
+  credentials: credentialService,
+  services: serviceRepository,
+  auditTrail,
+  host: config.DID_DOMAIN,
+  didCache,
+  recheck: custodyRecheckSettings(config),
+});
+// Own-hosted subjects waiting for their documents are re-checked in the background.
+const custodyRecheck = new CustodyRecheckScheduler(custodyService, { tickSeconds: config.CUSTODY_RECHECK_TICK_SECONDS });
+
+// Services created through the custody routes sign consent grants through
+// the KeyStore (stories rule 8).
+serviceProviderService.attachCustodialKeys(custodyService);
 
 const app = Fastify({
   logger: {
@@ -280,18 +311,28 @@ await app.register(agentRoutes, {
   agentService,
   credentialService,
   adminApiKey: config.HELIX_ADMIN_API_KEY,
+  // KYA-OS story F-3: the custody routes own POST /v1/agents.
+  createAgentRoute: false,
 });
-await app.register(agentKeyRoutes, { prefix: '/v1', didRepository, didCache, adminApiKey: config.HELIX_ADMIN_API_KEY });
 await app.register(serviceProviderRoutes, {
   prefix: '/v1',
   serviceProviderService,
   adminApiKey: config.HELIX_ADMIN_API_KEY,
+  custody: { service: custodyService },
+});
+await app.register(custodyRoutes, {
+  prefix: '/v1',
+  custodyService,
+  adminApiKey: config.HELIX_ADMIN_API_KEY,
+  // A POST /v1/agents body with enrollmentToken is story F-1's token onboarding, unchanged.
+  enrollmentOnboarding: enrollmentOnboardingHandler(agentService),
 });
 // KYA-OS story C-A: /{path}/did.json, /{path}/card.json and /.well-known/kya-os-card.json; after the static routes, so the wildcard never shadows them.
-await app.register(entityCardRoutes, { source: createEntityCardSource({ host: config.DID_DOMAIN, didRepository, services: serviceRepository }) });
+await app.register(entityCardRoutes, { source: createEntityCardSource({ host: config.DID_DOMAIN, didRepository, services: serviceRepository, details: (did) => custodyService.cardDetails(did) }) });
 
 const shutdown = async (): Promise<void> => {
   app.log.info('Helix ID API shutting down...');
+  await custodyRecheck.stop();
   await app.close();
   (redis as Redis | null)?.disconnect();
   await prisma?.$disconnect();
@@ -305,6 +346,7 @@ process.on('SIGINT', () => void shutdown());
 const start = async (): Promise<void> => {
   try {
     await app.listen({ port: config.PORT, host: '0.0.0.0' });
+    if (config.CUSTODY_RECHECK_ENABLED) custodyRecheck.start();
   } catch (err) {
     app.log.error(err);
     process.exit(1);

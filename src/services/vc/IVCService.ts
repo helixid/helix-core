@@ -14,6 +14,9 @@ export interface IssueVCInput {
   expiresInSeconds?: number;
   expiresAt?: Date | null;
   revokeExisting?: boolean;
+  /** KYA-OS story F-3: recorded on the agent's identity credential. */
+  keyCustody?: 'self' | 'helix';
+  didHosting?: 'own' | 'helix';
 }
 
 export interface IssueVCResult extends Partial<ReconcileResult> {
