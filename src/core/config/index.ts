@@ -149,6 +149,14 @@ export const ConfigSchema = z.object({
   CUSTODY_RECHECK_GIVE_UP_AFTER_SECONDS: z.coerce.number().int().min(60).max(30 * 86400).default(3 * 86400),
   CUSTODY_RECHECK_BATCH_SIZE: z.coerce.number().int().min(1).max(500).default(20),
 
+  // KYA-OS story L3-H: consent requests and the user's pairwise did:keys.
+  // A consent request waits this long for the user's click; a consented
+  // window lasts at most MAX_WINDOW; the shred job runs every
+  // USER_KEY_SHRED_INTERVAL_SECONDS (0: off, run it through the admin route).
+  CONSENT_REQUEST_TTL_SECONDS: z.coerce.number().int().min(30).max(86400).default(600),
+  CONSENT_MAX_WINDOW_SECONDS: z.coerce.number().int().min(60).max(5 * 365 * 86400).default(365 * 86400),
+  USER_KEY_SHRED_INTERVAL_SECONDS: z.coerce.number().int().min(0).max(86400).default(3600),
+
   // Hosted accounts & auth (Item #1, see the hosted-instance design).
   // All optional/defaulted so self-hosted deployments (which don't use
   // accounts at all — HELIX_ADMIN_API_KEY covers the single operator) never

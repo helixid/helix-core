@@ -126,7 +126,6 @@ export {
 export type {
   IServiceProviderService,
   EnrollServiceInput,
-  IssueDelegationGrantInput,
 } from './services/service-provider/service-provider.service.js';
 
 export { default as didRoutes } from './routes/did/index.js';
@@ -169,3 +168,42 @@ export { runAuditCli, verifyAuditLedgerExport, type AuditCliIo, type AuditLedger
 export { default as sessionRoutes } from './routes/sessions/index.js';
 export { default as serviceProviderRoutes } from './routes/service-provider/index.js';
 export type { ServiceProviderAction, ServiceProviderRouteOptions } from './routes/service-provider/index.js';
+// KYA-OS story L3-H: the root delegation signed by the user's did:key at consent.
+export { default as consentRoutes, readCookie, type ConsentRouteOptions } from './routes/consent/index.js';
+export { ConsentService, readUnsignedGrant, CONSENT_PAGE_COOKIE, DEFAULT_CONSENT_REQUEST_TTL_SECONDS, DEFAULT_MAX_CONSENT_WINDOW_SECONDS } from './services/consent/consent.service.js';
+export type {
+  ApprovedConsent,
+  ConsentPage,
+  ConsentRequestResult,
+  ConsentRequestState,
+  ConsentServiceInfo,
+  ConsentServiceOptions,
+  CreatedConsentRequest,
+  RenewedHop,
+  WithdrawnConsent,
+} from './services/consent/consent.service.js';
+export { UserKeyService, serviceUserRefOf, ORPHAN_USER_KEY_MS } from './services/consent/user-key.service.js';
+export type { UserKeyServiceOptions, UserKeyRepository } from './services/consent/user-key.service.js';
+export {
+  CONSENT_REQUEST_TYP,
+  CONSENT_RENEWAL_TYP,
+  CONSENT_WITHDRAWAL_TYP,
+  SIGNED_REQUEST_SKEW_SECONDS,
+  MemoryJtiStore,
+  signRequest,
+  verifySignedRequest,
+} from './services/consent/signed-request.js';
+export type { JtiStore, SignedRequestClaims, SignedRequestOptions } from './services/consent/signed-request.js';
+export { consentServiceDirectory, consentAgentScopes } from './services/consent/directory.js';
+export type { ServiceDirectorySources } from './services/consent/directory.js';
+export { ConsentRepository, CONSENT_REQUEST_STATUSES } from './repositories/consent.repository.js';
+export type {
+  ConsentDisplay,
+  ConsentRequestRow,
+  ConsentRequestStatus,
+  UnsignedRootGrant,
+  UserConsentRow,
+  UserKeyRow,
+} from './repositories/consent.repository.js';
+export { CONSENT_SQLITE_DDL } from './repositories/drivers/consent.drivers.js';
+export type { CredentialCardOptions } from './services/entity-card/entity-card.source.js';

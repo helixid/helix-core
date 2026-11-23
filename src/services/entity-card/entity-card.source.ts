@@ -86,6 +86,15 @@ export async function attestedCardCapabilities(store: ActiveCredentialStore, did
   return capabilities.length === 0 ? undefined : capabilities;
 }
 
+export interface CredentialCardOptions {
+  /**
+   * Story L3-H: whether the agent acts on user consent (a consent request
+   * named it). Its card then leaves `responsibleParty` out, so a verifier's
+   * root check falls to each chain's own root, the consenting user's did:key.
+   */
+  actsOnUserConsent?: ((agentDid: string) => Promise<boolean>) | undefined;
+}
+
 /**
  * An agent's card members from the credentials Helix holds for it (F-3
  * parity, Harish 2026-11-23): its active capability attestations
@@ -95,7 +104,10 @@ export async function attestedCardCapabilities(store: ActiveCredentialStore, did
  * card keeps its `revocation` entry and verifiers see the bit set. Nothing for any other subject, or a member it has no
  * credential for.
  */
-export function credentialCardDetails(store: ActiveCredentialStore): (did: string, subjectType: string) => Promise<EntityCardDetails | undefined> {
+export function credentialCardDetails(
+  store: ActiveCredentialStore,
+  options: CredentialCardOptions = {},
+): (did: string, subjectType: string) => Promise<EntityCardDetails | undefined> {
   return async (did, subjectType) => {
     if (subjectType !== 'agent') return undefined;
     const details: EntityCardDetails = {};
@@ -108,7 +120,9 @@ export function credentialCardDetails(store: ActiveCredentialStore): (did: strin
     const latest = active ?? (await store.latestBySubjectDid?.(did, IDENTITY_CREDENTIAL_TYPE));
     const identity = ownIdentity(latest) ? latest : undefined;
     const party = (identity?.['credentialSubject'] as { responsibleParty?: unknown } | undefined)?.responsibleParty;
-    if (typeof party === 'string' && party !== '') details.responsibleParty = party;
+    // Story L3-H (Harish, 2026-11-23): an agent acting on user consent has no single responsible party;
+    // each chain's own root (the user's did:key) is, so the card leaves it out.
+    if (typeof party === 'string' && party !== '' && !(await options.actsOnUserConsent?.(did))) details.responsibleParty = party;
     const status = identity?.['credentialStatus'] as { statusListCredential?: unknown; statusListIndex?: unknown } | undefined;
     if (typeof status?.statusListCredential === 'string' && (typeof status.statusListIndex === 'string' || typeof status.statusListIndex === 'number')) {
       details.revocation = { statusListCredential: status.statusListCredential, statusListIndex: String(status.statusListIndex) };

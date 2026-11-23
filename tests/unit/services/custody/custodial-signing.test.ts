@@ -5,8 +5,6 @@ import * as ed25519 from '@noble/ed25519';
 import { describe, expect, it } from 'vitest';
 import {
   CustodialSigningRefusedError,
-  DelegateeNotAnAgentError,
-  ServiceKeyNotFoundError,
   createEd25519Proof,
   base64UrlDecodeStrict,
   base64UrlEncode,
@@ -19,32 +17,16 @@ import {
   verifyDelegationChainProofs,
   EnvSigner,
   type Signer,
-  verifyEd25519Proof,
   type DIDDocument,
 } from '../../../../src/core/index.js';
 import { DidKeyRepository } from '../../../../src/repositories/did-key.repository.js';
 import { VcRepository } from '../../../../src/repositories/vc.repository.js';
 import { CredentialService } from '../../../../src/services/credentials/credential.service.js';
 import { AesGcmKeyCustody } from '../../../../src/services/key-custody/key-custody.js';
-import { ServiceProviderService } from '../../../../src/services/service-provider/service-provider.service.js';
-import { MockVCService } from '../../../mocks/MockVCService.js';
 import { TestAuditTrail } from '../../../utils/TestAuditTrail.js';
 import { clientKey, enrollmentSignature, CustodyEvents, events, harness, type Harness } from './harness.js';
 
 const MASTER = 'b'.repeat(64);
-
-/** Story F-1's credentials of an onboarded agent: its identity credential and one capability attestation per scope. */
-function agentCredentials(did: string, scopes: string[] = ['read:orders']): Record<string, unknown>[] {
-  return [
-    { id: `vc:helix:${did.slice(-8)}`, type: ['VerifiableCredential', 'AgentIdentityCredential'], issuer: 'did:web:helix.example', credentialSubject: { id: did, name: 'A' } },
-    ...scopes.map((capability) => ({
-      id: `att:helix:${did.slice(-8)}:${capability}`,
-      type: ['VerifiableCredential', 'CapabilityAttestationCredential'],
-      issuer: 'did:web:helix.example',
-      credentialSubject: { id: did, capability },
-    })),
-  ];
-}
 
 async function documentOf(h: Harness, did: string): Promise<DIDDocument> {
   return (await h.dids.findDidById(did))!.didDocument as DIDDocument;
@@ -171,48 +153,6 @@ describe('delegation hops Helix issues for custodial agents and services (F-3 pa
     await expect(credentials.signerFor(self.did, 'req')).rejects.toMatchObject({ code: 'AGENT_KEY_NOT_FOUND' });
     await expect((await credentialsFor(h, false)).signerFor(custodial.did)).rejects.toMatchObject({ code: 'AGENT_KEY_NOT_FOUND' });
     expect((await credentials.signerFor(custodial.did)).did).toBe(custodial.did);
-  });
-});
-
-describe('consent grants for services and agents created through the custody routes', () => {
-  function grantsFor(h: Harness, vcService: MockVCService, didKeys = new DidKeyRepository(), attach = true): ServiceProviderService {
-    const sp = new ServiceProviderService({} as never, vcService, h.services, didKeys, new AesGcmKeyCustody(MASTER), new TestAuditTrail());
-    if (attach) sp.attachCustodialKeys(h.service);
-    return sp;
-  }
-
-  it('a custodial service grants consent to a custodial agent, signing through its KeyStore key', async () => {
-    const h = harness();
-    const svc = await h.service.createService({ name: 'orders', domain: 'orders.example', requiredScopes: ['read:orders'], keyCustody: 'helix' }, h.context());
-    const agent = await h.service.createAgent({ name: 'Shopper', scopes: ['read:orders'], keyCustody: 'helix' }, h.context());
-    const vcService = new MockVCService();
-    vcService.setActiveVCs(agentCredentials(agent.did));
-    const sp = grantsFor(h, vcService);
-    expect(await sp.getAgentScopes(agent.did)).toEqual({ agentDid: agent.did, scopes: ['read:orders'] });
-    const { grantVC } = await sp.issueDelegationGrant({ serviceDid: svc.did, agentDid: agent.did, userDid: 'did:key:z6MkuserUser', scopes: ['read:orders'] }, 'req');
-    expect(grantVC.issuer).toBe(svc.did);
-    expect(grantVC.proof.verificationMethod).toBe(`${svc.did}#key-1`);
-    const { proof, ...payload } = grantVC as unknown as Record<string, unknown> & { proof: { proofValue: string } };
-    expect(await verifyEd25519Proof(payload, proof, await documentOf(h, svc.did))).toBe(true);
-    expect(events(h, CustodyEvents.CUSTODIAL_SIGNATURE)).toEqual([expect.objectContaining({ actor: 'custodial-grant', subjectType: 'service', did: svc.did })]);
-  });
-
-  it('a self-custody service has no Helix key to sign with; a pending agent or a did_keys key of another kind is refused', async () => {
-    const h = harness();
-    const selfService = await h.service.createService({ name: 'billing', domain: 'billing.example', requiredScopes: ['read:orders'], keyCustody: 'self', publicKeyJwk: clientKey().publicKeyJwk }, h.context());
-    const agent = await h.service.createAgent({ name: 'Shopper', scopes: ['read:orders'], keyCustody: 'helix' }, h.context());
-    const pending = await h.service.createAgent({ name: 'Pending', keyCustody: 'self' }, h.context());
-    const vcService = new MockVCService();
-    vcService.setActiveVCs(agentCredentials(agent.did));
-    const didKeys = new DidKeyRepository();
-    const sp = grantsFor(h, vcService, didKeys);
-    await expect(sp.issueDelegationGrant({ serviceDid: selfService.did, agentDid: agent.did, userDid: 'did:key:z6Mkuser', scopes: ['read:orders'] }, 'req')).rejects.toThrow(ServiceKeyNotFoundError);
-    await expect(sp.getAgentScopes(pending.did)).rejects.toThrow(DelegateeNotAnAgentError);
-    const wrongKind = await h.service.createService({ name: 'odd', domain: 'odd.example', requiredScopes: ['read:orders'], keyCustody: 'helix' }, h.context());
-    await didKeys.create({ did: wrongKind.did, subjectType: 'agent', encryptedPrivateKey: 'x', iv: 'x', authTag: 'x', algorithm: 'aes-256-gcm' });
-    await expect(sp.issueDelegationGrant({ serviceDid: wrongKind.did, agentDid: agent.did, userDid: 'did:key:z6Mkuser', scopes: ['read:orders'] }, 'req')).rejects.toThrow(ServiceKeyNotFoundError);
-    const unattached = grantsFor(h, vcService, new DidKeyRepository(), false);
-    await expect(unattached.getAgentScopes(agent.did)).rejects.toThrow(DelegateeNotAnAgentError);
   });
 });
 

@@ -316,7 +316,9 @@ export class CredentialService implements HopReissuer {
     scopes: string[] | undefined,
     parentVcId: string | undefined,
     requestId: string,
-    name: 'issued' | 'registered' | 'reissued' = 'issued',
+    name: 'issued' | 'registered' | 'renewed' | 'reissued' = 'issued',
+    userDid: string | null = null,
+    auditParent?: string,
   ): Promise<void> {
     await this.ensureSubjectRegistered(subjectDid, requestId);
     const index = Number(credential.credentialStatus.statusListIndex);
@@ -333,10 +335,10 @@ export class CredentialService implements HopReissuer {
       parentVcId,
       vcType: types.find((type) => type !== 'VerifiableCredential') ?? null,
       issuerDid: record['issuer'] as string,
-      userDid: null,
+      userDid,
       scopeKey: scopes ? [...new Set(scopes)].sort().join(' ') : null,
     });
-    this.auditIssued(credential, subjectDid, name, requestId, parentVcId);
+    this.auditIssued(credential, subjectDid, name, requestId, parentVcId ?? auditParent);
   }
 
   async issueIdentity(input: IssueIdentityInput, requestId: string): Promise<SignedIdentityCredential> {
@@ -487,6 +489,40 @@ export class CredentialService implements HopReissuer {
       throw new HelixError(ErrorCode.DELEGATION_CHAIN_INVALID, evaluation.reasons.join('; '), 400);
     }
     await this.store(hop, input.invoker, [...input.allowedAction], undefined, requestId);
+    return hop;
+  }
+
+  /**
+   * A root hop signed by a user's own did:key at consent (story L3-H point 3):
+   * `issuer` is the user, never Helix nor the service; the entry goes on the
+   * user's own status list (L3-C), which the same key signs. Only the consent
+   * service calls this, with the Signer of the user key the click unlocked,
+   * so no route can sign as a user. `name` is `renewed` for a renewal inside
+   * the consented window, which `parentRef` then links to the hop it renews.
+   */
+  async issueUserRootHop(
+    signer: Signer,
+    input: Omit<IssueRootHopInput, 'issuer' | 'validUntil'> & { validUntil: string },
+    requestId: string,
+    renews?: string,
+  ): Promise<SignedDelegationHop> {
+    const statusEntry = await this.statusEntry(signer.did);
+    const hop = await buildDelegationHop(
+      rootHopInput({
+        invoker: input.invoker,
+        invocationTarget: input.invocationTarget,
+        allowedAction: input.allowedAction,
+        ...(input.caveats === undefined ? {} : { caveats: input.caveats }),
+        validUntil: input.validUntil,
+        statusEntry,
+      }),
+      signer,
+    );
+    const evaluation = evaluateDelegationChain([hop]);
+    if (!evaluation.ok) {
+      throw new HelixError(ErrorCode.DELEGATION_CHAIN_INVALID, evaluation.reasons.join('; '), 400);
+    }
+    await this.store(hop, input.invoker, [...input.allowedAction], undefined, requestId, renews === undefined ? 'issued' : 'renewed', signer.did, renews);
     return hop;
   }
 
