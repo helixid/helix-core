@@ -49,7 +49,7 @@ interface Stack {
   identityId: string;
 }
 
-async function stack(options: { listen?: boolean; heartbeatMs?: number; signerFor?: boolean } = {}): Promise<Stack> {
+async function stack(options: { listen?: boolean; heartbeatMs?: number; signerFor?: boolean; maxParamLength?: number } = {}): Promise<Stack> {
   const repo = new VcRepository();
   const audit = new TestAuditTrail();
   const publisher = new StatusListPublisher({
@@ -74,7 +74,7 @@ async function stack(options: { listen?: boolean; heartbeatMs?: number; signerFo
     vcType: 'AgentIdentityCredential',
     vcJson: { type: ['VerifiableCredential', 'AgentIdentityCredential'], issuer: helixDid, credentialSubject: { id: 'did:key:z6MkAgent', responsibleParty: ownerDid }, credentialStatus: entry },
   });
-  const app = Fastify({ logger: false });
+  const app = Fastify({ logger: false, ...(options.maxParamLength === undefined ? {} : { routerOptions: { maxParamLength: options.maxParamLength } }) });
   app.setErrorHandler(errorHandler);
   await app.register(statusListRoutes, { prefix: '/v1/status-list', statusLists, adminApiKey: ADMIN });
   await app.register(revocationRoutes, {
@@ -167,6 +167,26 @@ describe('status-list routes', () => {
     expect(entry.statusCode).toBe(201);
     expect(entry.json()).toMatchObject({ type: 'BitstringStatusListEntry', statusPurpose: 'revocation', statusListIndex: '0', statusListCredential: `${API}/v1/status-list/${statusListIdFor(ownerDid, helixDid)}` });
     expect((await s.app.inject({ method: 'POST', url: '/v1/status-list/entries', headers: { 'x-admin-api-key': ADMIN }, payload: { issuer: 'nope' } })).statusCode).toBe(400);
+  });
+
+  it('serves the list of an issuer whose list id is longer than 100 characters, with the router setting server.ts uses', async () => {
+    // A hosted agent's did:web: its list id, `iss-` + base64url(DID), is far past Fastify's default 100-character parameter.
+    const longDid = `did:web:helix.example.com:accounts:${'a1b2c3d4'.repeat(4)}:agents:${'shopping-assistant-'.repeat(3)}x`;
+    const listId = statusListIdFor(longDid, helixDid);
+    expect(listId.length).toBeGreaterThan(100);
+    await s.statusLists.statusEntryFor(longDid);
+    // Fastify's default refuses it before any route runs.
+    expect((await s.app.inject({ method: 'GET', url: `/v1/status-list/${listId}` })).statusCode).toBe(414);
+    const wide = await stack({ maxParamLength: 2048 });
+    apps.push(wide.app);
+    await wide.statusLists.statusEntryFor(longDid);
+    // The route runs: the issuer has not signed its list yet (503), and its unsigned list is there to sign.
+    const served = await wide.app.inject({ method: 'GET', url: `/v1/status-list/${listId}` });
+    expect(served.statusCode).toBe(503);
+    expect(served.json()).toMatchObject({ error: { code: ErrorCode.STATUS_LIST_UNSIGNED } });
+    const unsigned = await wide.app.inject({ method: 'GET', url: `/v1/status-list/${listId}/unsigned` });
+    expect(unsigned.statusCode).toBe(200);
+    expect(unsigned.json().issuer).toBe(longDid);
   });
 
   it('creates a list with the admin API key only', async () => {
