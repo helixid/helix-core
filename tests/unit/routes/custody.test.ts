@@ -167,6 +167,12 @@ describe('custody routes', () => {
     expect((await post(plain, '/v1/agents', { enrollmentToken: 'tok' })).statusCode).toBe(400);
   });
 
+  it('the package exports the token onboarding handler, so a consuming server (helixid) wires POST /v1/agents as core does', async () => {
+    const pkg = await import('../../../src/index.js');
+    const { enrollmentOnboardingHandler } = await import('../../../src/routes/agent/index.js');
+    expect(pkg.enrollmentOnboardingHandler).toBe(enrollmentOnboardingHandler);
+  });
+
   it('the agent routes register POST /agents only when the custody routes do not own it', async () => {
     const { default: agentRoutes } = await import('../../../src/routes/agent/index.js');
     for (const [createAgentRoute, expected] of [[false, 404], [undefined, 201]] as const) {
