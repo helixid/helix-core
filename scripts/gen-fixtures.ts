@@ -237,6 +237,8 @@ export async function buildVerifierFixtures(): Promise<{ environment: FixtureEnv
   lists[listUrl('owner', 'other-id')] = { encoded_list: createStatusList(256), issuer: keys.owner.did, status_purpose: 'revocation', id: listUrl('owner', '1'), ...window };
   lists[listUrl('owner', 'cached')] = { encoded_list: createStatusList(256), issuer: keys.owner.did, status_purpose: ['suspension', 'revocation'], id: listUrl('owner', 'cached'), ...window, fresh: false };
   lists[listUrl('owner', 'bare')] = { encoded_list: createStatusList(256) };
+  // The agent's own list for its card's revocation entry (SPEC-ENTITY-CARD §10.3): index 5 is set.
+  lists[listUrl('agent', 'card')] = { encoded_list: setBit(createStatusList(256), 5, 1), issuer: keys.agent.did, status_purpose: 'revocation', id: listUrl('agent', 'card'), ...window };
 
   const entryOf = (issuer: KeyLabel, index: number, variant = '1'): BitstringStatusEntry => ({
     id: `${listUrl(issuer, variant)}#${index}`,
@@ -283,6 +285,10 @@ export async function buildVerifierFixtures(): Promise<{ environment: FixtureEnv
     stranger_responsible: card([attested('read:orders', readOrders), attested('write:orders', writeOrders)], keys.stranger.did),
     malformed: { ...card([attested('read:orders', readOrders)]), unknownMember: true },
     stranger_card: { ...card([attested('read:orders', readOrders)]), id: keys.stranger.did, kid: keys.stranger.kid },
+    // The card's own revocation entry, on a list its DID keeps: set, unset, and on a list the card does not keep.
+    card_revoked: { ...card([attested('read:orders', readOrders), attested('write:orders', writeOrders)]), revocation: { statusListCredential: listUrl('agent', 'card'), statusListIndex: '5' } },
+    card_live: { ...card([attested('read:orders', readOrders), attested('write:orders', writeOrders)]), revocation: { statusListCredential: listUrl('agent', 'card'), statusListIndex: '4' } },
+    card_list_not_kept: { ...card([attested('read:orders', readOrders), attested('write:orders', writeOrders)]), revocation: { statusListCredential: listUrl('helix'), statusListIndex: '4' } },
   };
 
   // ── the chain: owner (root) → parent → agent ───────────────────────────
@@ -496,6 +502,9 @@ export async function buildVerifierFixtures(): Promise<{ environment: FixtureEnv
   await statusCase('index_out_of_range', 'an index past the list names no bit', [await rootVariant({ invoker: AGENT, id: 'urn:zcap:00000000-0000-4000-8000-00000000f326', statusEntry: entryOf('owner', 4096) })]);
   await statusCase('status_seam_missing', 'without a fetchStatusList seam a chain cannot be verified', chain, { seams: { fetchStatusList: 'missing' } });
   await statusCase('revoked_attestation_only_demotes', 'a revoked attestation demotes but does not refuse', chain, {}, 'revoked_attestation');
+  await statusCase('revoked_card', "the card's own revocation entry is set: the agent is refused", chain, {}, 'card_revoked');
+  await statusCase('live_card', "the card's revocation entry is read and unset: the call is verified as usual", chain, {}, 'card_live');
+  await statusCase('card_list_not_kept_by_card', "the card's entry names a list another DID signs and no configuration binds: refused", chain, {}, 'card_list_not_kept');
 
   // seams
   const seamCase = async (name: string, description: string, seams: Partial<SeamSetting>): Promise<void> =>
