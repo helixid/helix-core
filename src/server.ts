@@ -243,6 +243,8 @@ const custodyRecheck = new CustodyRecheckScheduler(custodyService, { tickSeconds
 // Services created through the custody routes sign consent grants through
 // the KeyStore (stories rule 8).
 serviceProviderService.attachCustodialKeys(custodyService);
+// KYA-OS story L3-C: a custodial issuer's own status list is signed through its KeyStore key too.
+statusListPublisher.attachCustodialKeys(custodyService);
 
 const app = Fastify({
   logger: {

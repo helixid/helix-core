@@ -27,6 +27,7 @@ import { REVOCATION_REQUEST_TYP, RevocationService } from '../../../src/services
 import { RevocationSignalPublisher, type RevocationEvent } from '../../../src/services/revocation/signal-publisher.js';
 import { InProcessCache } from '../../../src/cache/InProcessCache.js';
 import { TestAuditTrail } from '../../utils/TestAuditTrail.js';
+import { CustodyEvents, clientKey, events as custodyEvents, harness as custodyHarness } from './custody/harness.js';
 
 const API = 'https://api.helix.test';
 const AUDIENCE = `${API}/v1/revocations`;
@@ -207,6 +208,47 @@ describe('signed per-issuer status lists', () => {
     const resigned = await signDataIntegrity((await w.publisher.unsignedList(listId)) as unknown as Record<string, unknown>, ownerSigner);
     await w.publisher.submitSigned(listId, resigned);
     expect(kyaos.verifier.readStatusBit((await w.served(listId)).bits, 0)).toBe(1);
+  });
+
+  it('a custodial issuer (F-3 KeyStore key) has its list signed through its KeyStore key, audited as a status_list signature', async () => {
+    const h = custodyHarness();
+    const svc = await h.service.createService({ name: 'orders', domain: 'orders.example', requiredScopes: ['read:orders'], keyCustody: 'helix' }, h.context());
+    const agent = await h.service.createAgent({ name: 'Shopper', scopes: ['read:orders'], keyCustody: 'helix' }, h.context());
+    const selfService = await h.service.createService({ name: 'billing', domain: 'billing.example', requiredScopes: ['read:orders'], keyCustody: 'self', publicKeyJwk: clientKey().publicKeyJwk }, h.context());
+    for (const did of [svc.did, agent.did]) w.documents[did] = (await h.dids.findDidById(did))!.didDocument as DIDDocument;
+    const custodyLookups = vi.spyOn(h.service, 'signerFor');
+    w.publisher.attachCustodialKeys(h.service);
+
+    // Without the KeyStore, these issuers' lists could not be signed; with it, each is signed by its own key.
+    for (const did of [svc.did, agent.did]) {
+      const entry = await w.statusLists.statusEntryFor(did);
+      const listId = w.publisher.listIdOfUrl(entry.statusListCredential)!;
+      expect((await w.served(listId)).issuer).toBe(did);
+    }
+    expect(custodyLookups.mock.calls.map(([did, subjectType, use]) => [did, subjectType, use.purpose])).toEqual([
+      [svc.did, 'agent', 'status_list'],
+      [svc.did, 'service', 'status_list'],
+      [agent.did, 'agent', 'status_list'],
+    ]);
+    expect(custodyEvents(h, CustodyEvents.CUSTODIAL_SIGNATURE)).toEqual([
+      expect.objectContaining({ actor: 'custodial-status_list', subjectType: 'service', did: svc.did }),
+      expect.objectContaining({ actor: 'custodial-status_list', subjectType: 'agent', did: agent.did }),
+    ]);
+
+    // A revocation on the service's list is republished at once, signed by the service again.
+    const entry = await w.statusLists.statusEntryFor(svc.did);
+    const granted = { vcId: 'urn:uuid:svc-grant', subjectDid: agent.did, subjectType: 'agent', statusListIndex: Number(entry.statusListIndex), expiresAt: null, issuerDid: svc.did, vcJson: { issuer: svc.did, credentialSubject: { id: agent.did }, credentialStatus: entry } };
+    await w.vcRepo.createVc(granted);
+    await w.statusLists.revokeVC(granted.vcId, 'req');
+    expect(await w.bitOf(granted.vcJson)).toBe(1);
+
+    // The Helix issuer's list never asks the KeyStore; a self-custody service still signs its own (503 until it does).
+    custodyLookups.mockClear();
+    await w.statusLists.statusEntryFor(helixDid);
+    expect((await w.served(DEFAULT_STATUS_LIST_ID)).issuer).toBe(helixDid);
+    expect(custodyLookups).not.toHaveBeenCalled();
+    const selfList = w.publisher.listIdOfUrl((await w.statusLists.statusEntryFor(selfService.did)).statusListCredential)!;
+    await expect(w.statusLists.getSigned(selfList)).rejects.toMatchObject({ code: ErrorCode.STATUS_LIST_UNSIGNED, httpStatus: 503 });
   });
 
   it('refuses an issuer-signed list that is not this list as it stands', async () => {

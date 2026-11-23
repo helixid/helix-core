@@ -23,7 +23,10 @@
  * re-signs the lists it knows ahead of time).
  *
  * Signers: the Helix issuer, and every DID whose key Helix holds go through
- * `signerFor` (the KeyStore; stories rule 8). An issuer whose key stays with
+ * `signerFor` (the KeyStore; stories rule 8). A custodial agent or service
+ * created through F-3's custody routes keeps its key in the KeyStore: with
+ * `attachCustodialKeys`, its list is signed through its KeyStoreSigner, each
+ * signature audited as a custodial signature for `status_list`. An issuer whose key stays with
  * it (self-custody) signs its own list: it reads the unsigned list from
  * `unsignedList()`, signs it, and hands it back to `submitSigned()`, which
  * accepts it only when its proof verifies under the issuer's
@@ -58,6 +61,8 @@ import {
   type Signer,
   type StatusListCredential,
 } from '../../core/index.js';
+import { randomUUID } from 'node:crypto';
+import type { CustodialKeys } from '../custody/custodial-keys.js';
 import { credentialRevoked, recordAudit, revocationSignalFailed, statusListPublished } from '../revocation/audit.js';
 import type { ICache } from '../../cache/ICache.js';
 import { NoopCache } from '../../cache/NoopCache.js';
@@ -109,6 +114,7 @@ export class StatusListPublisher {
   readonly #published = new Map<string, Published>();
   readonly #signedCache: ICache<string>;
   #timer: ReturnType<typeof setInterval> | undefined;
+  #custodialKeys: Pick<CustodialKeys, 'signerFor'> | undefined;
 
   constructor(options: StatusListPublisherOptions) {
     this.#options = options;
@@ -120,6 +126,29 @@ export class StatusListPublisher {
     }
     this.#clock = options.clock ?? Date.now;
     this.#signedCache = options.signedCache ?? new NoopCache<string>();
+  }
+
+  /**
+   * KYA-OS story F-3: agents and services created through the custody routes
+   * keep their key in the KeyStore, not where `signerFor` looks. With this
+   * attached, the list of such an issuer with key custody `helix` is signed
+   * through its KeyStoreSigner (stories rule 8), audited as a custodial
+   * signature for `status_list`; otherwise that list would wait for a
+   * signature nobody can give (503, every credential on it read as revoked).
+   */
+  attachCustodialKeys(keys: Pick<CustodialKeys, 'signerFor'>): void {
+    this.#custodialKeys = keys;
+  }
+
+  /** The issuer's Signer: its F-3 KeyStore key first, else `signerFor`; undefined for a self-custody issuer. */
+  async #signerFor(issuer: string): Promise<Signer | undefined> {
+    if (this.#custodialKeys !== undefined && issuer !== this.helixIssuerDid) {
+      for (const subjectType of ['agent', 'service'] as const) {
+        const signer = await this.#custodialKeys.signerFor(issuer, subjectType, { requestId: `status-list-${randomUUID()}`, purpose: 'status_list' });
+        if (signer !== undefined) return signer;
+      }
+    }
+    return this.#options.signerFor(issuer);
   }
 
   listIdFor(issuerDid: string): string {
@@ -194,7 +223,7 @@ export class StatusListPublisher {
     }
     const current = this.#published.get(listId);
     if (this.#servable(current, stored.encodedList)) return current.credential;
-    const signer = await this.#options.signerFor(issuer);
+    const signer = await this.#signerFor(issuer);
     if (signer !== undefined) return (await this.#sign(listId, issuer, stored.encodedList, signer)).credential;
     // A self-custody issuer: only a version it signed over these very bits, still inside its window.
     const submitted = await this.#cachedSigned(listId);
@@ -223,7 +252,7 @@ export class StatusListPublisher {
     if (issuer === undefined) return false;
     const stored = await this.#options.repo.findStatusListById(listId);
     if (!stored) return false;
-    const signer = await this.#options.signerFor(issuer);
+    const signer = await this.#signerFor(issuer);
     if (signer === undefined) return false;
     await this.#sign(listId, issuer, stored.encodedList, signer);
     return true;
