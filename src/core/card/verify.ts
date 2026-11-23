@@ -24,7 +24,10 @@
  * 4. Revocation: a card that declares `revocation` is verified only with a
  *    status-list checker to read it; with none, it reads as revoked and not
  *    fresh with `configuration_error` (§10.3). The checker's answer is
- *    read strictly: only a literal `revoked: false` passes.
+ *    read strictly: only a literal `revoked: false` passes. The checker is
+ *    told the card's DID (`entity`), which keeps the list URL only when its
+ *    configuration binds the URL to no one else (§10.3): a Helix card's list
+ *    is Helix's, bound by `statusListIssuers`.
  * 5. `ok` = accountability ok and attestations ok and not revoked.
  * 6. Level: a revoked card collapses to L1; otherwise L2 when every declared
  *    capability is attested and verified, lifted to L3 by a live proof of
@@ -67,8 +70,13 @@ export interface RevocationVerdict {
   reason?: string;
 }
 
-/** Reads one Bitstring Status List entry, live or cached; e.g. `createStatusListChecker`. */
-export type StatusListChecker = (entry: BitstringStatusListEntry, ctx: { credentialIssuer: string }) => Promise<RevocationVerdict>;
+/**
+ * Reads one Bitstring Status List entry, live or cached; e.g. `createStatusListChecker`.
+ * `entity` is the card's `id`: the keeper of a list URL no configuration binds
+ * (SPEC-ENTITY-CARD §10.3). It is not the list's required signer when the
+ * checker's configuration binds the URL to the backing credential's issuer.
+ */
+export type StatusListChecker = (entry: BitstringStatusListEntry, ctx: { entity: string }) => Promise<RevocationVerdict>;
 
 export interface VerifyEntityCardDeps {
   capabilityVerifier?: CapabilityVerifier | undefined;
@@ -199,7 +207,7 @@ export async function verifyEntityCard(card: EntityCard, deps: VerifyEntityCardD
       revocation = { checked: false, revoked: true, fresh: false, code: 'configuration_error', reason: 'card declares revocation and no status-list checker was supplied' };
     } else {
       try {
-        const verdict = await deps.statusListChecker(card.revocation, { credentialIssuer: card.id });
+        const verdict = await deps.statusListChecker(card.revocation, { entity: card.id });
         const revoked = verdict.revoked !== false;
         revocation = {
           checked: true,

@@ -140,7 +140,7 @@ describe('verifyEntityCard', () => {
     expect(await verifyEntityCard(revocable)).toMatchObject({ ok: false, conformanceLevel: 'L1', code: 'configuration_error', revocation: { checked: false, revoked: true, fresh: false, code: 'configuration_error' } });
     const checker = vi.fn(async () => ({ revoked: false, fresh: true }));
     expect(await verifyEntityCard(revocable, { statusListChecker: checker })).toMatchObject({ ok: true, revocation: { checked: true, revoked: false, fresh: true } });
-    expect(checker).toHaveBeenCalledWith(revocable.revocation, { credentialIssuer: AGENT });
+    expect(checker).toHaveBeenCalledWith(revocable.revocation, { entity: AGENT });
     expect(await verifyEntityCard(revocable, { statusListChecker: async () => ({ revoked: true, fresh: true, code: 'card_revoked', reason: 'bit set' }) })).toMatchObject({ ok: false, code: 'card_revoked', reasons: ['bit set'], revocation: { revoked: true, code: 'card_revoked', reason: 'bit set' } });
     expect(await verifyEntityCard(revocable, { statusListChecker: async () => ({ revoked: 'no' as never, fresh: true }) })).toMatchObject({ ok: false, code: 'card_revoked' });
     expect(await verifyEntityCard(revocable, { statusListChecker: async () => { throw new Error('offline'); } })).toMatchObject({ ok: false, code: 'status_unavailable', revocation: { revoked: true, fresh: false, reason: 'offline' } });
@@ -177,18 +177,19 @@ describe('verifyEntityCard', () => {
 
 describe('createStatusListChecker', () => {
   const entry: BitstringStatusListEntry = { statusListCredential: LIST_URL, statusListIndex: '7' };
-  const seams = { resolveDid: resolveDid as never, clock: () => NOW };
+  // These lists are the org's, for the org-owned agent's card: the configuration binds the URL to the org (§10.3).
+  const seams = { resolveDid: resolveDid as never, clock: () => NOW, statusListIssuers: { [ORG]: [LIST_URL] } };
 
   it('reads the bit of a signed list live through the outbound fetch, fresh, and from a list in hand, not fresh', async () => {
     const [clearList, revokedList] = [await signedList(clear), await signedList(revoked)];
-    expect(await createStatusListChecker({ ...seams, fetch: serving({ [LIST_URL]: clearList }) })(entry, { credentialIssuer: AGENT })).toEqual({ revoked: false, fresh: true });
-    expect(await createStatusListChecker({ ...seams, fetch: serving({ [LIST_URL]: revokedList }) })(entry, { credentialIssuer: AGENT })).toEqual({ revoked: true, fresh: true, code: 'card_revoked', reason: 'the card credential is revoked' });
-    expect(await createStatusListChecker({ ...seams, lists: { [LIST_URL]: clearList } })(entry, { credentialIssuer: AGENT })).toEqual({ revoked: false, fresh: false });
+    expect(await createStatusListChecker({ ...seams, fetch: serving({ [LIST_URL]: clearList }) })(entry, { entity: AGENT })).toEqual({ revoked: false, fresh: true });
+    expect(await createStatusListChecker({ ...seams, fetch: serving({ [LIST_URL]: revokedList }) })(entry, { entity: AGENT })).toEqual({ revoked: true, fresh: true, code: 'card_revoked', reason: 'the card credential is revoked' });
+    expect(await createStatusListChecker({ ...seams, lists: { [LIST_URL]: clearList } })(entry, { entity: AGENT })).toEqual({ revoked: false, fresh: false });
   });
 
   it('verifies the list before any bit (story L3-C): no resolver, an unsigned, a tampered or a foreign-signed list is unavailable', async () => {
     const clearList = (await signedList(clear)) as Record<string, unknown> & { credentialSubject: Record<string, unknown> };
-    const read = async (checker: ReturnType<typeof createStatusListChecker>) => checker(entry, { credentialIssuer: AGENT });
+    const read = async (checker: ReturnType<typeof createStatusListChecker>) => checker(entry, { entity: AGENT });
     expect(await read(createStatusListChecker({ clock: () => NOW, lists: { [LIST_URL]: clearList } }))).toMatchObject({ revoked: true, fresh: false, code: 'status_unavailable', reason: 'no resolveDid seam to verify the status list proof' });
     const unsigned: Record<string, unknown> = { ...clearList };
     delete unsigned['proof'];
@@ -201,23 +202,23 @@ describe('createStatusListChecker', () => {
 
   it('a list past its validUntil is read but never fresh; one whose validFrom lies ahead is unavailable', async () => {
     const stale = await signedList(clear, { validFrom: '2026-11-20T00:00:00Z', validUntil: '2026-11-20T12:00:00Z' });
-    expect(await createStatusListChecker({ ...seams, fetch: serving({ [LIST_URL]: stale }) })(entry, { credentialIssuer: AGENT })).toEqual({ revoked: false, fresh: false });
+    expect(await createStatusListChecker({ ...seams, fetch: serving({ [LIST_URL]: stale }) })(entry, { entity: AGENT })).toEqual({ revoked: false, fresh: false });
     const staleRevoked = await signedList(revoked, { validFrom: '2026-11-20T00:00:00Z', validUntil: '2026-11-20T12:00:00Z' });
-    expect(await createStatusListChecker({ ...seams, fetch: serving({ [LIST_URL]: staleRevoked }) })(entry, { credentialIssuer: AGENT })).toEqual({ revoked: true, fresh: false, code: 'card_revoked', reason: 'the card credential is revoked' });
+    expect(await createStatusListChecker({ ...seams, fetch: serving({ [LIST_URL]: staleRevoked }) })(entry, { entity: AGENT })).toEqual({ revoked: true, fresh: false, code: 'card_revoked', reason: 'the card credential is revoked' });
     const early = await signedList(clear, { validFrom: '2026-11-21T00:05:00Z', validUntil: '2026-11-21T02:00:00Z' });
-    expect(await createStatusListChecker({ ...seams, fetch: serving({ [LIST_URL]: early }) })(entry, { credentialIssuer: AGENT })).toMatchObject({ code: 'status_unavailable', reason: 'status list is not valid yet' });
-    expect(await createStatusListChecker({ ...seams, clockSkewMs: 600_000, fetch: serving({ [LIST_URL]: early }) })(entry, { credentialIssuer: AGENT })).toEqual({ revoked: false, fresh: true });
+    expect(await createStatusListChecker({ ...seams, fetch: serving({ [LIST_URL]: early }) })(entry, { entity: AGENT })).toMatchObject({ code: 'status_unavailable', reason: 'status list is not valid yet' });
+    expect(await createStatusListChecker({ ...seams, clockSkewMs: 600_000, fetch: serving({ [LIST_URL]: early }) })(entry, { entity: AGENT })).toEqual({ revoked: false, fresh: true });
     // Without an injected clock the checker reads the real one.
     const wide = await signedList(clear, { validFrom: '2020-01-01T00:00:00Z', validUntil: '2100-01-01T00:00:00Z' });
-    expect(await createStatusListChecker({ resolveDid: resolveDid as never, fetch: serving({ [LIST_URL]: wide }) })(entry, { credentialIssuer: AGENT })).toEqual({ revoked: false, fresh: true });
+    expect(await createStatusListChecker({ resolveDid: resolveDid as never, statusListIssuers: seams.statusListIssuers, fetch: serving({ [LIST_URL]: wide }) })(entry, { entity: AGENT })).toEqual({ revoked: false, fresh: true });
     // A window that is not a pair of date-times, signed as it stands.
     const undated = await buildStatusListCredential({ id: LIST_URL, issuer: ORG, encodedList: clear, validFrom: 'soon', validUntil: '2026-11-21T01:00:00Z' }, orgSigner);
-    expect(await createStatusListChecker({ ...seams, lists: { [LIST_URL]: undated } })(entry, { credentialIssuer: AGENT })).toMatchObject({ code: 'status_unavailable', reason: 'status list window is not a pair of date-times' });
+    expect(await createStatusListChecker({ ...seams, lists: { [LIST_URL]: undated } })(entry, { entity: AGENT })).toMatchObject({ code: 'status_unavailable', reason: 'status list window is not a pair of date-times' });
   });
 
   it('fails closed as status_unavailable on an unreachable, non-2xx, non-JSON, malformed or unreadable list, a wide entry, a bad index', async () => {
     const clearList = await signedList(clear);
-    const code = async (checker: ReturnType<typeof createStatusListChecker>, candidate = entry): Promise<string | undefined> => (await checker(candidate, { credentialIssuer: AGENT })).code;
+    const code = async (checker: ReturnType<typeof createStatusListChecker>, candidate = entry): Promise<string | undefined> => (await checker(candidate, { entity: AGENT })).code;
     expect(await code(createStatusListChecker({ ...seams, fetch: serving({}) }))).toBe('status_unavailable');
     expect(await code(createStatusListChecker({ ...seams, fetch: async () => { throw new Error('refused'); } }))).toBe('status_unavailable');
     expect(await code(createStatusListChecker({ ...seams, fetch: async () => new Response('<html>', { status: 200 }) }))).toBe('status_unavailable');
@@ -229,5 +230,60 @@ describe('createStatusListChecker', () => {
     expect(await code(createStatusListChecker({ ...seams, lists: { [LIST_URL]: clearList } }), { ...entry, statusListIndex: '7.5' })).toBe('status_unavailable');
     expect(await code(createStatusListChecker({ ...seams, lists: { [LIST_URL]: clearList } }), { ...entry, statusListIndex: '99999999999999999999' })).toBe('status_unavailable');
     expect(await code(createStatusListChecker({ ...seams, lists: { [LIST_URL]: clearList } }), { ...entry, statusSize: 1 })).toBeUndefined();
+  });
+
+  it('reads a list only when its verified signer keeps the URL (SPEC-ENTITY-CARD §10.3): the bound issuer, else the card DID', async () => {
+    // Helix issues the agent's identity VC and keeps its status list; the card's revocation entry points at that VC.
+    const HELIX = 'did:web:helix.test';
+    const HELIX_KEY = '6'.repeat(64);
+    const AGENT_KEY = '7'.repeat(64);
+    const documents: Record<string, DIDDocument> = {
+      [ORG]: orgDocument,
+      [HELIX]: buildDIDDocument(HELIX, derivePublicKey(HELIX_KEY)),
+      [AGENT]: buildDIDDocument(AGENT, derivePublicKey(AGENT_KEY)),
+    };
+    const resolveAll = async (did: string): Promise<DIDDocument | null> => documents[did] ?? null;
+    const listBy = (issuer: string, key: string, extra: { id?: string; encoded?: string } = {}) =>
+      buildStatusListCredential(
+        { id: extra.id ?? LIST_URL, issuer, encodedList: extra.encoded ?? clear, validFrom: '2026-11-20T23:00:00Z', validUntil: '2026-11-21T01:00:00Z' },
+        new EnvSigner({ did: issuer, envVar: 'K', env: { K: key } }),
+      );
+    const helixList = await listBy(HELIX, HELIX_KEY);
+    const read = (list: unknown, statusListIssuers?: Record<string, string[]>, ctx: { entity: string } = { entity: AGENT }) =>
+      createStatusListChecker({ resolveDid: resolveAll as never, clock: () => NOW, statusListIssuers, lists: { [LIST_URL]: list } })(entry, ctx);
+
+    // The fix: a Helix-signed list is read for the agent's card once Helix is bound to the URL or its origin.
+    expect(await read(helixList, { [HELIX]: [LIST_URL] })).toEqual({ revoked: false, fresh: false });
+    expect(await read(helixList, { [HELIX]: ['https://helix.test'] })).toEqual({ revoked: false, fresh: false });
+    expect(await read(await listBy(HELIX, HELIX_KEY, { encoded: revoked }), { [HELIX]: ['https://helix.test'] })).toMatchObject({ revoked: true, code: 'card_revoked' });
+    // Unbound, the card's own DID keeps the URL: Helix's list (or anyone's but the agent's) is refused, fail closed.
+    expect(await read(helixList)).toEqual({ revoked: true, fresh: false, code: 'status_list_mismatch', reason: `status list is signed by ${HELIX}, not ${AGENT}, who keeps ${LIST_URL}` });
+    expect(await read(await listBy(ORG, ORG_KEY))).toMatchObject({ revoked: true, code: 'status_list_mismatch' });
+    // Bound to another issuer, the configuration decides: the agent's own list no longer counts either.
+    expect(await read(helixList, { [ORG]: [LIST_URL] })).toMatchObject({ code: 'status_list_mismatch' });
+    expect(await read(await listBy(AGENT, AGENT_KEY), { [HELIX]: [LIST_URL] })).toMatchObject({ code: 'status_list_mismatch' });
+    // A binding for another URL, or an origin that is only a prefix of the host, does not bind this one.
+    expect(await read(helixList, { [HELIX]: ['https://helix.test/v1/status-list/other'] })).toMatchObject({ code: 'status_list_mismatch' });
+    expect(await read(helixList, { [HELIX]: ['https://helix.tes'] })).toMatchObject({ code: 'status_list_mismatch' });
+    // The Entity's own list is read unbound, and with a binding for some other origin.
+    expect(await read(await listBy(AGENT, AGENT_KEY))).toEqual({ revoked: false, fresh: false });
+    expect(await read(await listBy(AGENT, AGENT_KEY), { [HELIX]: ['https://other.example'] })).toEqual({ revoked: false, fresh: false });
+    // Every list states the entry's URL as its id, byte for byte.
+    expect(await read(await listBy(HELIX, HELIX_KEY, { id: 'https://helix.test/v1/status-list/elsewhere' }), { [HELIX]: [LIST_URL] })).toMatchObject({
+      code: 'status_list_mismatch',
+      reason: 'status list id https://helix.test/v1/status-list/elsewhere is not the URL it was read from',
+    });
+    // No card DID to fall back to: nothing is read.
+    const bound = createStatusListChecker({ resolveDid: resolveAll as never, clock: () => NOW, statusListIssuers: { [HELIX]: [LIST_URL] }, lists: { [LIST_URL]: helixList } });
+    expect(await bound(entry, undefined as never)).toMatchObject({ code: 'status_unavailable', reason: 'no card DID to decide who keeps the status list' });
+    expect(await read(helixList, { [HELIX]: [LIST_URL] }, { entity: '' })).toMatchObject({ code: 'status_unavailable' });
+  });
+
+  it('refuses a malformed statusListIssuers binding when the checker is created', () => {
+    expect(() => createStatusListChecker({ statusListIssuers: { [ORG]: [LIST_URL], 'did:web:other': [LIST_URL] } })).toThrow('statusListIssuers binds one URL to two issuers');
+    expect(() => createStatusListChecker({ statusListIssuers: { [ORG]: ['https://helix.test/'] } })).toThrow(TypeError);
+    expect(() => createStatusListChecker({ statusListIssuers: { [ORG]: ['https://Helix.test'] } })).toThrow(TypeError);
+    expect(() => createStatusListChecker({ statusListIssuers: { [ORG]: ['ftp://helix.test/list'] } })).toThrow(TypeError);
+    expect(() => createStatusListChecker({ statusListIssuers: { [ORG]: 'https://helix.test' as never } })).toThrow(TypeError);
   });
 });
