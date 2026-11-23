@@ -70,6 +70,31 @@ describe('VCService.reconcileActive', () => {
     return (await service.listActiveBySubjectDid(agentDid, GRANT)).map((vc) => vc['id'] as string);
   }
 
+  it('latestBySubjectDid: the newest credential of a type, revoked included; null for none', async () => {
+    const first = await issue(['read:a']);
+    const second = await issue(['read:z']);
+    await service.revokeVC(second.vcId, 'r');
+    expect((await service.latestBySubjectDid(agentDid, GRANT))?.['id']).toBe(second.vcId);
+    expect(await service.latestBySubjectDid(agentDid, 'AgentIdentityCredential')).toBeNull();
+    expect(await service.latestBySubjectDid('did:web:nobody', GRANT)).toBeNull();
+    expect(first.vcId).not.toBe(second.vcId);
+  });
+
+  it('latestBySubjectDid reads a stored string and orders records without a creation time first', async () => {
+    const repo = {
+      findMany: async () => [
+        { vcType: 'AgentIdentityCredential', vcJson: JSON.stringify({ id: 'vc:a' }) },
+        { vcType: 'AgentIdentityCredential', vcJson: { id: 'vc:b' }, createdAt: new Date('2026-01-02T00:00:00Z') },
+        { vcType: 'AgentIdentityCredential', vcJson: JSON.stringify({ id: 'vc:c' }), createdAt: new Date('2026-01-01T00:00:00Z') },
+        { vcType: 'Other', vcJson: { id: 'vc:d' }, createdAt: new Date('2026-02-01T00:00:00Z') },
+      ],
+    };
+    const stub = new VCService(repo as never, {} as never, audit, signingKey, issuerDid, 'http://localhost');
+    expect(await stub.latestBySubjectDid('did:x', 'AgentIdentityCredential')).toEqual({ id: 'vc:b' });
+    const only = new VCService({ findMany: async () => [{ vcType: 'T', vcJson: '{"id":"vc:s"}' }] } as never, {} as never, audit, signingKey, issuerDid, 'http://localhost');
+    expect(await only.latestBySubjectDid('did:x', 'T')).toEqual({ id: 'vc:s' });
+  });
+
   it('re-issuing the same scopes refreshes: old revoked on the status list and chained to the new', async () => {
     const first = await issue(['read:b', 'read:a']);
     const second = await issue(['read:a', 'read:b']);

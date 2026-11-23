@@ -210,7 +210,7 @@ describe("signed-proof-key-relationship vectors through verifyJwsByKid", () => {
     if (vector.expected === "pass") {
       it(`${vector.id} (pass): ${vector.reason}`, async () => {
         const result = await verifyJwsByKid(jws, resolver, {
-          expectedKid: vector.input.keyId,
+          ...(vector.input.keyId === undefined ? {} : { expectedKid: vector.input.keyId }),
           expectedDid: meta.did,
         });
         expect(result.did).toBe(meta.did);
@@ -220,7 +220,7 @@ describe("signed-proof-key-relationship vectors through verifyJwsByKid", () => {
         expect(
           await refusalAsync(
             verifyJwsByKid(jws, resolver, {
-              expectedKid: vector.input.keyId,
+              ...(vector.input.keyId === undefined ? {} : { expectedKid: vector.input.keyId }),
               expectedDid: meta.did,
             }),
           ),

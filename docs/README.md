@@ -95,6 +95,8 @@ const verifier = createLocalVerifier({
   serviceDid: 'did:web:orders.example.com',
   trustedIssuers: '*',
   nonceStore: new RedisNonceStore({ client: redis }), // replay protection, shared by every instance
+  // An agent card's revocation entry is on the Helix issuer's list: bind its exact URL (SPEC-ENTITY-CARD §10.3).
+  statusListIssuers: { 'did:web:api.helixid.dev': ['https://api.helixid.dev/v1/status-list/helix-status-list-1'] },
 })
 const requireHelix = helixidMCPMiddleware({ verifier, toolScopes: { lookup_order: ['read:orders'] } })
 

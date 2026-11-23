@@ -152,7 +152,8 @@ export type { CustodyAction, CustodyRouteOptions } from './routes/custody/index.
 export * from './services/custody/custody.service.js';
 export { CustodyRecheckScheduler, custodyRecheckSettings } from './services/custody/custody-recheck.js';
 export type { CustodyRecheckSchedulerOptions, CustodyRecheckTarget } from './services/custody/custody-recheck.js';
-export type { CustodialKeys } from './services/custody/custodial-keys.js';
+export { CUSTODIAL_SIGNING_SUBJECTS } from './services/custody/custodial-keys.js';
+export type { CustodialKeys, CustodialSigningSubject, CustodialSigningUse } from './services/custody/custodial-keys.js';
 export { DbKeyStore, resolveKeyEncryptionKey, DB_KEY_STORE_ALGORITHM } from './services/custody/db-key-store.js';
 export type { DbKeyStoreOptions, WrappedKeyTable, KeyEncryptionKeyConfig } from './services/custody/db-key-store.js';
 export { CustodyAudit, payloadDigest } from './services/custody/custody-audit.js';

@@ -148,6 +148,21 @@ describe('delegation hops Helix issues for custodial agents and services (F-3 pa
     ]);
   });
 
+  it('an owner (an account) roots its agent\'s hop with its KeyStore key, ahead of any did_keys key, audited as an owner signature (stories rule 8)', async () => {
+    const h = harness();
+    const owner = await h.service.createOwner({ name: 'Acme', keyCustody: 'helix', didHosting: 'helix' }, h.context());
+    expect(owner.did).toMatch(/:accounts:[0-9a-f]{32}$/);
+    const svc = await h.service.createService({ name: 'orders', domain: 'orders.example', requiredScopes: ['read:orders'], keyCustody: 'helix' }, h.context());
+    const agent = await h.service.createAgent({ name: 'Agent', scopes: ['read:orders'], keyCustody: 'helix' }, h.context());
+    const credentials = await credentialsFor(h);
+    const root = await credentials.issueRootHop({ issuer: owner.did, invoker: agent.did, invocationTarget: svc.did, allowedAction: ['read:orders'] }, 'req-owner');
+    expect(await verifyDelegationChainProofs([root], async (did) => (await documentOf(h, did)) as never)).toEqual({ ok: true });
+    expect(events(h, CustodyEvents.CUSTODIAL_SIGNATURE)).toEqual([expect.objectContaining({ actor: 'custodial-hop', subjectType: 'owner', did: owner.did, requestId: 'req-owner' })]);
+    // A self-custody owner signs its own hops: Helix has no key for it.
+    const selfOwner = await h.service.createOwner({ name: 'Own keys', keyCustody: 'self', didHosting: 'helix', publicKeyJwk: { kty: 'OKP', crv: 'Ed25519', x: 'kcfr0m8Bx1JeMSWgQd5zIlPAMv4YtBtQ_8fHQyGa9u8' } }, h.context());
+    await expect(credentials.signerFor(selfOwner.did, 'req')).rejects.toMatchObject({ code: 'AGENT_KEY_NOT_FOUND' });
+  });
+
   it('has no key for a self-custody agent (it signs its own hops), nor without the custodial keys attached', async () => {
     const h = harness();
     const self = await h.service.createAgent({ name: 'Own keys', keyCustody: 'self' }, h.context());

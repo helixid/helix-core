@@ -62,6 +62,8 @@ export interface EntityCardSourceOptions {
 /** What `credentialCardDetails` reads: the active credentials of a subject, of one type. */
 export interface ActiveCredentialStore {
   listActiveBySubjectDid(subjectDid: string, vcType?: string): Promise<Array<Record<string, unknown>>>;
+  /** The newest credential of the type whatever its status: a revoked identity still gives the card its `revocation`. */
+  latestBySubjectDid?(subjectDid: string, vcType: string): Promise<Record<string, unknown> | null>;
 }
 
 /**
@@ -89,7 +91,8 @@ export async function attestedCardCapabilities(store: ActiveCredentialStore, did
  * parity, Harish 2026-11-23): its active capability attestations
  * (`capabilities`), and from its newest active identity credential (F-1) the
  * `responsibleParty` it names and its status entry as the card's `revocation`
- * (C-A point 3). Nothing for any other subject, or a member it has no
+ * (C-A point 3); once the identity is revoked, the newest revoked one, so the
+ * card keeps its `revocation` entry and verifiers see the bit set. Nothing for any other subject, or a member it has no
  * credential for.
  */
 export function credentialCardDetails(store: ActiveCredentialStore): (did: string, subjectType: string) => Promise<EntityCardDetails | undefined> {
@@ -98,9 +101,12 @@ export function credentialCardDetails(store: ActiveCredentialStore): (did: strin
     const details: EntityCardDetails = {};
     const capabilities = await attestedCardCapabilities(store, did);
     if (capabilities) details.capabilities = capabilities;
-    const identity = (await store.listActiveBySubjectDid(did, IDENTITY_CREDENTIAL_TYPE))
-      .filter((vc) => (vc['credentialSubject'] as { id?: unknown } | undefined)?.id === did)
-      .at(-1);
+    const ownIdentity = (vc: Record<string, unknown> | null | undefined): vc is Record<string, unknown> => (vc?.['credentialSubject'] as { id?: unknown } | undefined)?.id === did;
+    const active = (await store.listActiveBySubjectDid(did, IDENTITY_CREDENTIAL_TYPE)).filter(ownIdentity).at(-1);
+    // With no active identity, the newest one, revoked included: its status entry is how a
+    // verifier learns that the agent was revoked (Cleanup, Harish's pick A).
+    const latest = active ?? (await store.latestBySubjectDid?.(did, IDENTITY_CREDENTIAL_TYPE));
+    const identity = ownIdentity(latest) ? latest : undefined;
     const party = (identity?.['credentialSubject'] as { responsibleParty?: unknown } | undefined)?.responsibleParty;
     if (typeof party === 'string' && party !== '') details.responsibleParty = party;
     const status = identity?.['credentialStatus'] as { statusListCredential?: unknown; statusListIndex?: unknown } | undefined;

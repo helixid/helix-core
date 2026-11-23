@@ -111,7 +111,7 @@ import { generateServiceId } from '../service-provider/service-provider.service.
 import { hostedUrls } from '../../routes/entity-card/index.js';
 import { CustodyAudit, type CustodyActor, type CustodyFactsSink } from './custody-audit.js';
 import { pendingHopReissuer, type HopReissueResult, type HopReissuer } from './hop-reissue.js';
-import type { CustodialKeys, CustodialSigningUse } from './custodial-keys.js';
+import type { CustodialKeys, CustodialSigningSubject, CustodialSigningUse } from './custodial-keys.js';
 import type { EntityCardDetails } from '../entity-card/entity-card.source.js';
 
 export const DEFAULT_ENROLLMENT_TTL_SECONDS = 24 * 60 * 60;
@@ -872,11 +872,11 @@ export class CustodyService implements CustodialKeys {
   }
 
   /**
-   * The KeyStore signer of an active custodial agent or service, for
-   * server-side signing (consent grants): only a `keyCustody: helix` subject
-   * has one; a self-custody key never reaches Helix.
+   * The KeyStore signer of an active custodial agent, service or owner, for
+   * server-side signing (grants, hops, status lists): only a `keyCustody:
+   * helix` subject has one; a self-custody key never reaches Helix.
    */
-  async signerFor(did: string, subjectType: 'agent' | 'service', use: CustodialSigningUse): Promise<Signer | undefined> {
+  async signerFor(did: string, subjectType: CustodialSigningSubject, use: CustodialSigningUse): Promise<Signer | undefined> {
     const record = await this.options.records.findRecord(did);
     if (!record || record.subjectType !== subjectType || record.keyCustody !== 'helix' || record.status !== 'active' || !record.kid) return undefined;
     const signer = new KeyStoreSigner(this.options.keyStore, did, record.kid);

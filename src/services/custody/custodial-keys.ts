@@ -35,12 +35,20 @@ export interface CustodialSigningUse {
   purpose: 'grant' | 'hop' | 'status_list';
 }
 
+/**
+ * The subjects whose `keyCustody: helix` key Helix signs with server side:
+ * agents, services and owners (accounts, which root their agents' hops and
+ * keep their own status list).
+ */
+export const CUSTODIAL_SIGNING_SUBJECTS = ['agent', 'service', 'owner'] as const;
+export type CustodialSigningSubject = (typeof CUSTODIAL_SIGNING_SUBJECTS)[number];
+
 export interface CustodialKeys {
   /**
-   * The Signer over the KeyStore key of an active `keyCustody: helix` agent or service, or undefined.
+   * The Signer over the KeyStore key of an active `keyCustody: helix` agent, service or owner, or undefined.
    * Every signature it makes is audited like one through the custody sign route (F-3 point 8).
    */
-  signerFor(did: string, subjectType: 'agent' | 'service', use: CustodialSigningUse): Promise<Signer | undefined>;
+  signerFor(did: string, subjectType: CustodialSigningSubject, use: CustodialSigningUse): Promise<Signer | undefined>;
   /** Whether `did` is an active agent created through the custody routes, whoever holds its key. */
   isActiveAgent(did: string): Promise<boolean>;
 }

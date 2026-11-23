@@ -47,6 +47,18 @@ describe('VC route surface', () => {
     await app.close();
   });
 
+  it('revokes through the credential service when it has one (an identity revoke cascades there), else the VC service', async () => {
+    const revokeVC = vi.fn(async (vcId: string) => ({ vcId, revoked: true as const, revokedAt: '2026-11-23T00:00:00.000Z' }));
+    const app = Fastify({ logger: false });
+    app.setErrorHandler(errorHandler);
+    await app.register(vcRoutes, { prefix: '/v1/vcs', vcService: new MockVCService() as never, credentialService: { renewIdentity: vi.fn(), revokeVC } as never, adminApiKey: 'test-admin-key-0001' });
+    const response = await app.inject({ method: 'POST', url: '/v1/vcs/vc:id:1/revoke', headers: { 'x-admin-api-key': 'test-admin-key-0001' } });
+    expect(response.statusCode).toBe(200);
+    expect(JSON.parse(response.body)).toMatchObject({ vcId: 'vc:id:1', revoked: true });
+    expect(revokeVC).toHaveBeenCalledWith('vc:id:1', expect.any(String));
+    await app.close();
+  });
+
   it('requires admin auth for VC listing', async () => {
     const app = await makeApp();
 
