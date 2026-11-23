@@ -20,7 +20,9 @@
  * middleware.
  *
  * Body: `{ proof, chain?, request, card?, expectedAudience, resource?,
- * resourceOwner?, trustedRootIssuers?, catalog?, action?, tokenCnfJkt? }`.
+ * resourceOwner?, trustedRootIssuers?, catalog?, action?, tokenCnfJkt?,
+ * maxChainLength?, liveStatus? }`. A verdict from cached status lists is at
+ * most L2; `liveStatus: true` reads them fresh, as an L3 decision needs.
  * `expectedAudience` is the caller's own DID: the service the proof was
  * minted for. Answer: 200 with the verifier's result (`ok`, `level`,
  * `effectiveScopes`, `reasons`, `chainSummary`, ...) whether or not the proof
@@ -79,6 +81,7 @@ interface VerifyBody {
   action?: string;
   tokenCnfJkt?: string;
   maxChainLength?: number;
+  liveStatus?: boolean;
 }
 
 /** A replay store in memory: one key per `(agent, nonce)`, swept of expired entries on each insert. */
@@ -189,6 +192,9 @@ const verifyRoutes: FastifyPluginAsync<VerifyRouteOptions> = async (fastify, opt
             action: { type: 'string' },
             tokenCnfJkt: { type: 'string' },
             maxChainLength: { type: 'integer', minimum: 1 },
+            // Read every status list fresh, past the status cache (story L3-C): what an L3 decision
+            // needs, as the middleware does for a tool whose minimum level is L3 (Harish's P1).
+            liveStatus: { type: 'boolean' },
           },
           additionalProperties: false,
         },
@@ -214,6 +220,7 @@ const verifyRoutes: FastifyPluginAsync<VerifyRouteOptions> = async (fastify, opt
           ...(body.catalog === undefined ? {} : { catalog: body.catalog }),
           ...(body.action === undefined ? {} : { action: body.action }),
           ...(body.tokenCnfJkt === undefined ? {} : { tokenCnfJkt: body.tokenCnfJkt }),
+          ...(body.liveStatus === true ? { liveStatus: true } : {}),
         },
       );
       return reply.code(200).send(result);
