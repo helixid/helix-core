@@ -118,6 +118,23 @@ describe('DbKeyStore', () => {
     await expect(store.sign({ did: DID, kid: `${DID}#nope` }, new Uint8Array([1]))).rejects.toThrow(KeyStoreKeyNotFoundError);
   });
 
+  it('generates a did:key whose DID is its own public key (story L3-H), the private half wrapped like any other', async () => {
+    const table = new InMemoryWrappedKeyStorageDriver();
+    const { random, seeds } = recordingRandom();
+    const store = new DbKeyStore({ table, keyEncryptionKey: KEK, randomBytes: random });
+    const key = await store.generateDidKey('consent');
+    expect(key.did).toMatch(/^did:key:z6Mk/);
+    expect(key.kid).toBe(`${key.did}#${key.did.slice('did:key:'.length)}`);
+    expect(hex(publicKeyJwkBytes(key.publicKeyJwk))).toBe(hex(await ed25519.getPublicKeyAsync(seeds[0]!)));
+    const [row] = table.dump();
+    expect(row).toMatchObject({ did: key.did, kid: key.kid, subjectType: 'consent' });
+    const signer = new KeyStoreSigner(store, key.did, key.kid);
+    const jws = await signJws({ hello: 'user' }, signer);
+    expect(verifyJws(jws, { ...key.publicKeyJwk, kid: key.kid })).toBeDefined();
+    const failing = new DbKeyStore({ table, keyEncryptionKey: KEK, randomBytes: () => new Uint8Array(31) });
+    await expect(failing.generateDidKey('consent')).rejects.toBeInstanceOf(KeyStoreUnavailableError);
+  });
+
   it('validates its inputs and its configuration', async () => {
     const table = new InMemoryWrappedKeyStorageDriver();
     expect(() => new DbKeyStore({ table, keyEncryptionKey: 'short' })).toThrow(KeyStoreUnavailableError);

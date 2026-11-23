@@ -61,6 +61,13 @@ export interface KeyStore {
   shred(ref: KeyStoreKeyRef): Promise<boolean>;
   /** Every key the store holds or held for `did`, public facts only. */
   list(did: string): Promise<KeyStoreKeyInfo[]>;
+  /**
+   * Generates a fresh Ed25519 key whose DID is the key itself (`did:key`,
+   * story L3-H: a user's pairwise consent identity), keeps the private half
+   * under `<did>#<multibase>`, and returns the public facts. A did:key cannot
+   * be named before its key exists, so `generate` cannot make one.
+   */
+  generateDidKey?(subjectType: KeyStoreSubjectType): Promise<KeyStoreKeyRef & { publicKeyJwk: PublicKeyJwk }>;
 }
 
 /**

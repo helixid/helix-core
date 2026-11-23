@@ -33,10 +33,12 @@ import {
   ValidationError,
   base64UrlDecodeStrict,
   base64UrlEncode,
+  didKeyFromPublicKey,
   type KeyStore,
   type KeyStoreGenerateInput,
   type KeyStoreKeyInfo,
   type KeyStoreKeyRef,
+  type KeyStoreSubjectType,
   type PublicKeyJwk,
 } from '../../core/index.js';
 import type { NewWrappedKey, WrappedKeyRow } from '../../repositories/custody.repository.js';
@@ -93,11 +95,35 @@ export class DbKeyStore implements KeyStore {
 
   async generate(input: KeyStoreGenerateInput): Promise<PublicKeyJwk> {
     requireRef(input);
-    const seed = this.#randomBytes(32);
+    return this.#store(input, this.#seed());
+  }
+
+  /** A did:key (story L3-H): the DID is derived from the fresh key, which is kept under `<did>#<multibase>`. */
+  async generateDidKey(subjectType: KeyStoreSubjectType): Promise<KeyStoreKeyRef & { publicKeyJwk: PublicKeyJwk }> {
+    const seed = this.#seed();
+    let did: string;
     try {
-      if (!(seed instanceof Uint8Array) || seed.length !== 32) {
-        throw new KeyStoreUnavailableError('DbKeyStore: the random source did not return 32 bytes');
-      }
+      did = didKeyFromPublicKey(ed25519.getPublicKey(seed));
+    } catch (error) {
+      seed.fill(0);
+      throw error;
+    }
+    const kid = `${did}#${did.slice('did:key:'.length)}`;
+    const publicKeyJwk = await this.#store({ did, kid, subjectType }, seed);
+    return { did, kid, publicKeyJwk };
+  }
+
+  #seed(): Uint8Array {
+    const seed = this.#randomBytes(32);
+    if (!(seed instanceof Uint8Array) || seed.length !== 32) {
+      throw new KeyStoreUnavailableError('DbKeyStore: the random source did not return 32 bytes');
+    }
+    return seed;
+  }
+
+  /** Wraps and stores `seed` under `input`; zeroes it whatever happens. */
+  async #store(input: KeyStoreGenerateInput, seed: Uint8Array): Promise<PublicKeyJwk> {
+    try {
       const publicKeyJwk: PublicKeyJwk = { kty: 'OKP', crv: 'Ed25519', x: base64UrlEncode(ed25519.getPublicKey(seed)) };
       const nonce = this.#randomBytes(NONCE_BYTES);
       const cipher = createCipheriv('aes-256-gcm', this.#kek, nonce);

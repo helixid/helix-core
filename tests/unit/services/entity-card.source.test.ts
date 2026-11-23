@@ -115,6 +115,15 @@ describe('credentialCardDetails (KYA-OS F-3 parity: C-B point 2, C-A point 3)', 
     expect(await attestedCardCapabilities(storeOf({}), AGENT)).toBeUndefined();
   });
 
+  it('leaves responsibleParty out for an agent that acts on user consent (story L3-H)', async () => {
+    const store = storeOf({ AgentIdentityCredential: [identity(AGENT, 'id:1')] });
+    const actsOnUserConsent = vi.fn(async (did: string) => did === AGENT);
+    const details = await credentialCardDetails(store, { actsOnUserConsent })(AGENT, 'agent');
+    expect(details).toEqual({ revocation: { statusListCredential: 'https://helix.test/v1/status-list/1', statusListIndex: '7' } });
+    expect(actsOnUserConsent).toHaveBeenCalledWith(AGENT);
+    expect((await credentialCardDetails(store, { actsOnUserConsent: async () => false })(AGENT, 'agent'))?.responsibleParty).toBe('did:web:helix.test');
+  });
+
   it('says nothing it has no credential for, takes a numeric index, and never looks for a service or an org', async () => {
     const bare = storeOf({ AgentIdentityCredential: [identity(AGENT, 'id:1', { credentialSubject: { id: AGENT }, credentialStatus: { statusListCredential: 'https://helix.test/l', statusListIndex: 3 } })] });
     expect(await credentialCardDetails(bare)(AGENT, 'agent')).toEqual({ revocation: { statusListCredential: 'https://helix.test/l', statusListIndex: '3' } });
