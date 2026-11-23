@@ -25,7 +25,7 @@
  * verify path never does (stories, rule 4).
  */
 
-import { CAPABILITY_ATTESTATION_TYPE, type BuildEntityCardInput, type EntityType, type Level2Capability } from '../../core/index.js';
+import { CAPABILITY_ATTESTATION_TYPE, IDENTITY_CREDENTIAL_TYPE, type BuildEntityCardInput, type EntityType, type Level2Capability } from '../../core/index.js';
 import type { EntityCardRecord, EntityCardSource } from '../../routes/entity-card/index.js';
 
 export interface EntityCardDetails {
@@ -51,14 +51,15 @@ export interface EntityCardSourceOptions {
   /** Name, accountability and revocation details Helix's other records know for `did`. */
   details?: ((did: string, subjectType: string) => Promise<EntityCardDetails | undefined>) | undefined;
   /**
-   * The card's L2 capabilities (story C-B point 2) when `details` names none:
-   * usually `attestedCardCapabilities`, so every agent Helix hosts, whoever
-   * holds its key, publishes the capability attestations Helix holds for it.
+   * What the agent's credentials say on its card, for members `details` does
+   * not name: usually `credentialCardDetails`, so every agent Helix hosts,
+   * whoever holds its key, publishes its attestations, its responsible party
+   * and its revocation entry (F-3 parity).
    */
-  capabilities?: ((did: string, subjectType: string) => Promise<EntityCardDetails['capabilities']>) | undefined;
+  credentials?: ((did: string, subjectType: string) => Promise<EntityCardDetails | undefined>) | undefined;
 }
 
-/** What `attestedCardCapabilities` reads: the active credentials of a subject, of one type. */
+/** What `credentialCardDetails` reads: the active credentials of a subject, of one type. */
 export interface ActiveCredentialStore {
   listActiveBySubjectDid(subjectDid: string, vcType?: string): Promise<Array<Record<string, unknown>>>;
 }
@@ -68,23 +69,45 @@ export interface ActiveCredentialStore {
  * for it (story F-1: one `CapabilityAttestationCredential` per scope; C-B
  * point 2: `{ name, attestations: [{ vc }] }`): every active attestation whose
  * subject is the agent, grouped by capability in the order they were issued.
- * Undefined for any other subject, and for an agent with none, so the card
- * then carries no `capabilities` member. A verifier checks each attestation
- * itself (issuer allowlist, proof, `validUntil`, status); this only publishes
- * them.
+ * Undefined when it has none. A verifier checks each attestation itself
+ * (issuer allowlist, proof, `validUntil`, status); this only publishes them.
  */
-export function attestedCardCapabilities(store: ActiveCredentialStore): (did: string, subjectType: string) => Promise<Level2Capability[] | undefined> {
+export async function attestedCardCapabilities(store: ActiveCredentialStore, did: string): Promise<Level2Capability[] | undefined> {
+  const capabilities: Level2Capability[] = [];
+  for (const vc of await store.listActiveBySubjectDid(did, CAPABILITY_ATTESTATION_TYPE)) {
+    const subject = vc['credentialSubject'] as { id?: unknown; capability?: unknown } | undefined;
+    if (subject?.id !== did || typeof subject.capability !== 'string' || subject.capability === '') continue;
+    const named = capabilities.find((entry) => entry.name === subject.capability);
+    if (named) named.attestations.push({ vc });
+    else capabilities.push({ name: subject.capability, attestations: [{ vc }] });
+  }
+  return capabilities.length === 0 ? undefined : capabilities;
+}
+
+/**
+ * An agent's card members from the credentials Helix holds for it (F-3
+ * parity, Harish 2026-11-23): its active capability attestations
+ * (`capabilities`), and from its newest active identity credential (F-1) the
+ * `responsibleParty` it names and its status entry as the card's `revocation`
+ * (C-A point 3). Nothing for any other subject, or a member it has no
+ * credential for.
+ */
+export function credentialCardDetails(store: ActiveCredentialStore): (did: string, subjectType: string) => Promise<EntityCardDetails | undefined> {
   return async (did, subjectType) => {
     if (subjectType !== 'agent') return undefined;
-    const capabilities: Level2Capability[] = [];
-    for (const vc of await store.listActiveBySubjectDid(did, CAPABILITY_ATTESTATION_TYPE)) {
-      const subject = vc['credentialSubject'] as { id?: unknown; capability?: unknown } | undefined;
-      if (subject?.id !== did || typeof subject.capability !== 'string' || subject.capability === '') continue;
-      const named = capabilities.find((entry) => entry.name === subject.capability);
-      if (named) named.attestations.push({ vc });
-      else capabilities.push({ name: subject.capability, attestations: [{ vc }] });
+    const details: EntityCardDetails = {};
+    const capabilities = await attestedCardCapabilities(store, did);
+    if (capabilities) details.capabilities = capabilities;
+    const identity = (await store.listActiveBySubjectDid(did, IDENTITY_CREDENTIAL_TYPE))
+      .filter((vc) => (vc['credentialSubject'] as { id?: unknown } | undefined)?.id === did)
+      .at(-1);
+    const party = (identity?.['credentialSubject'] as { responsibleParty?: unknown } | undefined)?.responsibleParty;
+    if (typeof party === 'string' && party !== '') details.responsibleParty = party;
+    const status = identity?.['credentialStatus'] as { statusListCredential?: unknown; statusListIndex?: unknown } | undefined;
+    if (typeof status?.statusListCredential === 'string' && (typeof status.statusListIndex === 'string' || typeof status.statusListIndex === 'number')) {
+      details.revocation = { statusListCredential: status.statusListCredential, statusListIndex: String(status.statusListIndex) };
     }
-    return capabilities.length === 0 ? undefined : capabilities;
+    return Object.keys(details).length === 0 ? undefined : details;
   };
 }
 
@@ -119,6 +142,11 @@ function defaultEntityType(subjectType: string, orgEntityType: EntityType): Enti
   return orgEntityType;
 }
 
+/** The members of `value` that are set: `details` wins only where it says something. */
+function definedMembers(value: EntityCardDetails): EntityCardDetails {
+  return Object.fromEntries(Object.entries(value).filter(([, member]) => member !== undefined)) as EntityCardDetails;
+}
+
 export function createEntityCardSource(options: EntityCardSourceOptions): EntityCardSource {
   const orgEntityType = options.orgEntityType ?? 'verifier';
   return {
@@ -126,8 +154,10 @@ export function createEntityCardSource(options: EntityCardSourceOptions): Entity
     async find(did: string): Promise<EntityCardRecord | null> {
       const record = await options.didRepository.findDidById(did);
       if (!record) return null;
-      const details = (await options.details?.(did, record.subjectType)) ?? {};
-      const capabilities = details.capabilities ?? (await options.capabilities?.(did, record.subjectType));
+      const details: EntityCardDetails = {
+        ...((await options.credentials?.(did, record.subjectType)) ?? {}),
+        ...definedMembers((await options.details?.(did, record.subjectType)) ?? {}),
+      };
       const named =
         details.name ??
         (record.subjectType === 'agent' ? (await options.agentRecords?.findByDid(did))?.name : undefined) ??
@@ -141,7 +171,7 @@ export function createEntityCardSource(options: EntityCardSourceOptions): Entity
           entityType: details.entityType ?? defaultEntityType(record.subjectType, orgEntityType),
           name: named,
           ...(key === undefined ? {} : { kid: key.kid, publicKeyJwk: key.publicKeyJwk }),
-          ...(capabilities === undefined ? {} : { capabilities }),
+          ...(details.capabilities === undefined ? {} : { capabilities: details.capabilities }),
           ...(details.responsibleParty === undefined ? {} : { responsibleParty: details.responsibleParty }),
           ...(details.principal === undefined ? {} : { principal: details.principal }),
           ...(details.delegationRef === undefined ? {} : { delegationRef: details.delegationRef }),

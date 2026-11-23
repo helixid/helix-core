@@ -2,7 +2,7 @@
 // KYA-OS story C-A: what a Helix-hosted card says is read from the DID, agent and service records.
 import { describe, expect, it, vi } from 'vitest';
 import { buildDIDDocument, buildDidDocument, publicKeyBytesToJwk } from '../../../src/core/index.js';
-import { assertionKeyOf, attestedCardCapabilities, createEntityCardSource } from '../../../src/services/entity-card/entity-card.source.js';
+import { assertionKeyOf, attestedCardCapabilities, createEntityCardSource, credentialCardDetails } from '../../../src/services/entity-card/entity-card.source.js';
 
 const JWK = publicKeyBytesToJwk(new Uint8Array(32).fill(8));
 const AGENT = 'did:web:helix.test:acme:ledger-agent';
@@ -73,13 +73,20 @@ describe('createEntityCardSource', () => {
   });
 });
 
-describe('attestedCardCapabilities (KYA-OS F-3 parity, C-B point 2)', () => {
+describe('credentialCardDetails (KYA-OS F-3 parity: C-B point 2, C-A point 3)', () => {
   const attestation = (subject: string, capability: unknown, id: string): Record<string, unknown> => ({
     id,
     type: ['VerifiableCredential', 'CapabilityAttestationCredential'],
     credentialSubject: { id: subject, capability },
   });
-  const held = [
+  const identity = (subject: string, id: string, extra: Record<string, unknown> = {}): Record<string, unknown> => ({
+    id,
+    type: ['VerifiableCredential', 'AgentIdentityCredential'],
+    credentialSubject: { id: subject, name: 'Ledger', responsibleParty: 'did:web:helix.test' },
+    credentialStatus: { type: 'BitstringStatusListEntry', statusPurpose: 'revocation', statusListIndex: '7', statusListCredential: 'https://helix.test/v1/status-list/1' },
+    ...extra,
+  });
+  const attestations = [
     attestation(AGENT, 'orders:read', 'att:1'),
     attestation(AGENT, 'orders:write', 'att:2'),
     attestation(AGENT, 'orders:read', 'att:3'),
@@ -88,33 +95,53 @@ describe('attestedCardCapabilities (KYA-OS F-3 parity, C-B point 2)', () => {
     attestation(AGENT, 7, 'att:6'),
     { id: 'att:7', type: ['VerifiableCredential', 'CapabilityAttestationCredential'] },
   ];
-
-  it("groups an agent's active attestations by capability in issued order, as { name, attestations: [{ vc }] }", async () => {
-    const store = { listActiveBySubjectDid: vi.fn(async () => held) };
-    const capabilities = await attestedCardCapabilities(store)(AGENT, 'agent');
-    expect(store.listActiveBySubjectDid).toHaveBeenCalledWith(AGENT, 'CapabilityAttestationCredential');
-    expect(capabilities).toEqual([
-      { name: 'orders:read', attestations: [{ vc: held[0] }, { vc: held[2] }] },
-      { name: 'orders:write', attestations: [{ vc: held[1] }] },
-    ]);
+  const storeOf = (held: Record<string, Record<string, unknown>[]>) => ({
+    listActiveBySubjectDid: vi.fn(async (_did: string, type?: string) => held[type ?? ''] ?? []),
   });
 
-  it('publishes nothing for an agent with none, and never looks for a service or an org', async () => {
-    const store = { listActiveBySubjectDid: vi.fn(async () => [] as Record<string, unknown>[]) };
-    const of = attestedCardCapabilities(store);
-    expect(await of(AGENT, 'agent')).toBeUndefined();
-    expect(await of(SERVICE, 'service')).toBeUndefined();
-    expect(await of(ORG, 'user')).toBeUndefined();
-    expect(store.listActiveBySubjectDid).toHaveBeenCalledTimes(1);
+  it("puts an agent's attestations, grouped by capability in issued order, its responsible party and its identity's status entry on the card", async () => {
+    const store = storeOf({
+      CapabilityAttestationCredential: attestations,
+      AgentIdentityCredential: [identity('did:web:other', 'id:0'), identity(AGENT, 'id:1', { credentialSubject: { id: AGENT, responsibleParty: 'did:web:older' } }), identity(AGENT, 'id:2')],
+    });
+    expect(await credentialCardDetails(store)(AGENT, 'agent')).toEqual({
+      capabilities: [
+        { name: 'orders:read', attestations: [{ vc: attestations[0] }, { vc: attestations[2] }] },
+        { name: 'orders:write', attestations: [{ vc: attestations[1] }] },
+      ],
+      responsibleParty: 'did:web:helix.test',
+      revocation: { statusListCredential: 'https://helix.test/v1/status-list/1', statusListIndex: '7' },
+    });
+    expect(await attestedCardCapabilities(storeOf({}), AGENT)).toBeUndefined();
   });
 
-  it('puts them on the hosted card unless details already name capabilities', async () => {
+  it('says nothing it has no credential for, takes a numeric index, and never looks for a service or an org', async () => {
+    const bare = storeOf({ AgentIdentityCredential: [identity(AGENT, 'id:1', { credentialSubject: { id: AGENT }, credentialStatus: { statusListCredential: 'https://helix.test/l', statusListIndex: 3 } })] });
+    expect(await credentialCardDetails(bare)(AGENT, 'agent')).toEqual({ revocation: { statusListCredential: 'https://helix.test/l', statusListIndex: '3' } });
+    const broken = storeOf({ AgentIdentityCredential: [identity(AGENT, 'id:1', { credentialSubject: { id: AGENT, responsibleParty: '' }, credentialStatus: { statusListIndex: '1' } })] });
+    expect(await credentialCardDetails(broken)(AGENT, 'agent')).toBeUndefined();
+    const store = storeOf({});
+    expect(await credentialCardDetails(store)(SERVICE, 'service')).toBeUndefined();
+    expect(await credentialCardDetails(store)(ORG, 'user')).toBeUndefined();
+    expect(store.listActiveBySubjectDid).not.toHaveBeenCalled();
+  });
+
+  it('fills the hosted card where details say nothing; details still win member by member', async () => {
     const didRepository = { findDidById: async (did: string) => dids[did] ?? null };
-    const store = { listActiveBySubjectDid: async () => held.slice(0, 1) };
-    const source = createEntityCardSource({ host: 'helix.test', didRepository, capabilities: attestedCardCapabilities(store) });
-    expect((await source.find(AGENT))!.card.capabilities).toEqual([{ name: 'orders:read', attestations: [{ vc: held[0] }] }]);
+    const store = storeOf({ CapabilityAttestationCredential: attestations.slice(0, 1), AgentIdentityCredential: [identity(AGENT, 'id:1')] });
+    const source = createEntityCardSource({ host: 'helix.test', didRepository, credentials: credentialCardDetails(store) });
+    expect((await source.find(AGENT))!.card).toMatchObject({
+      capabilities: [{ name: 'orders:read', attestations: [{ vc: attestations[0] }] }],
+      responsibleParty: 'did:web:helix.test',
+      revocation: { statusListCredential: 'https://helix.test/v1/status-list/1', statusListIndex: '7' },
+    });
     expect((await source.find(SERVICE))!.card).not.toHaveProperty('capabilities');
-    const overridden = createEntityCardSource({ host: 'helix.test', didRepository, details: async () => ({ capabilities: ['self-declared'] }), capabilities: attestedCardCapabilities(store) });
-    expect((await overridden.find(AGENT))!.card.capabilities).toEqual(['self-declared']);
+    const overridden = createEntityCardSource({
+      host: 'helix.test',
+      didRepository,
+      details: async () => ({ capabilities: ['self-declared'], name: 'Named', responsibleParty: undefined }),
+      credentials: credentialCardDetails(store),
+    });
+    expect((await overridden.find(AGENT))!.card).toMatchObject({ name: 'Named', capabilities: ['self-declared'], responsibleParty: 'did:web:helix.test' });
   });
 });

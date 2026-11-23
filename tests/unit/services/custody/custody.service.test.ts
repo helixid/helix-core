@@ -597,3 +597,52 @@ describe('changing custody is a rotation (point 6)', () => {
     expect(h.issued).toEqual([]);
   });
 });
+
+describe('the card carries what the agent\'s credentials say (F-3 parity)', () => {
+  /** What credentialCardDetails reads from the store, here from the harness's issued credentials. */
+  function withCredentialDetails(): Harness {
+    const box: { h?: Harness } = {};
+    const h = harness({
+      credentialDetails: async (did, subjectType) => {
+        if (subjectType !== 'agent') return undefined;
+        const attested = box.h!.attested.filter((entry) => entry.agentDid === did);
+        return {
+          ...(attested.length ? { capabilities: attested.map((entry) => ({ name: entry.capability, attestations: [{ vc: { id: entry.vcId } }] })) } : {}),
+          responsibleParty: 'did:web:helix.example',
+          revocation: { statusListCredential: 'https://helix.example/v1/status-list/1', statusListIndex: '4' },
+        };
+      },
+    });
+    box.h = h;
+    return h;
+  }
+  const carried = {
+    capabilities: [{ name: 'read:orders', attestations: [{ vc: { id: 'att:test:1' } }] }],
+    responsibleParty: 'did:web:helix.example',
+    revocation: { statusListCredential: 'https://helix.example/v1/status-list/1', statusListIndex: '4' },
+  };
+
+  it('an own-hosted agent: activation returns the card to republish, and GET custody keeps returning it', async () => {
+    const h = withCredentialDetails();
+    const did = 'did:web:owner.example:agents:carded';
+    const { enrolled } = await onboardSelf(h, { didHosting: 'own', did, scopes: ['read:orders'] });
+    // Before activation nothing is attested, so the card the owner first publishes has none.
+    expect(enrolled.documents!.card).not.toHaveProperty('capabilities');
+    publishOwnDomain(h, enrolled.documents!);
+    const active = await h.service.activate(did, h.context());
+    expect(active.documents!.card).toMatchObject({ id: did, ...carried });
+    expect(active.documents!.didDocument).toEqual(enrolled.documents!.didDocument);
+    expect((await h.service.getCustody(did, 'agent')).documents!.card).toMatchObject(carried);
+  });
+
+  it('a custodial Helix-hosted agent is returned with the same card at creation; services and pending agents get none', async () => {
+    const h = withCredentialDetails();
+    const agent = await h.service.createAgent({ name: 'Carded', scopes: ['read:orders'], keyCustody: 'helix' }, h.context());
+    expect(agent.documents!.card).toMatchObject(carried);
+    const svc = await h.service.createService({ name: 'svc', domain: 'svc.example', requiredScopes: ['read:orders'], keyCustody: 'helix' }, h.context());
+    expect(svc.documents!.card).not.toHaveProperty('capabilities');
+    expect(await h.service.getCustody(svc.did, 'service')).not.toHaveProperty('documents');
+    const pending = await h.service.createAgent({ name: 'Pending', keyCustody: 'self' }, h.context());
+    expect(await h.service.getCustody(pending.did, 'agent')).not.toHaveProperty('documents');
+  });
+});

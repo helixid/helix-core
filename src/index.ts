@@ -134,7 +134,7 @@ export { default as credentialRoutes, hopDelegate } from './routes/credentials/i
 export type { CredentialRouteAction, CredentialRouteOptions } from './routes/credentials/index.js';
 export { default as entityCardRoutes, hostedUrls } from './routes/entity-card/index.js';
 export type { EntityCardRouteOptions, EntityCardSource, EntityCardRecord } from './routes/entity-card/index.js';
-export { createEntityCardSource, assertionKeyOf, attestedCardCapabilities } from './services/entity-card/entity-card.source.js';
+export { createEntityCardSource, assertionKeyOf, attestedCardCapabilities, credentialCardDetails } from './services/entity-card/entity-card.source.js';
 export type { EntityCardSourceOptions, EntityCardDetails, ActiveCredentialStore } from './services/entity-card/entity-card.source.js';
 // KYA-OS story F-3: custody preference, KeyStore, custodial signing, conformance report.
 export { default as custodyRoutes } from './routes/custody/index.js';

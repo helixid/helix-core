@@ -42,7 +42,7 @@ import statusListRoutes from './routes/status-list/index.js';
 import verifyRoutes from './routes/verify/index.js';
 import agentRoutes, { enrollmentOnboardingHandler } from './routes/agent/index.js';
 import entityCardRoutes from './routes/entity-card/index.js';
-import { attestedCardCapabilities, createEntityCardSource } from './services/entity-card/entity-card.source.js';
+import { credentialCardDetails, createEntityCardSource } from './services/entity-card/entity-card.source.js';
 import auditLogRoutes from './routes/audit-log/index.js';
 import auditRoutes from './routes/audit/index.js';
 import sessionRoutes from './routes/sessions/index.js';
@@ -187,6 +187,7 @@ const custodyService = new CustodyService({
   host: config.DID_DOMAIN,
   didCache,
   recheck: custodyRecheckSettings(config),
+  credentialDetails: credentialCardDetails(vcService),
 });
 // Own-hosted subjects waiting for their documents are re-checked in the background.
 const custodyRecheck = new CustodyRecheckScheduler(custodyService, { tickSeconds: config.CUSTODY_RECHECK_TICK_SECONDS });
@@ -331,7 +332,7 @@ await app.register(custodyRoutes, {
   enrollmentOnboarding: enrollmentOnboardingHandler(agentService),
 });
 // KYA-OS story C-A: /{path}/did.json, /{path}/card.json and /.well-known/kya-os-card.json; after the static routes, so the wildcard never shadows them.
-await app.register(entityCardRoutes, { source: createEntityCardSource({ host: config.DID_DOMAIN, didRepository, services: serviceRepository, details: (did) => custodyService.cardDetails(did), capabilities: attestedCardCapabilities(vcService) }) });
+await app.register(entityCardRoutes, { source: createEntityCardSource({ host: config.DID_DOMAIN, didRepository, services: serviceRepository, details: (did) => custodyService.cardDetails(did), credentials: credentialCardDetails(vcService) }) });
 
 const shutdown = async (): Promise<void> => {
   app.log.info('Helix ID API shutting down...');
