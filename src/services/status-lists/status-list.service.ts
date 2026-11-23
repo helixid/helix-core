@@ -62,7 +62,7 @@ import {
   type StatusListCredential,
 } from '../../core/index.js';
 import { randomUUID } from 'node:crypto';
-import type { CustodialKeys } from '../custody/custodial-keys.js';
+import { CUSTODIAL_SIGNING_SUBJECTS, type CustodialKeys } from '../custody/custodial-keys.js';
 import { credentialRevoked, recordAudit, revocationSignalFailed, statusListPublished } from '../revocation/audit.js';
 import type { ICache } from '../../cache/ICache.js';
 import { NoopCache } from '../../cache/NoopCache.js';
@@ -143,7 +143,7 @@ export class StatusListPublisher {
   /** The issuer's Signer: its F-3 KeyStore key first, else `signerFor`; undefined for a self-custody issuer. */
   async #signerFor(issuer: string): Promise<Signer | undefined> {
     if (this.#custodialKeys !== undefined && issuer !== this.helixIssuerDid) {
-      for (const subjectType of ['agent', 'service'] as const) {
+      for (const subjectType of CUSTODIAL_SIGNING_SUBJECTS) {
         const signer = await this.#custodialKeys.signerFor(issuer, subjectType, { requestId: `status-list-${randomUUID()}`, purpose: 'status_list' });
         if (signer !== undefined) return signer;
       }

@@ -63,7 +63,7 @@ import type { DidKeyRepository } from '../../repositories/did-key.repository.js'
 import type { IKeyCustody } from '../key-custody/key-custody.js';
 import type { IDIDService } from '../did/IDIDService.js';
 import { CustodySigner } from './custody-signer.js';
-import type { CustodialKeys } from '../custody/custodial-keys.js';
+import { CUSTODIAL_SIGNING_SUBJECTS, type CustodialKeys } from '../custody/custodial-keys.js';
 
 /** The two years a credential lives by default; attestations and hops may be shorter. */
 const DEFAULT_VALID_MS = 2 * 365 * 24 * 60 * 60 * 1000;
@@ -242,18 +242,19 @@ export class CredentialService {
   }
 
   /**
-   * The Signer for `did`: the Helix issuer, a key Helix holds in did_keys, or
-   * the KeyStore key of an active custodial agent or service (F-3). A
-   * self-custody subject's key never reaches Helix: it signs its own hops.
+   * The Signer for `did`: the Helix issuer, the KeyStore key of an active
+   * custodial agent, service or owner (F-3; stories rule 8), else a key a
+   * pre-F-3 deployment still holds in did_keys. A self-custody subject's key
+   * never reaches Helix: it signs its own hops.
    */
   async signerFor(did: string, requestId = 'unspecified'): Promise<Signer> {
     if (did === this.helixSigner.did) return this.helixSigner;
-    const record = await this.keyRepository.findByDid(did);
-    if (record) return new CustodySigner(did, record, this.keyCustody);
-    for (const subjectType of ['agent', 'service'] as const) {
+    for (const subjectType of CUSTODIAL_SIGNING_SUBJECTS) {
       const signer = await this.custodialKeys?.signerFor(did, subjectType, { requestId, purpose: 'hop' });
       if (signer) return signer;
     }
+    const record = await this.keyRepository.findByDid(did);
+    if (record) return new CustodySigner(did, record, this.keyCustody);
     throw new HelixError(ErrorCode.AGENT_KEY_NOT_FOUND, `No key held for ${did}`, 404);
   }
 

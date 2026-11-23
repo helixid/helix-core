@@ -214,13 +214,15 @@ describe('signed per-issuer status lists', () => {
     const h = custodyHarness();
     const svc = await h.service.createService({ name: 'orders', domain: 'orders.example', requiredScopes: ['read:orders'], keyCustody: 'helix' }, h.context());
     const agent = await h.service.createAgent({ name: 'Shopper', scopes: ['read:orders'], keyCustody: 'helix' }, h.context());
+    // An account (an owner) keeps its own list too: it roots its agents' hops.
+    const owner = await h.service.createOwner({ name: 'Acme', keyCustody: 'helix', didHosting: 'helix' }, h.context());
     const selfService = await h.service.createService({ name: 'billing', domain: 'billing.example', requiredScopes: ['read:orders'], keyCustody: 'self', publicKeyJwk: clientKey().publicKeyJwk }, h.context());
-    for (const did of [svc.did, agent.did]) w.documents[did] = (await h.dids.findDidById(did))!.didDocument as DIDDocument;
+    for (const did of [svc.did, agent.did, owner.did]) w.documents[did] = (await h.dids.findDidById(did))!.didDocument as DIDDocument;
     const custodyLookups = vi.spyOn(h.service, 'signerFor');
     w.publisher.attachCustodialKeys(h.service);
 
     // Without the KeyStore, these issuers' lists could not be signed; with it, each is signed by its own key.
-    for (const did of [svc.did, agent.did]) {
+    for (const did of [svc.did, agent.did, owner.did]) {
       const entry = await w.statusLists.statusEntryFor(did);
       const listId = w.publisher.listIdOfUrl(entry.statusListCredential)!;
       expect((await w.served(listId)).issuer).toBe(did);
@@ -229,10 +231,14 @@ describe('signed per-issuer status lists', () => {
       [svc.did, 'agent', 'status_list'],
       [svc.did, 'service', 'status_list'],
       [agent.did, 'agent', 'status_list'],
+      [owner.did, 'agent', 'status_list'],
+      [owner.did, 'service', 'status_list'],
+      [owner.did, 'owner', 'status_list'],
     ]);
     expect(custodyEvents(h, CustodyEvents.CUSTODIAL_SIGNATURE)).toEqual([
       expect.objectContaining({ actor: 'custodial-status_list', subjectType: 'service', did: svc.did }),
       expect.objectContaining({ actor: 'custodial-status_list', subjectType: 'agent', did: agent.did }),
+      expect.objectContaining({ actor: 'custodial-status_list', subjectType: 'owner', did: owner.did }),
     ]);
 
     // A revocation on the service's list is republished at once, signed by the service again.
