@@ -7,6 +7,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+  setOutboundFetch,
   EnvSigner,
   buildDidDocument,
   clearDIDCache,
@@ -20,7 +21,6 @@ import {
   signJws,
   verifyJwsByKid,
 } from '../../../src/core/index.js';
-import { readRegisterAgentKeyBody } from '../../../src/routes/agent-keys/index.js';
 import { buildDidFixtures, serializeDidFixtures, type DidFixtures } from '../../../scripts/generate-did-fixtures.js';
 
 const FIXTURE_PATH = fileURLToPath(new URL('../../../fixtures/kya-os-helix/did.json', import.meta.url));
@@ -29,7 +29,7 @@ const fixtures = JSON.parse(checkedIn) as DidFixtures;
 
 describe('fixtures/kya-os-helix/did.json', () => {
   afterEach(() => {
-    vi.unstubAllGlobals();
+    setOutboundFetch(undefined);
     clearDIDCache();
   });
 
@@ -54,18 +54,8 @@ describe('fixtures/kya-os-helix/did.json', () => {
       expect(key.did_web_document.alsoKnownAs).toEqual([key.did_key]);
     });
 
-    it(`key ${name}: the registration body carries the public JWK only, and the route accepts it`, () => {
-      expect(Object.keys(key.registration_body).sort()).toEqual(['kid', 'publicKeyJwk']);
-      expect(Object.keys(key.registration_body.publicKeyJwk).sort()).toEqual(['crv', 'kty', 'x']);
-      expect(JSON.stringify(key.registration_body)).not.toContain(key.private_key_hex);
-      expect(JSON.stringify(key.registration_body)).not.toMatch(/"d"/);
-      const read = readRegisterAgentKeyBody(key.registration_body);
-      expect(Buffer.from(read.publicKey).toString('hex')).toBe(key.public_key_hex);
-      expect(read.kid).toBe(key.kid_fragment);
-    });
-
     it(`key ${name}: did:web and did:key resolve to the same raw key and JWK, and a JWS with kid <did>#<fragment> verifies by kid`, async () => {
-      vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify(key.did_web_document), { status: 200 })));
+      setOutboundFetch(vi.fn(async () => new Response(JSON.stringify(key.did_web_document), { status: 200 })));
       const viaWeb = await resolveDid(key.did_web);
       const viaKey = await resolveDid(key.did_key);
       expect(Buffer.from(viaWeb.rawKey).toString('hex')).toBe(key.resolved.raw_key_hex);

@@ -22,14 +22,27 @@ describe('vcLookupColumns', () => {
     ).toEqual({ vcType: 'DelegationGrantCredential', issuerDid: 'did:web:svc', userDid: 'did:web:u', scopeKey: 'x y' });
   });
 
-  it('reads an agent credential, which has no user and names its scopes privilegeScopes', () => {
+  it('reads an identity credential and an attestation, which carry no user and no scope set', () => {
     expect(
       vcLookupColumns({
-        type: ['VerifiableCredential', 'HelixAgentCredential'],
+        type: ['VerifiableCredential', 'AgentIdentityCredential'],
         issuer: 'did:web:issuer',
-        credentialSubject: { id: 'did:key:agent', privilegeScopes: ['read'] },
+        credentialSubject: { id: 'did:key:agent', name: 'agent', responsibleParty: 'did:web:owner' },
       }),
-    ).toEqual({ vcType: 'HelixAgentCredential', issuerDid: 'did:web:issuer', userDid: null, scopeKey: 'read' });
+    ).toEqual({ vcType: 'AgentIdentityCredential', issuerDid: 'did:web:issuer', userDid: null, scopeKey: null });
+    expect(
+      vcLookupColumns({
+        type: ['VerifiableCredential', 'CapabilityAttestationCredential'],
+        issuer: 'did:web:issuer',
+        credentialSubject: { id: 'did:key:agent', capability: 'read' },
+      }),
+    ).toEqual({ vcType: 'CapabilityAttestationCredential', issuerDid: 'did:web:issuer', userDid: null, scopeKey: null });
+  });
+
+  it('does not read the retired privilegeScopes member', () => {
+    expect(
+      vcLookupColumns({ type: ['VerifiableCredential', 'X'], issuer: 'did:web:i', credentialSubject: { privilegeScopes: ['read'] } }).scopeKey,
+    ).toBeNull();
   });
 
   it('yields nulls for anything it cannot read, never throws', () => {

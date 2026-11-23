@@ -27,6 +27,17 @@
 import { ValidationError } from '../errors/HelixError.js';
 import { decodeBase58btc, encodeBase58btc } from '../crypto/base58.js';
 import { base64UrlDecodeStrict, base64UrlEncode } from '../crypto/jws.js';
+import { didWebCardUrl } from './web.js';
+
+/** The one DID-document service type KYA-OS owns (SPEC-ENTITY-CARD §5.3, §14.4). */
+export const KYA_OS_CARD_SERVICE_TYPE = 'KyaOsEntityCard';
+export const KYA_OS_CARD_SERVICE_ID = '#kya-os-card';
+
+export interface KyaOsCardService {
+  id: typeof KYA_OS_CARD_SERVICE_ID;
+  type: typeof KYA_OS_CARD_SERVICE_TYPE;
+  serviceEndpoint: string;
+}
 
 export const DID_WEB_CONTEXTS: readonly string[] = [
   'https://www.w3.org/ns/did/v1',
@@ -77,6 +88,51 @@ export interface BuildDidDocumentOptions {
   alsoKnownAs?: readonly string[];
   /** Service endpoints to keep on the document, as the DID core spec lists them. */
   service?: readonly unknown[];
+  /**
+   * KYA-OS story C-A: anchor the entity's card. `true` derives the card URL
+   * from the DID (`https://host/a/b/card.json`, or the well-known path for a
+   * bare host); a string names it. The entry replaces any `#kya-os-card`
+   * already in `service`.
+   */
+  cardServiceEndpoint?: string | true | undefined;
+}
+
+/** The `{id: "#kya-os-card", type: "KyaOsEntityCard", serviceEndpoint}` entry anchoring a card. */
+export function kyaOsCardServiceEntry(serviceEndpoint: string): KyaOsCardService {
+  let url: URL;
+  try {
+    url = new URL(serviceEndpoint);
+  } catch {
+    throw new ValidationError('cardServiceEndpoint must be an https URL');
+  }
+  if (url.protocol !== 'https:' && url.protocol !== 'http:') {
+    throw new ValidationError('cardServiceEndpoint must be an https URL');
+  }
+  return { id: KYA_OS_CARD_SERVICE_ID, type: KYA_OS_CARD_SERVICE_TYPE, serviceEndpoint };
+}
+
+/** The `KyaOsEntityCard` service endpoint a DID document anchors, or undefined. */
+export function cardEndpointOf(document: unknown): string | undefined {
+  const services = (document as { service?: unknown })?.service;
+  if (!Array.isArray(services)) return undefined;
+  for (const entry of services) {
+    if (typeof entry === 'object' && entry !== null && (entry as { type?: unknown }).type === KYA_OS_CARD_SERVICE_TYPE) {
+      const endpoint = (entry as { serviceEndpoint?: unknown }).serviceEndpoint;
+      if (typeof endpoint === 'string') return endpoint;
+    }
+  }
+  return undefined;
+}
+
+/** `service` with the card entry for `did` in place of any earlier `#kya-os-card` / `KyaOsEntityCard` entry. */
+export function withKyaOsCardService(service: readonly unknown[] | undefined, did: string, endpoint: string | true = true): unknown[] {
+  const entry = kyaOsCardServiceEntry(endpoint === true ? didWebCardUrl(did) : endpoint);
+  const kept = (service ?? []).filter((existing) => {
+    if (typeof existing !== 'object' || existing === null) return true;
+    const { id, type } = existing as { id?: unknown; type?: unknown };
+    return id !== KYA_OS_CARD_SERVICE_ID && type !== KYA_OS_CARD_SERVICE_TYPE;
+  });
+  return [...kept, entry];
 }
 
 export function isDidWeb(did: unknown): did is string {
@@ -195,6 +251,12 @@ export function buildDidDocument(options: BuildDidDocumentOptions): AgentDidDocu
       throw new ValidationError('alsoKnownAs entries must be DIDs');
     }
   }
+  const service =
+    options.cardServiceEndpoint === undefined
+      ? options.service && options.service.length > 0
+        ? [...options.service]
+        : undefined
+      : withKyaOsCardService(options.service, options.did, options.cardServiceEndpoint);
   return {
     '@context': [...DID_WEB_CONTEXTS],
     id: options.did,
@@ -210,6 +272,6 @@ export function buildDidDocument(options: BuildDidDocumentOptions): AgentDidDocu
     ],
     authentication: [id],
     assertionMethod: [id],
-    ...(options.service && options.service.length > 0 ? { service: [...options.service] } : {}),
+    ...(service ? { service } : {}),
   };
 }

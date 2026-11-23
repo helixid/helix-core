@@ -20,6 +20,12 @@ export interface AgentRouteOptions {
   credentialService?: CredentialService | undefined;
   /** Required to call POST /agents/:did/vp — see that route's comment for why. */
   adminApiKey?: string | undefined;
+  /**
+   * Whether this plugin registers POST /agents. False when the custody routes
+   * (KYA-OS story F-3) own the path: they hand a body carrying
+   * `enrollmentToken` to `enrollmentOnboardingHandler`, unchanged.
+   */
+  createAgentRoute?: boolean | undefined;
 }
 
 function sendError(request: FastifyRequest, reply: FastifyReply, error: unknown): FastifyReply {
@@ -42,6 +48,37 @@ function optionalCaveats(value: unknown): Caveat[] | undefined {
     throw new HelixError(ErrorCode.VALIDATION_ERROR, 'caveats must be an array of objects with a type', 400);
   }
   return value as Caveat[];
+}
+
+/**
+ * POST /agents with an enrollment token (story F-1): onboard a custodial agent
+ * and return its identity credential plus one capability attestation per
+ * requested scope. The request may carry `ownerDid`, the party that answers
+ * for the agent (default: the Helix issuer DID).
+ */
+export function enrollmentOnboardingHandler(
+  agentService: Pick<IAgentService, 'onboardWithCustody'>,
+): (request: FastifyRequest, reply: FastifyReply) => Promise<FastifyReply> {
+  return async (request, reply) => {
+    try {
+      const body = request.body as { enrollmentToken: string; domains?: string[]; ownerDid?: string };
+      const result = await agentService.onboardWithCustody(
+        {
+          enrollmentToken: body.enrollmentToken,
+          ...(body.domains ? { domains: body.domains } : {}),
+          ...(body.ownerDid ? { ownerDid: body.ownerDid } : {}),
+        },
+        request.id,
+      );
+      return reply.code(201).send({
+        agentDid: result.agentDid,
+        identity: result.identity,
+        attestations: result.attestations,
+      });
+    } catch (error) {
+      return sendError(request, reply, error);
+    }
+  };
 }
 
 const agentRoutes: FastifyPluginAsync<AgentRouteOptions> = async (fastify, options) => {
@@ -137,30 +174,11 @@ const agentRoutes: FastifyPluginAsync<AgentRouteOptions> = async (fastify, optio
     return options.credentialService;
   }
 
-  // POST /agents - onboard a custodial agent and return its identity
-  // credential plus one capability attestation per requested scope. The
-  // request may carry `ownerDid`, the party that answers for the agent
-  // (default: the Helix issuer DID).
-  fastify.post('/agents', async (request, reply) => {
-    try {
-      const body = request.body as { enrollmentToken: string; domains?: string[]; ownerDid?: string };
-      const result = await options.agentService.onboardWithCustody(
-        {
-          enrollmentToken: body.enrollmentToken,
-          ...(body.domains ? { domains: body.domains } : {}),
-          ...(body.ownerDid ? { ownerDid: body.ownerDid } : {}),
-        },
-        request.id,
-      );
-      return reply.code(201).send({
-        agentDid: result.agentDid,
-        identity: result.identity,
-        attestations: result.attestations,
-      });
-    } catch (error) {
-      return sendError(request, reply, error);
-    }
-  });
+  // POST /agents - see enrollmentOnboardingHandler. Not registered here when
+  // the custody routes own the path (createAgentRoute: false).
+  if (options.createAgentRoute !== false) {
+    fastify.post('/agents', enrollmentOnboardingHandler(options.agentService));
+  }
 
   // GET /agents/:did/credentials - the Helix copy of everything issued to the agent.
   fastify.get('/agents/:did/credentials', async (request, reply) => {

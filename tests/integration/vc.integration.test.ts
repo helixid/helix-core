@@ -120,26 +120,36 @@ describe('VC API Integration', () => {
   }
 
   describe('POST /v1/vcs', () => {
-    it('issues an agent VC successfully', async () => {
+    it('issues a user VC successfully', async () => {
       const response = await app.inject({
         method: 'POST',
         url: '/v1/vcs',
         headers: { 'x-admin-api-key': 'test-admin-key-0001' },
-        payload: {
-          subjectDid: didId,
-          subjectType: 'agent',
-          privilegeScopes: ['read:orders'],
-          agentName: 'Test Agent',
-        },
+        payload: { subjectDid: didId, subjectType: 'user', userId: 'test-user' },
       });
 
       expect(response.statusCode).toBe(201);
       const body = JSON.parse(response.body);
       expect(body.vcId).toMatch(/^vc:helix:[0-9a-f]{24}$/);
+      expect(body.vc.type).toEqual(['VerifiableCredential', 'HelixUserCredential']);
       expect(body.vc.validFrom).toBeDefined();
       expect(body.vc.validUntil).toBeDefined();
       expect(body.vc.credentialStatus.type).toBe('BitstringStatusListEntry');
-      expect(body.vc.credentialSubject.privilegeScopes).toContain('read:orders');
+      expect(body.vc.credentialSubject).toMatchObject({ id: didId, userId: 'test-user' });
+    });
+
+    it('refuses an agent VC: agents are issued an identity credential and attestations at onboarding', async () => {
+      const response = await app.inject({
+        method: 'POST',
+        url: '/v1/vcs',
+        headers: { 'x-admin-api-key': 'test-admin-key-0001' },
+        payload: { subjectDid: didId, subjectType: 'agent', privilegeScopes: ['read:orders'], agentName: 'Test Agent' },
+      });
+
+      expect(response.statusCode).toBe(400);
+      const { error } = JSON.parse(response.body);
+      expect(error.code).toBe(ErrorCode.VALIDATION_ERROR);
+      expect(error.message).toContain('AgentIdentityCredential');
     });
 
     it('requires admin authorization for issuance', async () => {
