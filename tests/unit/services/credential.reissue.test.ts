@@ -145,9 +145,9 @@ describe('CredentialService as the hop reissuer (story C-E)', () => {
 
   it('reissues the identity credential after a compromise; anything else is not an identity', async () => {
     const identity = await service.issueIdentity({ agentDid, name: 'bot', ownerDid: helixDid }, 'i');
-    const renewed = await service.reissueIdentity(identity.id, 'cmp');
+    const renewed = await service.reissueIdentity({ vcId: identity.id }, 'cmp');
     expect(renewed).toMatch(/^urn:uuid:/);
     expect(renewed).not.toBe(identity.id);
-    expect(await service.reissueIdentity('urn:uuid:none', 'cmp')).toBeNull();
+    expect(await service.reissueIdentity({ vcId: 'urn:uuid:none' }, 'cmp')).toBeNull();
   });
 });

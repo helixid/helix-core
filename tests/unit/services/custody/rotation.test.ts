@@ -156,8 +156,8 @@ describe('the compromise path (C-E point 5)', () => {
     const reissued: string[] = [];
     const h = harness({ hopReissuer: reissuer });
     // The harness's credentials gain the identity reissue C-E uses.
-    (h.service as unknown as { options: { credentials: { reissueIdentity?: unknown } } }).options.credentials.reissueIdentity = async (vcId: string) => {
-      reissued.push(vcId);
+    (h.service as unknown as { options: { credentials: { reissueIdentity?: unknown } } }).options.credentials.reissueIdentity = async (input: { vcId: string; agentDid: string }) => {
+      reissued.push(`${input.vcId}@${input.agentDid}`);
       return 'vc:test:renewed';
     };
     const { enrolled, key } = await onboardSelf(h);
@@ -169,7 +169,7 @@ describe('the compromise path (C-E point 5)', () => {
 
     const revoked = await h.service.revokeKey(enrolled.did, 'key-1', h.context({ actor: 'did:web:helix.example:accounts:00ff' }), 'agent');
     expect(revoked).toMatchObject({ revokedKid: oldKid, revokedHops: ['urn:zcap:a', 'urn:zcap:b'], rotationSequence: 3, credentialVcId: 'vc:test:renewed' });
-    expect(reissued).toEqual(['vc:test:1']);
+    expect(reissued).toEqual([`vc:test:1@${enrolled.did}`]);
     expect(reissuer.calls['revoke']).toEqual([expect.objectContaining({ did: enrolled.did, kid: oldKid, bound: expect.objectContaining({ until: expect.any(Date) }) })]);
     expect(revoked.keys.find((entry) => entry.kid === oldKid)).toMatchObject({ status: 'revoked', revokedAt: h.now.value.toISOString(), retiresAt: h.now.value.toISOString() });
 

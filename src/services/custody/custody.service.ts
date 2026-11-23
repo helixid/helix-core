@@ -171,7 +171,7 @@ export interface CustodyCredentials {
    * key compromise, so the card's backing credential and revocation entry are
    * new; resolves to its id, or null when `vcId` is not an identity.
    */
-  reissueIdentity?(vcId: string, requestId: string): Promise<string | null>;
+  reissueIdentity?(input: { vcId: string; agentDid: string }, requestId: string): Promise<string | null>;
 }
 
 export interface CustodyServices {
@@ -970,7 +970,7 @@ export class CustodyService implements CustodialKeys {
     const revokedHops = (await this.hopReissuer.revokeHopsForKid?.({ did, kid: fullKid, requestId: context.requestId, bound: boundWindow(await this.options.records.listKeys(did), fullKid) })) ?? [];
     let credentialVcId = record.credentialVcId;
     if (record.subjectType === 'agent' && record.credentialVcId && this.options.credentials.reissueIdentity) {
-      credentialVcId = (await this.options.credentials.reissueIdentity(record.credentialVcId, context.requestId)) ?? record.credentialVcId;
+      credentialVcId = (await this.options.credentials.reissueIdentity({ vcId: record.credentialVcId, agentDid: did }, context.requestId)) ?? record.credentialVcId;
       if (credentialVcId !== record.credentialVcId) record = await this.options.records.updateRecord(did, { credentialVcId });
     }
     const rotationSequence = documentVersion(await this.options.records.listKeys(did)).rotationSequence;

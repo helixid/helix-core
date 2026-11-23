@@ -557,8 +557,8 @@ export class CredentialService implements HopReissuer {
   }
 
   /** Story C-E point 5: a fresh identity credential for the same agent after a key compromise; its id, or null for a non-identity. */
-  async reissueIdentity(vcId: string, requestId: string): Promise<string | null> {
-    return (await this.renewIdentity(vcId, {}, requestId))?.vcId ?? null;
+  async reissueIdentity(input: { vcId: string }, requestId: string): Promise<string | null> {
+    return (await this.renewIdentity(input.vcId, {}, requestId))?.vcId ?? null;
   }
 
   /** The active hops delegated to `did` while the key of `bound` was current, oldest first. */
