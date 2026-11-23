@@ -52,22 +52,22 @@ const ED25519_PUBLIC_KEY_LENGTH = 32;
 const PUBLIC_JWK_MEMBERS = new Set(['kty', 'crv', 'x', 'kid']);
 
 /** An Ed25519 public key as RFC 8037 writes it. */
-export interface PublicKeyJwk {
+export type PublicKeyJwk = {
   kty: 'OKP';
   crv: 'Ed25519';
   x: string;
   kid?: string;
-}
+};
 
-export interface AgentVerificationMethod {
+export type AgentVerificationMethod = {
   id: string;
   type: 'Ed25519VerificationKey2020';
   controller: string;
   publicKeyJwk: PublicKeyJwk;
   publicKeyMultibase: string;
-}
+};
 
-export interface AgentDidDocument {
+export type AgentDidDocument = {
   '@context': string[];
   id: string;
   alsoKnownAs?: string[];
@@ -75,7 +75,7 @@ export interface AgentDidDocument {
   authentication: string[];
   assertionMethod: string[];
   service?: unknown[];
-}
+};
 
 export interface BuildDidDocumentOptions {
   /** The agent's did:web DID. */

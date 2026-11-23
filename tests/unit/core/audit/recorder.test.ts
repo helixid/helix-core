@@ -70,6 +70,13 @@ function wrap(base: MemoryAuditJournal, overrides: Partial<AuditJournalProvider>
   };
 }
 
+/** The context with no producerRef member at all (exactOptionalPropertyTypes refuses `producerRef: undefined`). */
+function withoutProducerRef<T extends { producerRef?: unknown }>(context: T): Omit<T, 'producerRef'> {
+  const copy: Partial<T> = { ...context };
+  delete copy.producerRef;
+  return copy as Omit<T, 'producerRef'>;
+}
+
 describe('AuditRecorderService', () => {
   it('assigns sequence, predecessor, service time and a receipt the recorder key verifies', async () => {
     const signer = testRecorderSigner();
@@ -103,14 +110,14 @@ describe('AuditRecorderService', () => {
     const recorder = new AuditRecorderService(config({ authorizer: { authorize: ({ context }) => context.producerAuthority !== 'did:web:blocked.example' } }));
     expect((await refusal(recorder.submitAuthenticated(submission(event), { ...contextFor(event), producerAuthority: '' }))).code).toBe('AUDIT_UNAUTHORIZED_SUBMISSION');
     expect((await refusal(recorder.submitAuthenticated(submission(event, { ledgerId: 'other' }), contextFor(event)))).code).toBe('AUDIT_LEDGER_MISMATCH');
-    const notProducer = { ...contextFor(event), producerRef: undefined, producerAuthority: 'did:web:someone-else.example' };
+    const notProducer = { ...withoutProducerRef(contextFor(event)), producerAuthority: 'did:web:someone-else.example' };
     expect((await refusal(recorder.submitAuthenticated(submission(event), notProducer))).message).toMatch(/producer/);
     const foreignTenant = producerEvent('foreign', { tenantRef: { kind: 'public_did', did: 'did:web:other-tenant.example' } });
     expect((await refusal(recorder.submitAuthenticated(submission(foreignTenant), contextFor(foreignTenant)))).message).toMatch(/tenant/);
     const blocked = producerEvent('blocked', { producer: { kind: 'public_did', did: 'did:web:blocked.example' } });
     expect((await refusal(recorder.submitAuthenticated(submission(blocked), contextFor(blocked)))).message).toMatch(/not authorized/);
     const keyed = producerEvent('keyed', { producer: { kind: 'keyed_commitment', value: `sha256:${'5'.repeat(64)}`, keyId: 'k' } });
-    expect((await refusal(recorder.submitAuthenticated(submission(keyed), { ...contextFor(keyed), producerRef: undefined }))).code).toBe('AUDIT_UNAUTHORIZED_SUBMISSION');
+    expect((await refusal(recorder.submitAuthenticated(submission(keyed), withoutProducerRef(contextFor(keyed))))).code).toBe('AUDIT_UNAUTHORIZED_SUBMISSION');
   });
 
   it('persists submitted evidence write-ahead, exactly as the event references it, and refuses anything else', async () => {

@@ -56,7 +56,7 @@ describe('DID write routes: authorization', () => {
   it('self-hosted default: every write works with the admin key', async () => {
     const { app, performed } = await makeApp({ adminApiKey: 'k'.repeat(20) });
     for (const write of WRITES) {
-      const res = await app.inject({ method: write.method, url: write.url, headers: { 'x-admin-api-key': 'k'.repeat(20) }, payload: write.payload });
+      const res = await app.inject({ method: write.method, url: write.url, headers: { 'x-admin-api-key': 'k'.repeat(20) }, ...(write.payload === undefined ? {} : { payload: write.payload }) });
       expect(res.statusCode, write.name).toBeLessThan(300);
     }
     expect(performed).toEqual(WRITES.map((write) => write.name));
@@ -66,8 +66,8 @@ describe('DID write routes: authorization', () => {
   it('self-hosted default: every write refuses a missing or wrong admin key', async () => {
     const { app, performed } = await makeApp({ adminApiKey: 'k'.repeat(20) });
     for (const write of WRITES) {
-      expect((await app.inject({ method: write.method, url: write.url, payload: write.payload })).statusCode, write.name).toBe(403);
-      const wrong = await app.inject({ method: write.method, url: write.url, headers: { 'x-admin-api-key': 'wrong' }, payload: write.payload });
+      expect((await app.inject({ method: write.method, url: write.url, ...(write.payload === undefined ? {} : { payload: write.payload }) })).statusCode, write.name).toBe(403);
+      const wrong = await app.inject({ method: write.method, url: write.url, headers: { 'x-admin-api-key': 'wrong' }, ...(write.payload === undefined ? {} : { payload: write.payload }) });
       expect(wrong.statusCode, write.name).toBe(403);
     }
     expect(performed).toEqual([]);
@@ -79,7 +79,7 @@ describe('DID write routes: authorization', () => {
   it('fails closed when no admin key and no authorizer are configured', async () => {
     const { app, performed } = await makeApp({});
     for (const write of WRITES) {
-      expect((await app.inject({ method: write.method, url: write.url, headers: { 'x-admin-api-key': '' }, payload: write.payload })).statusCode, write.name).toBe(403);
+      expect((await app.inject({ method: write.method, url: write.url, headers: { 'x-admin-api-key': '' }, ...(write.payload === undefined ? {} : { payload: write.payload }) })).statusCode, write.name).toBe(403);
     }
     expect(performed).toEqual([]);
     await app.close();
@@ -96,8 +96,8 @@ describe('DID write routes: authorization', () => {
       },
     });
     for (const write of WRITES) {
-      expect((await app.inject({ method: write.method, url: write.url, payload: write.payload })).statusCode, write.name).toBe(403);
-      expect((await app.inject({ method: write.method, url: write.url, headers: { 'x-owner': 'yes' }, payload: write.payload })).statusCode, write.name).toBeLessThan(300);
+      expect((await app.inject({ method: write.method, url: write.url, ...(write.payload === undefined ? {} : { payload: write.payload }) })).statusCode, write.name).toBe(403);
+      expect((await app.inject({ method: write.method, url: write.url, headers: { 'x-owner': 'yes' }, ...(write.payload === undefined ? {} : { payload: write.payload }) })).statusCode, write.name).toBeLessThan(300);
     }
     expect(seen.filter((_, index) => index % 2 === 1)).toEqual([
       { action: 'create', subjectType: 'agent' },

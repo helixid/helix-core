@@ -385,7 +385,7 @@ describe('API audit factory', () => {
     expect(await floor()).toBe(0);
     sqlite.execute(`INSERT INTO dids (id, subject_type, controller, public_key, hedera_transaction_id, did_document, created_at, updated_at)
       VALUES ('did:key:zR', 'agent', 'did:key:zR', 'aa', 'tx', '{}', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')`);
-    const insertVc = (id: string, expires: string | null): void =>
+    const insertVc = (id: string, expires: string | null): unknown =>
       sqlite.write(
         `INSERT INTO vcs (vc_id, subject_did, subject_type, vc_json, status_list_index, expires_at, created_at, updated_at) VALUES (?, 'did:key:zR', 'agent', '{}', 0, ?, '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')`,
         id,

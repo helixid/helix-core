@@ -13,7 +13,7 @@
 import { sha256 } from '@noble/hashes/sha2';
 import { publicKeyToMultibase, multibaseToPublicKeyHex } from './keys.js';
 
-export interface DIDDocument {
+export type DIDDocument = {
   '@context': string[];
   id: string;
   controller: string;
@@ -21,20 +21,20 @@ export interface DIDDocument {
   authentication: string[];
   assertionMethod: string[];
   service?: ServiceEndpoint[] | undefined;
-}
+};
 
-export interface VerificationMethod {
+export type VerificationMethod = {
   id: string;
   type: string;
   controller: string;
   publicKeyMultibase: string;
-}
+};
 
-export interface ServiceEndpoint {
+export type ServiceEndpoint = {
   id: string;
   type: string;
   serviceEndpoint: string;
-}
+};
 
 export type DIDSubjectType = 'agent' | 'user';
 
