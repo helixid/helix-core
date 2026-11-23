@@ -28,7 +28,6 @@ import {
   EnvSigner,
   attestedCapabilityEntry,
   buildCapabilityAttestation,
-  buildDIDDocument,
   buildDelegationHop,
   buildIdentityCredential,
   buildIdentityVerificationCredential,
@@ -51,6 +50,7 @@ import {
   type SignedDelegationHop,
   type TrustedIssuers,
 } from '../src/core/index.js';
+import { didKeyDocument, didKeyKid } from './did-key-document.js';
 
 export interface FixtureKey {
   private_key_hex: string;
@@ -135,7 +135,7 @@ function fixtureKey(label: string): FixtureKey {
   const privateKeyHex = bytesToHex(sha256(utf8ToBytes(`helix-f-1-fixture-key:${label}`)));
   const publicKeyHex = derivePublicKey(privateKeyHex);
   const did = `did:key:${publicKeyToMultibase(publicKeyHex)}`;
-  return { private_key_hex: privateKeyHex, public_key_hex: publicKeyHex, did, kid: `${did}#key-1`, did_document: buildDIDDocument(did, publicKeyHex) };
+  return { private_key_hex: privateKeyHex, public_key_hex: publicKeyHex, did, kid: didKeyKid(did), did_document: didKeyDocument(did, publicKeyHex) };
 }
 
 /** A copy of `value` without `member`. */
@@ -166,8 +166,8 @@ export async function buildCredentialFixtures(): Promise<CredentialFixtures> {
   statusIndex = 0;
   const keys = Object.fromEntries(KEY_LABELS.map((label) => [label, fixtureKey(label)])) as Record<KeyLabel, FixtureKey>;
   const signers = Object.fromEntries(
-    // The fixture's documents publish `#key-1` for these did:keys; pin it so the checked-in fixtures stay as generated.
-    KEY_LABELS.map((label) => [label, new EnvSigner({ did: keys[label].did, kid: 'key-1', envVar: 'FIXTURE_KEY', env: { FIXTURE_KEY: keys[label].private_key_hex } })]),
+    // The documents publish each did:key's W3C method `#<multibase>`, which EnvSigner signs with by default.
+    KEY_LABELS.map((label) => [label, new EnvSigner({ did: keys[label].did, envVar: 'FIXTURE_KEY', env: { FIXTURE_KEY: keys[label].private_key_hex } })]),
   ) as Record<KeyLabel, EnvSigner>;
   const didDocuments = Object.fromEntries(KEY_LABELS.map((label) => [keys[label].did, keys[label].did_document]));
   const resolve = async (did: string): Promise<JwsDidDocument | undefined> => didDocuments[did] as unknown as JwsDidDocument | undefined;

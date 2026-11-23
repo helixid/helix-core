@@ -40,7 +40,6 @@ import { kyaos } from '@helixid/sdk-js';
 import {
   EnvSigner,
   buildCapabilityAttestation,
-  buildDIDDocument,
   buildDelegationHop,
   createStatusList,
   derivePublicKey,
@@ -52,6 +51,7 @@ import {
   type DIDDocument,
   type SignedDelegationHop,
 } from '../src/core/index.js';
+import { didKeyDocument, didKeyKid } from './did-key-document.js';
 
 const { verifier } = kyaos;
 
@@ -133,7 +133,17 @@ function fixtureKey(label: string): FixtureKey {
   const privateKeyHex = bytesToHex(sha256(utf8ToBytes(`helix-f-2-fixture-key:${label}`)));
   const publicKeyHex = derivePublicKey(privateKeyHex);
   const did = `did:key:${publicKeyToMultibase(publicKeyHex)}`;
-  return { private_key_hex: privateKeyHex, public_key_hex: publicKeyHex, did, kid: `${did}#key-1`, did_document: buildDIDDocument(did, publicKeyHex) };
+  return { private_key_hex: privateKeyHex, public_key_hex: publicKeyHex, did, kid: didKeyKid(did), did_document: didKeyDocument(did, publicKeyHex) };
+}
+
+/**
+ * The proof with one signature byte changed. A character in the middle of the
+ * signature segment: the last base64url character of a 64-byte signature
+ * carries only padding bits, so changing it can leave the signature intact.
+ */
+function flipSignatureByte(proof: kyaos.verifier.RequestProof): kyaos.verifier.RequestProof {
+  const at = proof.jws.lastIndexOf('.') + 20;
+  return { ...proof, jws: `${proof.jws.slice(0, at)}${proof.jws[at] === 'A' ? 'B' : 'A'}${proof.jws.slice(at + 1)}` };
 }
 
 const DEFAULT_SEAMS: SeamSetting = { resolveDid: 'documents', resolveDidKeys: 'documents', fetchStatusList: 'lists', nonceStore: 'fresh', clock: 'fixed', trustedIssuers: '*', resolveCard: 'missing' };
@@ -201,8 +211,8 @@ function withoutMember(value: object, member: string): Record<string, unknown> {
 export async function buildVerifierFixtures(): Promise<{ environment: FixtureEnvironment; files: Record<string, FixtureCase[]>; requestProof: FixtureCase[] }> {
   const keys = Object.fromEntries(KEY_LABELS.map((label) => [label, fixtureKey(label)])) as Record<KeyLabel, FixtureKey>;
   const signers = Object.fromEntries(
-    // The fixture's documents publish `#key-1` for these did:keys; pin it so the checked-in fixtures stay as generated.
-    KEY_LABELS.map((label) => [label, new EnvSigner({ did: keys[label].did, kid: 'key-1', envVar: 'FIXTURE_KEY', env: { FIXTURE_KEY: keys[label].private_key_hex } })]),
+    // The documents publish each did:key's W3C method `#<multibase>`, which EnvSigner signs with by default.
+    KEY_LABELS.map((label) => [label, new EnvSigner({ did: keys[label].did, envVar: 'FIXTURE_KEY', env: { FIXTURE_KEY: keys[label].private_key_hex } })]),
   ) as Record<KeyLabel, EnvSigner>;
   const didDocuments = Object.fromEntries(KEY_LABELS.map((label) => [keys[label].did, keys[label].did_document]));
   const SERVICE = keys.service.did;
@@ -407,8 +417,7 @@ export async function buildVerifierFixtures(): Promise<{ environment: FixtureEnv
   await add('valid', 'trusted_root_listed', 'the root issuer is among the trusted root issuers', { proof: await proofBy('agent'), chain, request, card: attestedCard }, { options: { trustedRootIssuers: [keys.owner.did] } });
 
   // proof
-  const tamperedSignature = { ...(await proofBy('agent')) };
-  tamperedSignature.jws = `${tamperedSignature.jws.slice(0, -1)}${tamperedSignature.jws.endsWith('A') ? 'B' : 'A'}`;
+  const tamperedSignature = flipSignatureByte(await proofBy('agent'));
   await add('proof', 'tampered_signature', 'the detached JWS no longer verifies', { proof: tamperedSignature, chain, request, card: attestedCard });
   await add('proof', 'tampered_request', 'the request body differs from the one the proof binds', { proof: await proofBy('agent'), chain, request: { method: 'tools/call', params: { name: 'lookup_order', arguments: { orderId: 'ORD-9999' } } }, card: attestedCard });
   await add('proof', 'meta_tampering_is_free', 'a changed params._meta leaves requestHash unchanged', { proof: await proofBy('agent'), chain, request: { method: 'tools/call', params: { ...request.params, _meta: { other: 1 } } }, card: attestedCard });
@@ -420,7 +429,7 @@ export async function buildVerifierFixtures(): Promise<{ environment: FixtureEnv
   await add('proof', 'within_skew', 'a proof that expired within the skew is still accepted', { proof: await proofBy('agent', { now: NOW_MS - 63_000 }), chain, request, card: attestedCard });
   const strangerKid = { ...(await proofBy('agent')), kid: keys.stranger.kid };
   await add('proof', 'kid_did_mismatch', 'kid belongs to another DID than did', { proof: strangerKid, chain, request, card: attestedCard });
-  const forgedPrincipal = { ...(await proofBy('stranger')), did: AGENT, kid: `${AGENT}#key-1` };
+  const forgedPrincipal = { ...(await proofBy('stranger')), did: AGENT, kid: keys.agent.kid };
   await add('proof', 'forged_principal', 'a proof signed by a stranger claiming the agent DID fails the signature under the agent key', { proof: forgedPrincipal, chain, request, card: attestedCard });
   await add('proof', 'key_not_published', 'kid names a method the DID document does not list', { proof: { ...(await proofBy('agent')), kid: `${AGENT}#key-9` }, chain, request, card: attestedCard });
   await add('proof', 'key_not_in_did_document', 'the DID-key membership seam lists no key with the thumbprint', { proof: await proofBy('agent'), chain, request, card: attestedCard }, { seams: { resolveDidKeys: 'empty' } });
@@ -506,7 +515,7 @@ export async function buildVerifierFixtures(): Promise<{ environment: FixtureEnv
   // request-proof (story C-C): the §11.2 order, the carrier keys, chains without a proof.
   const cc = async (name: string, description: string, input: FixtureCase['input'], settings: { seams?: Partial<SeamSetting>; options?: Record<string, unknown> } = {}): Promise<void> =>
     add('request-proof', name, description, input, settings);
-  const badSignature = (proof: kyaos.verifier.RequestProof): kyaos.verifier.RequestProof => ({ ...proof, jws: `${proof.jws.slice(0, -1)}${proof.jws.endsWith('A') ? 'B' : 'A'}` });
+  const badSignature = flipSignatureByte;
   await cc('order_key_before_audience', 'step 4 (key membership) runs before step 5 (audience)', { proof: await proofBy('agent', { audience: keys.stranger.did }), chain, request, card: attestedCard }, { seams: { resolveDidKeys: 'empty' } });
   await cc('order_key_unresolvable_before_audience', 'step 3 (the key kid names) runs before step 5 (audience)', { proof: { ...(await proofBy('agent', { audience: keys.stranger.did })), kid: `${AGENT}#key-9` }, chain, request, card: attestedCard });
   await cc('order_audience_before_request_hash', 'step 5 (audience) runs before step 6 (requestHash)', { proof: await proofBy('agent', { audience: keys.stranger.did }), chain, request: { method: 'tools/call', params: { name: 'lookup_order', arguments: { orderId: 'ORD-9999' } } }, card: attestedCard });
