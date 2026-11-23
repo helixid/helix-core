@@ -102,7 +102,18 @@ function resolveDidKey(did: string): DIDDocument {
     throw new ValidationError(`Only Ed25519 did:key documents are supported: ${did}`);
   }
   const publicKeyHex = Buffer.from(decoded.slice(2)).toString('hex');
-  return buildDIDDocument(did, publicKeyHex);
+  // One key, two names: Helix's `#key-1` and the W3C did:key method id
+  // `<did>#<fingerprint>`, which a did:key signer names by default
+  // (defaultKidFragment) and KYA-OS verifiers resolve. List both, as the
+  // server's public resolver does, so a proof under either verifies.
+  const document = buildDIDDocument(did, publicKeyHex);
+  const standardId = `${did}#${fingerprint}`;
+  return {
+    ...document,
+    verificationMethod: [...document.verificationMethod, { ...document.verificationMethod[0]!, id: standardId }],
+    assertionMethod: [...document.assertionMethod, standardId],
+    authentication: [...document.authentication, standardId],
+  };
 }
 
 async function resolveDidWeb(did: string): Promise<DIDDocument> {

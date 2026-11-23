@@ -35,10 +35,10 @@ export interface Signer {
 export interface EnvSignerOptions {
   did: string;
   /**
-   * Verification-method fragment (`key-1`, the default, which matches
-   * `buildDIDDocument`) or the full id the DID document publishes
+   * Verification-method fragment or the full id the DID document publishes
    * (`<did>#key-1`), so a did:web agent announces exactly the `kid` its
-   * document lists.
+   * document lists. Default: `defaultKidFragment(did)`, the multibase value
+   * for a did:key, else `key-1`.
    */
   kid?: string;
   /** Name of the variable holding the private key. Default `HELIX_SIGNING_KEY`. */
@@ -49,6 +49,22 @@ export interface EnvSignerOptions {
 
 export const DEFAULT_SIGNING_KEY_ENV_VAR = "HELIX_SIGNING_KEY";
 export const DEFAULT_KID_FRAGMENT = "key-1";
+
+const DID_KEY_PREFIX = "did:key:";
+
+/**
+ * The verification-method fragment a DID's signer names when the caller gives
+ * none. A did:key document defines exactly one method, `did:key:z…#z…` (the
+ * multibase value repeated), so a did:key signs as that; `key-1`, which
+ * `buildDIDDocument` publishes for did:web and other DIDs, does not exist in
+ * a did:key document and a verifier refuses it.
+ */
+export function defaultKidFragment(did: string): string {
+  if (did.startsWith(DID_KEY_PREFIX) && did.length > DID_KEY_PREFIX.length) {
+    return did.slice(DID_KEY_PREFIX.length);
+  }
+  return DEFAULT_KID_FRAGMENT;
+}
 
 /**
  * The only Signer for now: an Ed25519 private key (raw 32-byte hex or PKCS8
@@ -70,7 +86,7 @@ export class EnvSigner implements Signer {
     }
     // The fragment alone (`key-1`, `#key-1`) or the full verification-method
     // id the DID document publishes (`<did>#key-1`), which must be this DID's.
-    let kid = options.kid ?? DEFAULT_KID_FRAGMENT;
+    let kid = options.kid ?? defaultKidFragment(options.did);
     if (kid.startsWith(`${options.did}#`)) kid = kid.slice(options.did.length + 1);
     kid = kid.replace(/^#/, "");
     if (kid.length === 0 || kid.includes("#")) {

@@ -6,7 +6,6 @@ import {
   ErrorCode,
   HelixError,
   buildCapabilityAttestation,
-  buildDIDDocument,
   derivePublicKey,
   evaluateDelegationChain,
   publicKeyToMultibase,
@@ -24,6 +23,7 @@ import { CustodySigner } from '../../../src/services/credentials/custody-signer.
 import { TestAuditTrail } from '../../utils/TestAuditTrail.js';
 import type { DidResolver } from '../../../src/core/credentials/index.js';
 import type { CredentialStatusStore } from '../../../src/services/credentials/credential.service.js';
+import { testDidDocument } from '../../utils/didDocuments.js';
 
 const HELIX_KEY = '1'.repeat(64);
 const OWNER_KEY = '2'.repeat(64);
@@ -51,7 +51,7 @@ describe('CredentialService', () => {
     const { publicKey, encrypted } = custody.generateAndEncrypt();
     const did = `did:key:${publicKeyToMultibase(publicKey)}`;
     await keyRepo.create({ did, subjectType: 'agent', ...encrypted });
-    documents[did] = buildDIDDocument(did, publicKey);
+    documents[did] = testDidDocument(did, publicKey);
     return did;
   }
 
@@ -79,8 +79,8 @@ describe('CredentialService', () => {
       custody,
       audit as unknown as ConstructorParameters<typeof CredentialService>[6],
     );
-    documents[helixDid] = buildDIDDocument(helixDid, derivePublicKey(HELIX_KEY));
-    documents[ownerDid] = buildDIDDocument(ownerDid, derivePublicKey(OWNER_KEY));
+    documents[helixDid] = testDidDocument(helixDid, derivePublicKey(HELIX_KEY));
+    documents[ownerDid] = testDidDocument(ownerDid, derivePublicKey(OWNER_KEY));
     parentDid = await custodialAgent();
     childDid = await custodialAgent();
   });
@@ -400,11 +400,13 @@ describe('CustodySigner', () => {
     const { publicKey, encrypted } = custody.generateAndEncrypt();
     const did = `did:key:${publicKeyToMultibase(publicKey)}`;
     const signer = new CustodySigner(did, encrypted, custody);
-    expect(signer.kid).toBe('key-1');
+    // A did:key signs as its W3C method id; another DID keeps key-1; an explicit kid wins.
+    expect(signer.kid).toBe(did.slice('did:key:'.length));
+    expect(new CustodySigner('did:web:agent.example', encrypted, custody).kid).toBe('key-1');
     expect(new CustodySigner(did, encrypted, custody, 'key-2').kid).toBe('key-2');
     const signature = await signer.sign(new Uint8Array([1, 2, 3]));
     expect(signature).toHaveLength(64);
-    expect(JSON.stringify(signer)).toBe(JSON.stringify({ did, kid: 'key-1' }));
+    expect(JSON.stringify(signer)).toBe(JSON.stringify({ did, kid: did.slice('did:key:'.length) }));
     expect(JSON.stringify(signer)).not.toContain('33333333');
   });
 });

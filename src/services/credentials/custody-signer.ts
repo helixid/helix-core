@@ -10,7 +10,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-import { signData, type Signer } from '../../core/index.js';
+import { defaultKidFragment, signData, type Signer } from '../../core/index.js';
 import type { EncryptedKeyMaterial, IKeyCustody } from '../key-custody/key-custody.js';
 
 /**
@@ -28,7 +28,7 @@ export class CustodySigner implements Signer {
   readonly #encrypted: EncryptedKeyMaterial;
   readonly #keyCustody: IKeyCustody;
 
-  constructor(did: string, encrypted: EncryptedKeyMaterial, keyCustody: IKeyCustody, kid = 'key-1') {
+  constructor(did: string, encrypted: EncryptedKeyMaterial, keyCustody: IKeyCustody, kid = defaultKidFragment(did)) {
     this.did = did;
     this.kid = kid;
     this.#encrypted = encrypted;

@@ -27,6 +27,7 @@ import { AesGcmKeyCustody } from '../../src/services/key-custody/key-custody.js'
 import { MockDIDService } from '../mocks/MockDIDService.js';
 import { MockVCService } from '../mocks/MockVCService.js';
 import { TestAuditTrail } from '../utils/TestAuditTrail.js';
+import { publicDidResolver } from '../../src/services/revocation/public-resolver.js';
 
 const ADMIN = 'test-admin-key';
 const ISSUER_KEY = 'a'.repeat(64);
@@ -35,7 +36,8 @@ const ISSUER_DID = `did:key:${publicKeyToMultibase(derivePublicKey(ISSUER_KEY))}
 const OWNER_DID = `did:key:${publicKeyToMultibase(derivePublicKey(OWNER_KEY))}`;
 const LIST_URL = 'http://localhost:3000/v1/status-list/helix-status-list-1';
 const RESOURCE = 'did:web:service.example:orders';
-const resolve = async (did: string): Promise<JwsDidDocument> => (await resolveDID(did)) as unknown as JwsDidDocument;
+// What the server resolves with: a did:key under both its W3C method id and Helix's `#key-1`.
+const resolve = publicDidResolver(resolveDID) as unknown as (did: string) => Promise<JwsDidDocument>;
 
 function makeApp(withCredentials = true, hook?: { authorize: (request: unknown, action: CredentialRouteAction) => void; actions: CredentialRouteAction[] }) {
   const app = Fastify();

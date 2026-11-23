@@ -10,7 +10,7 @@ import verifyRoutes, { cardEndpointOf, memoryNonceStore, readableUrl, type Verif
 
 const fixturesDir = new URL('../../../fixtures/verifier/', import.meta.url);
 const env = JSON.parse(readFileSync(new URL('environment.json', fixturesDir), 'utf8')) as {
-  keys: Record<string, { did: string; private_key_hex: string }>;
+  keys: Record<string, { did: string; kid: string; private_key_hex: string }>;
   did_documents: Record<string, unknown>;
   status_lists: Record<string, { encoded_list: string; issuer?: string; status_purpose?: string; id?: string; valid_from?: string; valid_until?: string }>;
   cards: Record<string, unknown>;
@@ -19,7 +19,8 @@ const valid = (JSON.parse(readFileSync(new URL('valid.json', fixturesDir), 'utf8
 const NOW = Date.parse('2026-06-01T00:00:00Z');
 const SERVICE = env.keys['service']!.did;
 const AGENT = env.keys['agent']!.did;
-const agentSigner = new EnvSigner({ did: AGENT, envVar: 'K', env: { K: env.keys['agent']!.private_key_hex } });
+// The fixture's documents publish `#key-1`: sign under the fixture's own kid.
+const agentSigner = new EnvSigner({ did: AGENT, kid: env.keys['agent']!.kid, envVar: 'K', env: { K: env.keys['agent']!.private_key_hex } });
 const request = { method: 'tools/call', params: { name: 'lookup_order', arguments: { orderId: 'ORD-1001' } } };
 
 /** Seams over the fixture environment: DID documents, decoded lists and cards from local data. */
@@ -157,7 +158,7 @@ describe('POST /v1/verify default status and card seams', () => {
             validUntil: list.valid_until,
             credentialSubject: { id: `${url}#list`, type: 'BitstringStatusList', statusPurpose: list.status_purpose, encodedList: list.encoded_list },
           },
-          new EnvSigner({ did: key.did, envVar: 'L', env: { L: key.private_key_hex } }),
+          new EnvSigner({ did: key.did, kid: key.kid, envVar: 'L', env: { L: key.private_key_hex } }),
         ));
       return { ok: body !== undefined, status: body ? 200 : 404, json: async () => body };
     });

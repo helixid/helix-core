@@ -19,11 +19,11 @@ import {
   derivePublicKey,
   publicKeyToMultibase,
   verifyDataIntegrity,
-  buildDIDDocument,
 } from '../../../src/core/index.js';
 import { SqliteStore } from '../../../src/storage/sqlite.js';
 import { VcRepository } from '../../../src/repositories/vc.repository.js';
 import { PrismaVcStorageDriver } from '../../../src/repositories/drivers/vc.drivers.js';
+import { testDidDocument } from '../../utils/didDocuments.js';
 
 const dirs: string[] = [];
 afterEach(() => {
@@ -107,7 +107,7 @@ describe('status-list credentials and ids (story L3-C)', () => {
     const list = await buildStatusListCredential({ id: 'https://api.example/v1/status-list/x', issuer: did, encodedList, validFrom: '2026-01-01T00:00:00Z', validUntil: '2026-01-01T01:00:00Z' }, signer);
     expect(list.credentialSubject.encodedList).toBe(`u${encodedList}`);
     expect(list.proof).toMatchObject({ cryptosuite: 'eddsa-jcs-2022', created: '2026-01-01T00:00:00Z' });
-    const verdict = await verifyDataIntegrity(list as unknown as Record<string, unknown>, (async () => buildDIDDocument(did, derivePublicKey(KEY))) as never);
+    const verdict = await verifyDataIntegrity(list as unknown as Record<string, unknown>, (async () => testDidDocument(did, derivePublicKey(KEY))) as never);
     expect(verdict.ok).toBe(true);
     await expect(buildStatusListCredential({ id: 'x', issuer: did, encodedList, validFrom: '2026-01-01T01:00:00Z', validUntil: '2026-01-01T01:00:00Z' }, signer)).rejects.toThrow(/after validFrom/);
     expect(unsignedStatusListCredential({ id: 'x', issuer: did, encodedList: `u${encodedList}`, validFrom: 'a', validUntil: 'b' }).credentialSubject.encodedList).toBe(`u${encodedList}`);
@@ -144,6 +144,12 @@ describe('publicDidResolver (story L3-C)', () => {
     expect(await publicDidResolver(async () => web)('did:web:x.example')).toBe(web);
     const bare = { id: did, verificationMethod: [] } as never;
     expect(await publicDidResolver(async () => bare)(did)).toBe(bare);
+    // A resolver that only knows Helix's #key-1 (core's resolveDID lists both itself since the F-1 kid fix).
+    const helixOnly = (await import('../../../src/core/index.js')).buildDIDDocument(did, derivePublicKey('7'.repeat(64)));
+    const widened = (await publicDidResolver(async () => helixOnly)(did)) as unknown as { verificationMethod: Array<{ id: string }>; assertionMethod: string[]; authentication: string[] };
+    expect(widened.verificationMethod.map((method) => method.id)).toEqual([`${did}#key-1`, standard]);
+    expect(widened.assertionMethod).toContain(standard);
+    expect(widened.authentication).toContain(standard);
     const already = { id: did, verificationMethod: [{ id: standard }] } as never;
     expect(await publicDidResolver(async () => already)(did)).toBe(already);
   });

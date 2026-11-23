@@ -4,7 +4,6 @@ import { describe, expect, it } from 'vitest';
 import {
   EnvSigner,
   ProofReasons,
-  buildDIDDocument,
   derivePublicKey,
   hashData,
   issuerOf,
@@ -18,6 +17,7 @@ import { canonicalize } from '../../../../src/core/crypto/jcs.js';
 import { sha256 } from '@noble/hashes/sha2';
 import { bytesToHex, utf8ToBytes } from '@noble/hashes/utils';
 import type { DidResolver } from '../../../../src/core/credentials/index.js';
+import { testDidDocument } from '../../../utils/didDocuments.js';
 
 function omit<T extends object, K extends keyof T>(value: T, key: K): Omit<T, K> {
   const copy = { ...value };
@@ -31,8 +31,8 @@ const did = `did:key:${publicKeyToMultibase(derivePublicKey(KEY))}`;
 const otherDid = `did:key:${publicKeyToMultibase(derivePublicKey(OTHER_KEY))}`;
 const signer = new EnvSigner({ did, envVar: 'K', env: { K: KEY } });
 const documents: Record<string, DIDDocument> = {
-  [did]: buildDIDDocument(did, derivePublicKey(KEY)),
-  [otherDid]: buildDIDDocument(otherDid, derivePublicKey(OTHER_KEY)),
+  [did]: testDidDocument(did, derivePublicKey(KEY)),
+  [otherDid]: testDidDocument(otherDid, derivePublicKey(OTHER_KEY)),
 };
 const resolve = (async (value: string) => documents[value]) as unknown as DidResolver;
 
@@ -51,7 +51,7 @@ describe('signDataIntegrity', () => {
       type: 'DataIntegrityProof',
       cryptosuite: 'eddsa-jcs-2022',
       created: '2026-01-01T00:00:00Z',
-      verificationMethod: `${did}#key-1`,
+      verificationMethod: signer.verificationMethodId,
       proofPurpose: 'assertionMethod',
       proofValue: expect.stringMatching(/^z[1-9A-HJ-NP-Za-km-z]+$/),
     });
@@ -60,7 +60,7 @@ describe('signDataIntegrity', () => {
     const data = hashData(config, document);
     expect(bytesToHex(data.slice(0, 32))).toBe(bytesToHex(sha256(utf8ToBytes(canonicalize(config)))));
     expect(bytesToHex(data.slice(32))).toBe(bytesToHex(sha256(utf8ToBytes(canonicalize(document)))));
-    expect(await verifyDataIntegrity(signed, resolve)).toEqual({ ok: true, issuer: did, verificationMethod: `${did}#key-1` });
+    expect(await verifyDataIntegrity(signed, resolve)).toEqual({ ok: true, issuer: did, verificationMethod: signer.verificationMethodId });
   });
 
   it('defaults created to now and accepts an issuer object', async () => {
@@ -139,7 +139,7 @@ describe('verifyDataIntegrity', () => {
     expect(await refusal(signed, (async () => authenticationOnly) as unknown as DidResolver)).toBe(ProofReasons.KEY_REJECTED);
     const unsupported = {
       ...documents[did]!,
-      verificationMethod: [{ id: `${did}#key-1`, type: 'JsonWebKey2020', controller: did, publicKeyJwk: { kty: 'EC', crv: 'P-256', x: 'a', y: 'b' } }],
+      verificationMethod: [{ id: signer.verificationMethodId, type: 'JsonWebKey2020', controller: did, publicKeyJwk: { kty: 'EC', crv: 'P-256', x: 'a', y: 'b' } }],
     } as unknown as DIDDocument;
     expect(await refusal(signed, (async () => unsupported) as unknown as DidResolver)).toBe(ProofReasons.KEY_REJECTED);
   });
@@ -149,8 +149,9 @@ describe('verifyDataIntegrity', () => {
     expect(await refusal({ ...signed, credentialSubject: { id: 'did:key:z6MkSubject', n: 2 } })).toBe(ProofReasons.SIGNATURE_INVALID);
     const flipped = `${signed.proof.proofValue.slice(0, -1)}${signed.proof.proofValue.endsWith('1') ? '2' : '1'}`;
     expect(await refusal({ ...signed, proof: { ...signed.proof, proofValue: flipped } })).toBe(ProofReasons.SIGNATURE_INVALID);
-    const otherKeyDocument = { ...documents[did]!, verificationMethod: [{ ...documents[did]!.verificationMethod[0]!, publicKeyMultibase: documents[otherDid]!.verificationMethod[0]!.publicKeyMultibase }] };
-    expect(await refusal(signed, async () => otherKeyDocument)).toBe(ProofReasons.SIGNATURE_INVALID);
+    const other = documents[otherDid]!.verificationMethod[0]! as unknown as Record<string, unknown>;
+    const otherKeyDocument = { ...documents[did]!, verificationMethod: [{ ...documents[did]!.verificationMethod[0]!, publicKeyMultibase: other['publicKeyMultibase'], publicKeyJwk: other['publicKeyJwk'] }] } as unknown as DIDDocument;
+    expect(await refusal(signed, (async () => otherKeyDocument) as unknown as DidResolver)).toBe(ProofReasons.SIGNATURE_INVALID);
   });
 
   it('refuses a document the canonicalizer cannot write after the key is read', async () => {
