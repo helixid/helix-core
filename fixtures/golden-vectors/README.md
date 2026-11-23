@@ -2,7 +2,7 @@
 
 These fixtures are the cross-language contract for the small set of crypto
 primitives that every SDK must implement **locally** rather than call the API
-for: canonical JSON, hashing, Ed25519 signing, and `VPBuilder.sign()`. They
+for: canonical JSON, hashing and Ed25519 signing. They
 are generated once from `helix-core`'s own implementation — never
 hand-written or re-derived from a spec — and every SDK asserts byte-for-byte
 equality against them.
@@ -31,11 +31,8 @@ generated output.
 - **`helix-core`**: `tests/unit/golden-vectors.test.ts` re-derives every
   vector from current source and fails if it drifts from what's committed
   here — this is what catches "changed the crypto, forgot to regenerate."
-- **`helix-sdk-js`**: `tests/unit/golden-vectors.test.ts` does the same
-  using this package's own import of `VPBuilder`. Today that's a re-export
-  of `@helixid/core`; once `proposal-retire-core-package.md` lands and this
-  file becomes a verbatim local copy, this test is what catches a missed
-  copy-paste sync.
+- **`helix-sdk-js`**: no longer tests `vp-builder.json`; `VPBuilder` and
+  its vector test were removed with the Helix VP (KYA-OS story C-C).
 - **`helix-sdk-py`** (once it exists): same pattern, its own
   implementation, same fixture files.
 

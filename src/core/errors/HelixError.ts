@@ -324,12 +324,6 @@ export class InsufficientScopeError extends HelixError {
   }
 }
 
-export class VPMissingError extends HelixError {
-  constructor(message = 'No KYA-OS request proof in MCP _meta["org.kya-os/request-proof"]') {
-    super('VP_MISSING', message, 401);
-  }
-}
-
 export class VPNotFoundError extends HelixError {
   constructor(message = 'VP not found') {
     super('VP_NOT_FOUND', message, 404);
