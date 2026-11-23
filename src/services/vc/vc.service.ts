@@ -41,9 +41,17 @@ import { extractEd25519PublicKeyHexFromDIDDocument } from '../did/publicKey.js';
 
 type CredentialSubject = {
   agentName?: string;
+  /** Story F-1: the identity credential names its agent here (`agentName` is the pre-F-1 member). */
+  name?: string;
   userId?: string;
   parentVcId?: string;
 };
+
+/** The agent's name for a summary: the identity credential's `name` (F-1), else a legacy `agentName`. */
+function agentNameOf(subject: CredentialSubject, vcType: string | null | undefined): string | undefined {
+  if (vcType === 'AgentIdentityCredential' && typeof subject.name === 'string' && subject.name !== '') return subject.name;
+  return subject.agentName;
+}
 
 function asRecord(value: unknown): Record<string, unknown> {
   return typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : {};
@@ -732,7 +740,7 @@ export class VCService implements IVCService {
         vcId: record.vcId,
         subjectDid: record.subjectDid,
         ...(vcType ? { vcType } : {}),
-        ...(subject.agentName ? { agentName: subject.agentName } : {}),
+        ...(agentNameOf(subject, vcType) ? { agentName: agentNameOf(subject, vcType) } : {}),
         scopes,
         status,
         issuedAt: record.createdAt?.toISOString() ?? validFrom,
