@@ -215,6 +215,22 @@ describe('the service submits an unsigned grant for itself (points 2, 3)', () =>
     await world.consent.createRequest(await world.requestJws({ grant: world.grant({ agent: OTHER_AGENT.did, scopes: ['anything'] }) }), 'r');
   });
 
+  it('applies the deployment\'s own rule on who may ask for which agent', async () => {
+    const seen: Array<{ serviceDid: string; agentDid: string }> = [];
+    const world = consentWorld({
+      consent: {
+        authorizeRequest: ({ serviceDid, agentDid }) => {
+          seen.push({ serviceDid, agentDid });
+          if (agentDid === OTHER_AGENT.did) throw new HelixError(ErrorCode.DID_NOT_FOUND, 'Delegatee is not a known agent', 404);
+        },
+      },
+    });
+    await world.consent.createRequest(await world.requestJws({}), 'r');
+    expect(seen).toEqual([{ serviceDid: SERVICE.did, agentDid: AGENT.did }]);
+    const refused = await refusal(world.consent.createRequest(await world.requestJws({ grant: world.grant({ agent: OTHER_AGENT.did }) }), 'r'));
+    expect(refused.httpStatus).toBe(404);
+  });
+
   it('checks the signed request: typ, audience, time, jti, signature', async () => {
     const world = consentWorld();
     const body = { serviceUserId: 'user-1', grant: world.grant() };

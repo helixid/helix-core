@@ -88,6 +88,13 @@ export interface ConsentServiceOptions {
   apiBaseUrl: string;
   /** The service when it is known to this deployment, else undefined (its consent requests are refused). */
   serviceOf: (serviceDid: string) => Promise<ConsentServiceInfo | undefined>;
+  /**
+   * A deployment's own rule on who may ask whose consent for which agent
+   * (the hosted build: an account's service may not ask for another
+   * account's private agent). Throws to refuse; runs after the service is
+   * known and before anything is stored.
+   */
+  authorizeRequest?: ((input: { serviceDid: string; agentDid: string }) => Promise<void> | void) | undefined;
   /** The scopes the agent is attested for, when this deployment knows it; undefined skips the check (the verifier still intersects). */
   agentScopesOf?: ((agentDid: string) => Promise<readonly string[] | undefined>) | undefined;
   audit?: AuditTrail | undefined;
@@ -296,6 +303,7 @@ export class ConsentService {
     if (service === undefined) {
       throw new HelixError(ErrorCode.CONSENT_SERVICE_UNKNOWN, `${claims.iss} is not a service known to this deployment`, 403);
     }
+    await this.#options.authorizeRequest?.({ serviceDid: claims.iss, agentDid: grant.invoker });
     const attested = await this.#options.agentScopesOf?.(grant.invoker);
     if (attested !== undefined) {
       const held = new Set(attested);
