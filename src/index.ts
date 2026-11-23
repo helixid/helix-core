@@ -139,10 +139,13 @@ export { default as revocationRoutes } from './routes/revocations/index.js';
 export { default as eventRoutes } from './routes/events/index.js';
 export type { VerifyRouteOptions } from './routes/verify/index.js';
 export { default as agentRoutes } from './routes/agent/index.js';
+// KYA-OS F-1 credential routes with a host authorize hook (F-3 parity: helix-server-enterprise mounts them account-scoped).
+export { default as credentialRoutes, hopDelegate } from './routes/credentials/index.js';
+export type { CredentialRouteAction, CredentialRouteOptions } from './routes/credentials/index.js';
 export { default as entityCardRoutes, hostedUrls } from './routes/entity-card/index.js';
 export type { EntityCardRouteOptions, EntityCardSource, EntityCardRecord } from './routes/entity-card/index.js';
-export { createEntityCardSource, assertionKeyOf } from './services/entity-card/entity-card.source.js';
-export type { EntityCardSourceOptions, EntityCardDetails } from './services/entity-card/entity-card.source.js';
+export { createEntityCardSource, assertionKeyOf, attestedCardCapabilities, credentialCardDetails } from './services/entity-card/entity-card.source.js';
+export type { EntityCardSourceOptions, EntityCardDetails, ActiveCredentialStore } from './services/entity-card/entity-card.source.js';
 // KYA-OS story F-3: custody preference, KeyStore, custodial signing, conformance report.
 export { default as custodyRoutes } from './routes/custody/index.js';
 export type { CustodyAction, CustodyRouteOptions } from './routes/custody/index.js';

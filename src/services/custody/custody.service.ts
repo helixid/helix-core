@@ -110,6 +110,7 @@ import { hostedUrls } from '../../routes/entity-card/index.js';
 import { CustodyAudit, type CustodyActor, type CustodyFactsSink } from './custody-audit.js';
 import { pendingHopReissuer, type HopReissueResult, type HopReissuer } from './hop-reissue.js';
 import type { CustodialKeys, CustodialSigningUse } from './custodial-keys.js';
+import type { EntityCardDetails } from '../entity-card/entity-card.source.js';
 
 export const DEFAULT_ENROLLMENT_TTL_SECONDS = 24 * 60 * 60;
 export const DEFAULT_ROTATION_OVERLAP_SECONDS = 24 * 60 * 60;
@@ -183,6 +184,14 @@ export interface CustodyServiceOptions {
   hopReissuer?: HopReissuer | undefined;
   /** The Helix did:web host (`DID_DOMAIN`), with its port when it has one. Needed for `helix` hosting. */
   host: string;
+  /**
+   * What an agent's credentials put on its card (F-3 parity): its
+   * attestations, responsible party and revocation entry, as the hosted card
+   * route publishes them (`credentialCardDetails`). With it, an active
+   * agent's documents carry them too, so an owner hosting its own did:web
+   * republishes a card that says the same.
+   */
+  credentialDetails?: ((did: string, subjectType: string) => Promise<EntityCardDetails | undefined>) | undefined;
   /** The origin Helix-hosted documents are reachable at, when it is not `https://<host>`. */
   publicOrigin?: string | undefined;
   /** The DID service's document cache, dropped when a document changes. */
@@ -836,8 +845,11 @@ export class CustodyService implements CustodialKeys {
 
   // ----------------------------------------------------------------- reading
 
-  async getCustody(did: string, expectedSubjectType?: CustodySubjectType): Promise<CustodyView> {
-    return this.view(await this.requireRecord(did, expectedSubjectType));
+  /** The subject's custody, with its current documents for an agent (an own-hosted owner publishes these). */
+  async getCustody(did: string, expectedSubjectType?: CustodySubjectType): Promise<CustodyView & { documents?: PublishedDocuments }> {
+    const record = await this.requireRecord(did, expectedSubjectType);
+    const documents = record.subjectType === 'agent' ? await this.currentDocuments(record) : undefined;
+    return { ...(await this.view(record)), ...(documents ? { documents } : {}) };
   }
 
   /** The custody view of each DID that has a record; the console labels its lists with these. */
@@ -1020,7 +1032,7 @@ export class CustodyService implements CustodialKeys {
     });
     if (record.didHosting === 'helix') {
       const active = await this.markActive(record, context, 'helix-hosted');
-      return { ...active, documents };
+      return { ...active, documents: active.documents ?? documents };
     }
     const now = this.clock();
     const pending = await this.options.records.updateRecord(did, {
@@ -1064,7 +1076,18 @@ export class CustodyService implements CustodialKeys {
       // The same enrollment event the agent service logs when an agent is onboarded.
       this.audit.agentOnboarded({ requestId: context.requestId, agentDid: record.did, credentialId: vcId });
     }
-    return { ...(await this.view(active)), ...(vcId ? { vcId } : {}) };
+    // An agent's documents now carry what its credentials say on the card; an
+    // own-hosted agent's owner republishes that card (helix activate does).
+    const documents = record.subjectType === 'agent' ? await this.currentDocuments(active) : undefined;
+    return { ...(await this.view(active)), ...(vcId ? { vcId } : {}), ...(documents ? { documents } : {}) };
+  }
+
+  /** The subject's documents from its active and retiring keys, current key first (what `republish` stores). */
+  private async currentDocuments(record: CustodyRecordRow): Promise<PublishedDocuments | undefined> {
+    const keys = (await this.options.records.listKeys(record.did)).filter((key) => key.status !== 'revoked');
+    if (!keys.some((key) => key.kid === record.kid)) return undefined;
+    const ordered = [...keys.filter((key) => key.kid === record.kid), ...keys.filter((key) => key.kid !== record.kid)];
+    return this.documentsFor(record, ordered);
   }
 
   /**
@@ -1107,6 +1130,7 @@ export class CustodyService implements CustodialKeys {
       document.authentication.push(method.id);
       document.assertionMethod.push(method.id);
     }
+    const fromCredentials = record.status === 'active' ? await this.options.credentialDetails?.(record.did, record.subjectType) : undefined;
     const card = buildEntityCard({
       id: record.did,
       entityType: entityTypeOf(record.subjectType, ownerEntityType),
@@ -1114,6 +1138,9 @@ export class CustodyService implements CustodialKeys {
       kid: current!.kid,
       publicKeyJwk: current!.publicKeyJwk,
       didDocument: urls.didDocument,
+      ...(fromCredentials?.capabilities === undefined ? {} : { capabilities: fromCredentials.capabilities }),
+      ...(fromCredentials?.responsibleParty === undefined ? {} : { responsibleParty: fromCredentials.responsibleParty }),
+      ...(fromCredentials?.revocation === undefined ? {} : { revocation: fromCredentials.revocation }),
     });
     return { didDocument: document, card, didDocumentUrl: urls.didDocument, cardUrl: urls.card };
   }

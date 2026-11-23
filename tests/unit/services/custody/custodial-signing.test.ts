@@ -16,11 +16,15 @@ import {
   rootHopInput,
   verificationMethodOfKey,
   verifyDelegationHop,
+  verifyDelegationChainProofs,
+  EnvSigner,
   type Signer,
   verifyEd25519Proof,
   type DIDDocument,
 } from '../../../../src/core/index.js';
 import { DidKeyRepository } from '../../../../src/repositories/did-key.repository.js';
+import { VcRepository } from '../../../../src/repositories/vc.repository.js';
+import { CredentialService } from '../../../../src/services/credentials/credential.service.js';
 import { AesGcmKeyCustody } from '../../../../src/services/key-custody/key-custody.js';
 import { ServiceProviderService } from '../../../../src/services/service-provider/service-provider.service.js';
 import { MockVCService } from '../../../mocks/MockVCService.js';
@@ -101,6 +105,57 @@ describe('KYA-OS delegation for custodial agents: signed through the generic /si
     await expect(custodialSigner(h, agent.did).sign(new Uint8Array([1]))).rejects.toThrow(CustodialSigningRefusedError);
     expect(await h.service.signerFor(agent.did, 'agent', { requestId: 'req', purpose: 'grant' })).toBeUndefined();
     expect(await h.service.isActiveAgent(agent.did)).toBe(true);
+  });
+});
+
+describe('delegation hops Helix issues for custodial agents and services (F-3 parity)', () => {
+  /** A CredentialService over an in-memory store, its custodial keys from the harness's CustodyService. */
+  async function credentialsFor(h: Harness, attach = true): Promise<CredentialService> {
+    const vcRepo = new VcRepository();
+    await vcRepo.createStatusList('helix-status-list-1', 'list');
+    let index = 0;
+    const statusStore = {
+      claimStatusListEntry: async () => ({ statusListCredentialUrl: 'https://helix.example/v1/status-list/helix-status-list-1', statusListIndex: (index += 1) }),
+      revokeVC: async () => ({}),
+    };
+    const helix = new EnvSigner({ did: 'did:web:helix.example', envVar: 'K', env: { K: '5c'.repeat(32) } });
+    const credentials = new CredentialService(
+      vcRepo,
+      statusStore as never,
+      { resolveDID: async () => ({}), registerResolvedDID: async () => undefined } as never,
+      helix,
+      new DidKeyRepository(),
+      new AesGcmKeyCustody(MASTER),
+      new TestAuditTrail(),
+    );
+    if (attach) credentials.attachCustodialKeys(h.service);
+    return credentials;
+  }
+
+  it('a custodial service roots authority over itself and a custodial agent re-delegates it, each signed with its KeyStore key and audited', async () => {
+    const h = harness();
+    const svc = await h.service.createService({ name: 'orders', domain: 'orders.example', requiredScopes: ['read:orders'], keyCustody: 'helix' }, h.context());
+    const delegator = await h.service.createAgent({ name: 'Delegator', scopes: ['read:orders'], keyCustody: 'helix' }, h.context());
+    const delegatee = await h.service.createAgent({ name: 'Delegatee', keyCustody: 'helix' }, h.context());
+    const credentials = await credentialsFor(h);
+    const root = await credentials.issueRootHop({ issuer: svc.did, invoker: delegator.did, invocationTarget: svc.did, allowedAction: ['read:orders'] }, 'req-root');
+    const { chain } = await credentials.issueHop(root.id, { invoker: delegatee.did, allowedAction: ['read:orders'] }, 'req-hop');
+    expect(chain.map((hop) => hop.issuer)).toEqual([svc.did, delegator.did]);
+    expect(await verifyDelegationChainProofs(chain, async (did) => (await documentOf(h, did)) as never)).toEqual({ ok: true });
+    expect(events(h, CustodyEvents.CUSTODIAL_SIGNATURE)).toEqual([
+      expect.objectContaining({ actor: 'custodial-hop', subjectType: 'service', did: svc.did, requestId: 'req-root' }),
+      expect.objectContaining({ actor: 'custodial-hop', subjectType: 'agent', did: delegator.did, requestId: 'req-hop' }),
+    ]);
+  });
+
+  it('has no key for a self-custody agent (it signs its own hops), nor without the custodial keys attached', async () => {
+    const h = harness();
+    const self = await h.service.createAgent({ name: 'Own keys', keyCustody: 'self' }, h.context());
+    const custodial = await h.service.createAgent({ name: 'Custodial', keyCustody: 'helix' }, h.context());
+    const credentials = await credentialsFor(h);
+    await expect(credentials.signerFor(self.did, 'req')).rejects.toMatchObject({ code: 'AGENT_KEY_NOT_FOUND' });
+    await expect((await credentialsFor(h, false)).signerFor(custodial.did)).rejects.toMatchObject({ code: 'AGENT_KEY_NOT_FOUND' });
+    expect((await credentials.signerFor(custodial.did)).did).toBe(custodial.did);
   });
 });
 

@@ -11,8 +11,8 @@
 // limitations under the License.
 
 /**
- * What consent-grant issuance needs from KYA-OS story F-3 for services and
- * agents created through the custody routes: a service's key is in the
+ * What consent-grant and delegation-hop issuance need from KYA-OS story F-3 for
+ * services and agents created through the custody routes: a service's key is in the
  * KeyStore, never in did_keys, so grants are signed through a KeyStoreSigner
  * (stories rule 8: KeyStore only, no second key location), and such an agent
  * counts as onboarded. CustodyService implements it.
@@ -22,15 +22,17 @@ import type { Signer } from '../../core/index.js';
 
 /**
  * Which server-side path asks for the signature, and its request: each
- * signature is audited as CUSTODIAL_SIGNATURE. Consent grants, and (story
- * L3-C) the issuer's own status list, which the StatusListPublisher signs:
- * there is no VP signing any more (story F-2 removed it), and the old
- * delegation path is gone with story F-1; KYA-OS delegation hops and request
- * proofs are signed client side through the generic /sign route.
+ * signature is audited as a custodial signature (F-3 point 8). Consent grants
+ * signed by a custodial service; delegation hops Helix issues on behalf of a
+ * custodial agent or service (`POST /v1/grants`, `/v1/grants/:id/hops`); and
+ * (story L3-C) the issuer's own status list, which the StatusListPublisher
+ * signs. There is no VP signing (story F-2 removed it). A custodial agent can
+ * still sign its own hops and request proofs client side through the /sign
+ * route.
  */
 export interface CustodialSigningUse {
   requestId: string;
-  purpose: 'grant' | 'status_list';
+  purpose: 'grant' | 'hop' | 'status_list';
 }
 
 export interface CustodialKeys {

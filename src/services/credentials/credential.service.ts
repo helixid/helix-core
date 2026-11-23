@@ -63,6 +63,7 @@ import type { DidKeyRepository } from '../../repositories/did-key.repository.js'
 import type { IKeyCustody } from '../key-custody/key-custody.js';
 import type { IDIDService } from '../did/IDIDService.js';
 import { CustodySigner } from './custody-signer.js';
+import type { CustodialKeys } from '../custody/custodial-keys.js';
 
 /** The two years a credential lives by default; attestations and hops may be shorter. */
 const DEFAULT_VALID_MS = 2 * 365 * 24 * 60 * 60 * 1000;
@@ -161,6 +162,8 @@ function stored<T>(record: VCRecord): StoredCredential<T> {
 }
 
 export class CredentialService {
+  private custodialKeys: CustodialKeys | undefined;
+
   constructor(
     private readonly vcRepo: CredentialVcRepository,
     private readonly statusStore: CredentialStatusStore,
@@ -226,14 +229,32 @@ export class CredentialService {
     return (value ?? new Date(Date.now() + DEFAULT_VALID_MS)).toISOString();
   }
 
-  /** The Signer for `did`: the Helix issuer, or a key Helix holds in custody for that DID. */
-  async signerFor(did: string): Promise<Signer> {
+  /**
+   * KYA-OS story F-3: agents and services created through the custody routes
+   * keep their key in the KeyStore, not in did_keys. With this attached, Helix
+   * signs a delegation hop for such a subject when its key custody is
+   * `helix`, through a KeyStoreSigner (stories rule 8), audited as a
+   * custodial signature; a custodial agent delegates exactly as an agent
+   * whose key is in did_keys does.
+   */
+  attachCustodialKeys(keys: CustodialKeys): void {
+    this.custodialKeys = keys;
+  }
+
+  /**
+   * The Signer for `did`: the Helix issuer, a key Helix holds in did_keys, or
+   * the KeyStore key of an active custodial agent or service (F-3). A
+   * self-custody subject's key never reaches Helix: it signs its own hops.
+   */
+  async signerFor(did: string, requestId = 'unspecified'): Promise<Signer> {
     if (did === this.helixSigner.did) return this.helixSigner;
     const record = await this.keyRepository.findByDid(did);
-    if (!record) {
-      throw new HelixError(ErrorCode.AGENT_KEY_NOT_FOUND, `No key held for ${did}`, 404);
+    if (record) return new CustodySigner(did, record, this.keyCustody);
+    for (const subjectType of ['agent', 'service'] as const) {
+      const signer = await this.custodialKeys?.signerFor(did, subjectType, { requestId, purpose: 'hop' });
+      if (signer) return signer;
     }
-    return new CustodySigner(did, record, this.keyCustody);
+    throw new HelixError(ErrorCode.AGENT_KEY_NOT_FOUND, `No key held for ${did}`, 404);
   }
 
   /** `vcs.subjectDid` is a foreign key onto `dids`: a DID this server has only seen in a credential is registered first. */
@@ -392,7 +413,7 @@ export class CredentialService {
 
   /** The root of a chain: `parentCapability` is the resource itself. Any issuer Helix can sign for may issue it. */
   async issueRootHop(input: IssueRootHopInput, requestId: string): Promise<SignedDelegationHop> {
-    const signer = await this.signerFor(input.issuer);
+    const signer = await this.signerFor(input.issuer, requestId);
     const statusEntry = await this.statusEntry(signer.did);
     const hop = await buildDelegationHop(
       rootHopInput({
@@ -443,7 +464,7 @@ export class CredentialService {
     const parentChain = await this.chainOf(parentId);
     const parent = parentChain[parentChain.length - 1]!;
     const delegate = parent.credentialSubject.invoker ?? parent.credentialSubject.controller!;
-    const signer = await this.signerFor(delegate);
+    const signer = await this.signerFor(delegate, requestId);
     const statusEntry = await this.statusEntry(signer.did);
     const hop = await buildDelegationHop(
       {
