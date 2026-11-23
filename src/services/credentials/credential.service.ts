@@ -617,11 +617,11 @@ export class CredentialService implements HopReissuer {
    * whose issuer has not reissued it yet) runs to its own `validUntil`.
    */
   async expireHopsForKid(input: KidHopsInput): Promise<string[]> {
+    const ended = input.bound?.until;
+    if (!ended) return [];
     const bound = await this.hopsBoundTo(input.did, input.bound);
     if (bound.length === 0) return [];
-    const later = (await this.vcRepo.findActiveBySubjectDid(input.did, DELEGATION_CREDENTIAL_TYPE)).filter(
-      (record) => input.bound?.until !== null && input.bound !== undefined && (record.createdAt?.getTime() ?? 0) >= input.bound.until!.getTime(),
-    );
+    const later = await this.hopsBoundTo(input.did, { from: ended, until: null });
     const successors = new Set(later.map((record) => grantOf(stored<SignedDelegationHop>(record).credential)));
     const expired: string[] = [];
     for (const record of bound) {

@@ -477,15 +477,20 @@ describe('changing custody is a rotation (point 6)', () => {
     const changed = await h.service.changeCustody(agent.did, { keyCustody: 'self', publicKeyJwk: newKey.publicKeyJwk, proof: rotationProof(newKey, agent.did, newKid, h.now.value.toISOString()) }, h.context({ actor: 'account:acc_1' }));
     expect(changed).toMatchObject({ keyCustody: 'self', label: 'custody: self', conformant: true, kid: newKid, previousKid: oldKid, previousKeyShredded: true, publishRequired: false, credentialVcId: 'vc:test:1' });
     expect(changed.retiresAt).toBe(new Date(h.now.value.getTime() + 86_400_000).toISOString());
-    expect(changed.hopReissue).toEqual({ reissued: 0, pending: true, note: expect.stringMatching(/C-E/) });
+    expect(changed.hopReissue).toEqual({ reissued: 0, pending: true, note: expect.stringMatching(/no delegation hop/) });
+    expect(changed.rotationSequence).toBe(2);
     expect(changed.keys.map((key) => [key.kid, key.location, key.status])).toEqual([
       [oldKid, 'helix', 'retiring'],
       [newKid, 'self', 'active'],
     ]);
 
-    // Both keys in the DID document during the overlap, the new one first.
+    // Both keys in the DID document during the overlap, the new one first;
+    // the old one already carries its validUntil, the version moved on (C-E).
     const document = await documentOf(h, agent.did);
     expect(document.assertionMethod).toEqual([newKid, oldKid]);
+    expect(document).toMatchObject({ rotationSequence: 2 });
+    expect(document.verificationMethod.find((method) => method.id === oldKid)).toMatchObject({ validUntil: changed.retiresAt });
+    expect(document.verificationMethod.find((method) => method.id === newKid)).not.toHaveProperty('validUntil');
     expect(keyIn(document, newKid)).toEqual({ ...newKey.publicKeyJwk });
     // A proof made before the change still verifies against the published old key.
     expect(await ed25519.verifyAsync(oldSignature, before, publicKeyJwkBytes(keyIn(document, oldKid)!))).toBe(true);
@@ -501,19 +506,22 @@ describe('changing custody is a rotation (point 6)', () => {
     expect(h.issued).toHaveLength(1);
     expect(changed).not.toHaveProperty('vcId');
     expect(events(h, CustodyEvents.CUSTODY_CHANGED)).toEqual([
-      expect.objectContaining({ actor: 'account:acc_1', did: agent.did, from: 'helix', to: 'self', oldKid, newKid, hopReissue: expect.objectContaining({ pending: true }) }),
+      expect.objectContaining({ actor: 'account:acc_1', did: agent.did, name: 'changed', from: 'helix', to: 'self', oldKid, newKid, rotationSequence: 2, hopReissue: expect.objectContaining({ pending: true }) }),
     ]);
     expect(events(h, CustodyEvents.CUSTODY_KEY_SHREDDED)).toEqual([expect.objectContaining({ did: agent.did, kid: oldKid })]);
     expect(h.didCacheDeleted).toContain(agent.did);
 
-    // The overlap ends: the old key is revoked and leaves the document.
+    // The overlap ends: the old key is retired and stays in the document with
+    // its validUntil (C-E point 3), so proofs it made before still verify.
     h.now.value = new Date(h.now.value.getTime() + 86_400_001);
     const finalized = await h.service.finalizeRotation(agent.did, h.context());
-    expect(finalized.revoked).toEqual([oldKid]);
-    expect(finalized.keys.find((key) => key.kid === oldKid)).toMatchObject({ status: 'revoked', revokedAt: h.now.value.toISOString() });
-    expect((await documentOf(h, agent.did)).verificationMethod.map((method) => method.id)).toEqual([newKid]);
-    expect(events(h, CustodyEvents.CUSTODY_KEY_REVOKED)).toEqual([expect.objectContaining({ kid: oldKid, location: 'helix' })]);
-    expect((await h.service.finalizeRotation(agent.did, h.context())).revoked).toEqual([]);
+    expect(finalized.retired).toEqual([oldKid]);
+    expect(finalized.keys.find((key) => key.kid === oldKid)).toMatchObject({ status: 'retired', retiresAt: changed.retiresAt, revokedAt: null });
+    const after = await documentOf(h, agent.did);
+    expect(after.verificationMethod.map((method) => method.id)).toEqual([newKid, oldKid]);
+    expect(after).toMatchObject({ rotationSequence: 2 });
+    expect(events(h, CustodyEvents.CUSTODY_KEY_RETIRED)).toEqual([expect.objectContaining({ kid: oldKid, location: 'helix', expiredHops: 0 })]);
+    expect((await h.service.finalizeRotation(agent.did, h.context())).retired).toEqual([]);
   });
 
   it('self to helix: Helix generates the new key; the client key retires; the overlap can be ended at once', async () => {
@@ -521,10 +529,12 @@ describe('changing custody is a rotation (point 6)', () => {
     const { enrolled } = await onboardSelf(h);
     const changed = await h.service.changeCustody(enrolled.did, { keyCustody: 'helix', overlapSeconds: 0 }, h.context());
     expect(changed).toMatchObject({ keyCustody: 'helix', label: 'custody: helix', kid: `${enrolled.did}#key-2`, previousKeyShredded: false });
-    expect(changed.keys.map((key) => [key.location, key.status])).toEqual([['self', 'revoked'], ['helix', 'active']]);
-    expect((await documentOf(h, enrolled.did)).verificationMethod.map((method) => method.id)).toEqual([`${enrolled.did}#key-2`]);
+    expect(changed.keys.map((key) => [key.location, key.status])).toEqual([['self', 'retired'], ['helix', 'active']]);
+    const document = await documentOf(h, enrolled.did);
+    expect(document.verificationMethod.map((method) => method.id)).toEqual([`${enrolled.did}#key-2`, enrolled.kid]);
+    expect(document.verificationMethod[1]).toMatchObject({ validUntil: h.now.value.toISOString() });
     expect((await h.service.sign(enrolled.did, { payload: 'AQ' }, h.context(), 'agent')).kid).toBe(`${enrolled.did}#key-2`);
-    expect(events(h, CustodyEvents.CUSTODY_KEY_REVOKED)).toEqual([expect.objectContaining({ location: 'self' })]);
+    expect(events(h, CustodyEvents.CUSTODY_KEY_RETIRED)).toEqual([expect.objectContaining({ location: 'self' })]);
     expect(events(h, CustodyEvents.CUSTODY_KEY_SHREDDED)).toEqual([]);
   });
 
@@ -534,14 +544,14 @@ describe('changing custody is a rotation (point 6)', () => {
     await h.service.changeCustody(enrolled.did, { keyCustody: 'helix', overlapSeconds: 60 }, h.context());
     h.now.value = new Date(h.now.value.getTime() + 61_000);
     await h.service.sign(enrolled.did, { payload: 'AQ' }, h.context(), 'agent');
-    expect((await h.service.getCustody(enrolled.did)).keys[0]!.status).toBe('revoked');
+    expect((await h.service.getCustody(enrolled.did)).keys[0]!.status).toBe('retired');
 
     const second = harness();
     const agent = await second.service.createAgent({ name: 'Mover', keyCustody: 'helix' }, second.context());
     const key = clientKey();
     await second.service.changeCustody(agent.did, { keyCustody: 'self', publicKeyJwk: key.publicKeyJwk, kid: 'client', proof: rotationProof(key, agent.did, `${agent.did}#client`, second.now.value.toISOString()) }, second.context());
     const forced = await second.service.finalizeRotation(agent.did, second.context(), { force: true }, 'agent');
-    expect(forced.revoked).toEqual([`${agent.did}#key-1`]);
+    expect(forced.retired).toEqual([`${agent.did}#key-1`]);
     expect(forced.kid).toBe(`${agent.did}#client`);
   });
 
@@ -575,7 +585,7 @@ describe('changing custody is a rotation (point 6)', () => {
       h.service.changeCustody(agent.did, { keyCustody: 'self', publicKeyJwk: key.publicKeyJwk, kid: 'key-1', proof: rotationProof(key, agent.did, agent.kid!, h.now.value.toISOString()) }, h.context()),
     ).rejects.toThrow(/already used/);
     const pending = await h.service.createAgent({ name: 'Pending', keyCustody: 'self' }, h.context());
-    await expect(h.service.changeCustody(pending.did, { keyCustody: 'helix' }, h.context())).rejects.toThrow(/custody changes on an active subject/);
+    await expect(h.service.changeCustody(pending.did, { keyCustody: 'helix' }, h.context())).rejects.toThrow(/keys rotate on an active subject/);
     await expect(h.service.activate(pending.did, h.context())).rejects.toThrow(CustodyStateInvalidError);
     const self = await onboardSelf(h);
     await expect(h.service.changeCustody(self.enrolled.did, { keyCustody: 'helix', publicKeyJwk: key.publicKeyJwk }, h.context())).rejects.toThrow(/send no publicKeyJwk/);
@@ -583,12 +593,12 @@ describe('changing custody is a rotation (point 6)', () => {
 
   it('the hop reissue seam is replaceable (C-E)', async () => {
     const calls: unknown[] = [];
-    const h = harness({ hopReissuer: { reissueHopsForKid: async (input) => { calls.push(input); return { reissued: 2, pending: false }; } } });
+    const h = harness({ hopReissuer: { reissueHopsForKid: async (input) => { calls.push({ ...input, bound: undefined }); return { reissued: 2, pending: false }; } } });
     const agent = await h.service.createAgent({ name: 'Mover', keyCustody: 'helix' }, h.context());
     const key = clientKey();
     const changed = await h.service.changeCustody(agent.did, { keyCustody: 'self', publicKeyJwk: key.publicKeyJwk, proof: rotationProof(key, agent.did, `${agent.did}#key-2`, h.now.value.toISOString()) }, h.context());
     expect(changed.hopReissue).toEqual({ reissued: 2, pending: false });
-    expect(calls).toEqual([{ did: agent.did, oldKid: `${agent.did}#key-1`, newKid: `${agent.did}#key-2`, requestId: 'req_test' }]);
+    expect(calls).toEqual([{ did: agent.did, oldKid: `${agent.did}#key-1`, newKid: `${agent.did}#key-2`, requestId: 'req_test', bound: undefined }]);
     expect(await pendingHopReissuer.reissueHopsForKid({ did: 'd', oldKid: 'a', newKid: 'b', requestId: 'r' })).toMatchObject({ pending: true });
   });
 

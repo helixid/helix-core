@@ -103,6 +103,24 @@ describe.each(backends)('custody repositories (%s)', (_name, make) => {
     expect(await custody.transitionStatus('did:web:h:o:none', 'pending_key', { status: 'active' })).toBeNull();
   });
 
+  it('lists subjects whose rotation overlap ended, earliest first, once each (C-E)', async () => {
+    const { custody } = make();
+    const t = (minute: number): Date => new Date(Date.UTC(2026, 10, 22, 10, minute));
+    for (const did of ['did:web:h:o:r1', 'did:web:h:o:r2', 'did:web:h:o:r3']) await custody.createRecord(record(did, { status: 'active', enrollmentTokenHash: `h-${did}` }));
+    const key = (did: string, n: number, status: 'active' | 'retiring' | 'retired', retiresAt: Date | null) =>
+      custody.addKey({ did, kid: `${did}#key-${n}`, location: 'self', publicKeyJwk: JWK, status, sequence: n, retiresAt, revokedAt: null });
+    await key('did:web:h:o:r1', 1, 'retiring', t(4));
+    await key('did:web:h:o:r1', 2, 'retiring', t(1));
+    await key('did:web:h:o:r2', 1, 'retiring', t(2));
+    await key('did:web:h:o:r3', 1, 'retiring', t(9));
+    await key('did:web:h:o:r3', 2, 'retired', t(0));
+    expect(await custody.listRetiringDue(t(5), 10)).toEqual(['did:web:h:o:r1', 'did:web:h:o:r2']);
+    expect(await custody.listRetiringDue(t(5), 1)).toEqual(['did:web:h:o:r1']);
+    expect(await custody.listRetiringDue(t(0), 10)).toEqual([]);
+    await custody.updateKey('did:web:h:o:r2', 'did:web:h:o:r2#key-1', { status: 'retired' });
+    expect(await custody.listRetiringDue(t(9), 10)).toEqual(['did:web:h:o:r1', 'did:web:h:o:r3']);
+  });
+
   it('lists due re-checks soonest first and claims each once', async () => {
     const { custody } = make();
     const t = (minute: number): Date => new Date(Date.UTC(2026, 10, 22, 10, minute));
@@ -219,6 +237,9 @@ describe('custody drivers (postgres)', () => {
     await driver.listRecords({});
     expect(await driver.addKey({ ...keyRow, location: 'helix', status: 'active' } as never)).not.toHaveProperty('id');
     expect((await driver.listKeys('did:web:h:o:p'))[0]).not.toHaveProperty('id');
+    prisma.custodyKey.findMany.mockResolvedValueOnce([{ ...keyRow, status: 'retiring', retiresAt: at }]);
+    expect(await driver.listRetiringDue(at, 5)).toEqual(['did:web:h:o:p']);
+    expect(prisma.custodyKey.findMany).toHaveBeenLastCalledWith({ where: { status: 'retiring', retiresAt: { lte: at } }, orderBy: [{ retiresAt: 'asc' }, { did: 'asc' }] });
     await driver.updateKey('did:web:h:o:p', 'did:web:h:o:p#key-1', { status: 'revoked' });
     expect(prisma.custodyKey.update).toHaveBeenCalledWith({ where: { did_kid: { did: 'did:web:h:o:p', kid: 'did:web:h:o:p#key-1' } }, data: { status: 'revoked' } });
     prisma.custodyRecord.findUnique.mockResolvedValueOnce(null);

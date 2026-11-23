@@ -36,21 +36,21 @@ describe('CustodyAudit on the typed trail (F-3 point 8, A-1)', () => {
     expect(trail.events[0]!.actor).toBeUndefined();
   });
 
-  it('records activation, key revocation and shredding the same way, each under its own action name', async () => {
+  it('records activation, the end of an overlap and shredding the same way, each under its own action name', async () => {
     const trail = await recorded((audit) => {
       audit.activated({ ...base, keyCustody: 'self', didHosting: 'own', kid: KID, resolution: 'verified' });
-      audit.keyRevoked({ ...base, kid: KID, location: 'helix' });
+      audit.keyRetired({ ...base, kid: KID, location: 'helix', expiredHops: 2 });
       audit.keyShredded({ ...base, kid: KID });
     });
     expect(trail.events.map((event) => [event.eventType, event.action.name])).toEqual([
       ['configuration.changed', 'activated'],
-      ['configuration.changed', 'key_revoked'],
+      ['configuration.changed', 'key_retired'],
       ['configuration.changed', 'key_shredded'],
     ]);
     expect(trail.events[1]!.details).toEqual({
       family: 'key',
       phase: 'configuration_changed',
-      configurationDigest: jsonDigest({ did: DID, actor: 'account:acc_1', subjectType: 'agent', kid: KID, location: 'helix' }),
+      configurationDigest: jsonDigest({ did: DID, actor: 'account:acc_1', subjectType: 'agent', kid: KID, location: 'helix', expiredHops: 2 }),
     });
   });
 
@@ -58,7 +58,7 @@ describe('CustodyAudit on the typed trail (F-3 point 8, A-1)', () => {
     const newKid = `${DID}#key-2`;
     const hopReissue = { status: 'pending' as const, note: 'later' };
     const trail = await recorded((audit) =>
-      audit.changed({ ...base, from: 'helix', to: 'self', oldKid: KID, newKid, retiresAt: '2026-11-22T00:00:00.000Z', hopReissue: hopReissue as never }),
+      audit.rotated({ ...base, name: 'changed', from: 'helix', to: 'self', oldKid: KID, newKid, rotationSequence: 2, retiresAt: '2026-11-22T00:00:00.000Z', hopReissue: hopReissue as never }),
     );
     expect(trail.events[0]).toMatchObject({
       eventType: 'key.rotated',
@@ -77,10 +77,33 @@ describe('CustodyAudit on the typed trail (F-3 point 8, A-1)', () => {
           subjectType: 'agent',
           from: 'helix',
           to: 'self',
+          rotationSequence: 2,
           retiresAt: '2026-11-22T00:00:00.000Z',
           hopReissue,
         }),
       },
+    });
+    // The actor is a label here, not a DID: it is committed, not named.
+    expect(trail.events[0]!.actor).toBeUndefined();
+  });
+
+  it('records a rotation in place and a compromised key as key.rotated, naming a DID actor (C-E point 8)', async () => {
+    const newKid = `${DID}#key-2`;
+    const actor = 'did:web:helix.example:accounts:0a1b';
+    const trail = await recorded((audit) => {
+      audit.rotated({ ...base, actor, name: 'rotated', from: 'self', to: 'self', oldKid: KID, newKid, rotationSequence: 3, retiresAt: '2026-11-22T00:00:00.000Z', hopReissue: { reissued: 1, pending: false } });
+      audit.keyCompromised({ ...base, actor, oldKid: KID, newKid, rotationSequence: 4, location: 'self', revokedHops: 2, credentialVcId: 'vc:2' });
+    });
+    expect(trail.events.map((event) => [event.eventType, event.action.name, event.actor])).toEqual([
+      ['key.rotated', 'rotated', { kind: 'public_did', did: actor }],
+      ['key.rotated', 'key_revoked', { kind: 'public_did', did: actor }],
+    ]);
+    expect(trail.events[1]!.details).toEqual({
+      family: 'key',
+      phase: 'rotated',
+      previousSigner: { did: DID, kid: KID, alg: 'EdDSA' },
+      nextSigner: { did: DID, kid: newKid, alg: 'EdDSA' },
+      configurationDigest: jsonDigest({ did: DID, oldKid: KID, newKid, actor, subjectType: 'agent', rotationSequence: 4, location: 'self', revokedHops: 2, credentialVcId: 'vc:2' }),
     });
   });
 
@@ -136,7 +159,7 @@ describe('CustodyAudit on the typed trail (F-3 point 8, A-1)', () => {
     const trail = new TestAuditTrail();
     const audit = new CustodyAudit(trail, (digest, facts) => void kept.push([digest, { ...facts }]));
     audit.chosen({ ...base, keyCustody: 'self', didHosting: 'helix', source: { keyCustody: 'account', didHosting: 'account' } });
-    audit.changed({ ...base, from: 'self', to: 'helix', oldKid: KID, newKid: `${DID}#key-2`, retiresAt: '2026-11-24T00:00:00.000Z', hopReissue: { status: 'pending', note: 'later' } as never });
+    audit.rotated({ ...base, name: 'changed', from: 'self', to: 'helix', oldKid: KID, newKid: `${DID}#key-2`, rotationSequence: 2, retiresAt: '2026-11-24T00:00:00.000Z', hopReissue: { status: 'pending', note: 'later' } as never });
     audit.signature({ ...base, kid: KID, payload: new Uint8Array([1]) });
     await trail.flush();
     expect(kept).toHaveLength(2);
@@ -151,10 +174,10 @@ describe('CustodyAudit on the typed trail (F-3 point 8, A-1)', () => {
     const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const trail = new TestAuditTrail();
     new CustodyAudit(trail, () => Promise.reject(new Error('facts down'))).keyShredded({ ...base, kid: KID });
-    new CustodyAudit(trail, () => { throw new Error('facts bad'); }).keyRevoked({ ...base, kid: KID, location: 'self' });
+    new CustodyAudit(trail, () => { throw new Error('facts bad'); }).keyRetired({ ...base, kid: KID, location: 'self', expiredHops: 0 });
     await trail.flush();
     await new Promise((resolve) => setImmediate(resolve));
-    expect(trail.events.map((event) => event.action.name)).toEqual(['key_shredded', 'key_revoked']);
+    expect(trail.events.map((event) => event.action.name)).toEqual(['key_shredded', 'key_retired']);
     expect(error).toHaveBeenCalledWith('AUDIT_RECORD_FAILED', 'facts down');
     expect(error).toHaveBeenCalledWith('AUDIT_RECORD_FAILED', 'facts bad');
     error.mockRestore();

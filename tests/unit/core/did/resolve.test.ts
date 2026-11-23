@@ -19,6 +19,8 @@ import {
   resolveDid,
   resolveDidKey,
   resolveDidWeb,
+  RotationSequenceGuard,
+  StaleDidDocumentError,
   type JwsDidDocument,
 } from '../../../../src/core/index.js';
 
@@ -54,6 +56,15 @@ describe('resolveDid', () => {
     expect(fromWeb.kid).toBe(KID);
     expect(fromWeb.document).toEqual(DOCUMENT);
     expect(getOutboundFetch()).toHaveBeenCalledWith('https://agents.example.com/agents/abc/did.json', expect.anything());
+  });
+
+  it('refuses a did:web document older than one already seen (C-E point 2)', async () => {
+    const guard = new RotationSequenceGuard();
+    setOutboundFetch(servedJson({ ...DOCUMENT, rotationSequence: 3 }));
+    expect((await resolveDidWeb(DID_WEB, { sequenceGuard: guard })).kid).toBe(KID);
+    clearDIDCache();
+    setOutboundFetch(servedJson({ ...DOCUMENT, rotationSequence: 2 }));
+    await expect(resolveDidWeb(DID_WEB, { sequenceGuard: guard })).rejects.toBeInstanceOf(StaleDidDocumentError);
   });
 
   it('the did:key document has the reference shape: <did>#<multibase> with both key forms (L1.6)', () => {

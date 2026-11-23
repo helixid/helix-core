@@ -153,4 +153,12 @@ describe('publicDidResolver (story L3-C)', () => {
     const already = { id: did, verificationMethod: [{ id: standard }] } as never;
     expect(await publicDidResolver(async () => already)(did)).toBe(already);
   });
+
+  it('refuses a document older than one it already served (story C-E point 2)', async () => {
+    const { publicDidResolver } = await import('../../../src/services/revocation/public-resolver.js');
+    const served = [{ id: 'did:web:x.example', rotationSequence: 2 }, { id: 'did:web:x.example', rotationSequence: 1 }];
+    const resolve = publicDidResolver(async () => served.shift() as never);
+    expect(await resolve('did:web:x.example')).toMatchObject({ rotationSequence: 2 });
+    await expect(resolve('did:web:x.example')).rejects.toThrow(/lower than 2/);
+  });
 });

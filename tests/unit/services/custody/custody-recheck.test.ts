@@ -212,6 +212,20 @@ describe('CustodyRecheckScheduler', () => {
 
   const emptyRun = (): CustodyRecheckRun => ({ checked: [], activated: [], stopped: [], deferred: [] });
 
+  it('ends due rotation overlaps on the same tick and logs them (story C-E)', async () => {
+    const target = {
+      recheckPending: vi.fn(async () => emptyRun()),
+      finalizeDueRotations: vi.fn().mockResolvedValueOnce(['did:web:o:r']).mockResolvedValueOnce([]),
+    };
+    const log = { info: vi.fn(), error: vi.fn() };
+    const scheduler = new CustodyRecheckScheduler(target, { tickSeconds: 30, log });
+    await scheduler.runOnce();
+    await scheduler.runOnce();
+    expect(target.finalizeDueRotations).toHaveBeenCalledTimes(2);
+    expect(log.info).toHaveBeenCalledTimes(1);
+    expect(log.info).toHaveBeenCalledWith({ finalized: ['did:web:o:r'] }, 'key rotation overlaps ended');
+  });
+
   it('runs every tick, never two runs at once, logs runs that did something, and stops', async () => {
     vi.useFakeTimers();
     let release: () => void = () => undefined;
