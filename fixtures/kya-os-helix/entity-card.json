@@ -1,0 +1,1246 @@
+{
+  "generated_from": "helix-core",
+  "generator": "scripts/generate-entity-card-fixtures.ts",
+  "note": "KYA-OS story C-A. Regenerate (pnpm generate:entity-card-fixtures) whenever src/core/card/*, src/core/did/* or src/core/net/* change; helix-core, helix-sdk-js, helix-sdk-py and e2e-playwright assert against this file. Test keys only; never real secrets.",
+  "host": "helix.test",
+  "user_did_key": "did:key:z6MknVbixt4vJMcKzaXUWURZN8ZZ1tC1kxRFysKRFXYjQpDp",
+  "entities": {
+    "org_root": {
+      "kind": "org_root",
+      "entity_type": "verifier",
+      "name": "Helix (host)",
+      "private_key_hex": "202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f",
+      "public_key_jwk": {
+        "kty": "OKP",
+        "crv": "Ed25519",
+        "x": "Kay64UG8yvCyLhqU000LxzYeUm0L_hLIl5S8kyKWbdc"
+      },
+      "did_key": "did:key:z6MkhFwXNFWosLeugvSf4wcL9t3uuRXueGSFTRgSvHhWj5G2",
+      "did_hedera": "did:hedera:testnet:z29acbae141bccaf0b22e1a94d34d0bc7361e526d0bfe_0.0.1000",
+      "did": "did:web:helix.test",
+      "kid": "did:web:helix.test#key-1",
+      "did_document_url": "https://helix.test/.well-known/did.json",
+      "card_url": "https://helix.test/.well-known/kya-os-card.json",
+      "did_document": {
+        "@context": [
+          "https://www.w3.org/ns/did/v1",
+          "https://w3id.org/security/suites/ed25519-2020/v1"
+        ],
+        "id": "did:web:helix.test",
+        "alsoKnownAs": [
+          "did:key:z6MkhFwXNFWosLeugvSf4wcL9t3uuRXueGSFTRgSvHhWj5G2",
+          "did:hedera:testnet:z29acbae141bccaf0b22e1a94d34d0bc7361e526d0bfe_0.0.1000"
+        ],
+        "verificationMethod": [
+          {
+            "id": "did:web:helix.test#key-1",
+            "type": "Ed25519VerificationKey2020",
+            "controller": "did:web:helix.test",
+            "publicKeyJwk": {
+              "kty": "OKP",
+              "crv": "Ed25519",
+              "x": "Kay64UG8yvCyLhqU000LxzYeUm0L_hLIl5S8kyKWbdc"
+            },
+            "publicKeyMultibase": "z6MkhFwXNFWosLeugvSf4wcL9t3uuRXueGSFTRgSvHhWj5G2"
+          }
+        ],
+        "authentication": [
+          "did:web:helix.test#key-1"
+        ],
+        "assertionMethod": [
+          "did:web:helix.test#key-1"
+        ],
+        "service": [
+          {
+            "id": "#kya-os-card",
+            "type": "KyaOsEntityCard",
+            "serviceEndpoint": "https://helix.test/.well-known/kya-os-card.json"
+          }
+        ]
+      },
+      "card": {
+        "id": "did:web:helix.test",
+        "entityType": "verifier",
+        "name": "Helix (host)",
+        "kid": "did:web:helix.test#key-1",
+        "publicKeyJwk": {
+          "kty": "OKP",
+          "crv": "Ed25519",
+          "x": "Kay64UG8yvCyLhqU000LxzYeUm0L_hLIl5S8kyKWbdc",
+          "kid": "did:web:helix.test#key-1"
+        },
+        "createdAt": "2026-11-21T00:00:00Z",
+        "capabilities": [
+          "proof.verify",
+          "attestation.issue"
+        ],
+        "didDocument": "https://helix.test/.well-known/did.json",
+        "proofProfile": "org.kya-os/proof.v1"
+      },
+      "summary": {
+        "id": "did:web:helix.test",
+        "entityType": "verifier",
+        "name": "Helix (host)",
+        "capabilities": [
+          "proof.verify",
+          "attestation.issue"
+        ],
+        "proofProfile": "org.kya-os/proof.v1"
+      },
+      "server_meta": {
+        "org.kya-os/card": {
+          "id": "did:web:helix.test",
+          "entityType": "verifier",
+          "name": "Helix (host)",
+          "capabilities": [
+            "proof.verify",
+            "attestation.issue"
+          ],
+          "proofProfile": "org.kya-os/proof.v1",
+          "org.kya-os/cardRef": "https://helix.test/.well-known/kya-os-card.json"
+        }
+      }
+    },
+    "org": {
+      "kind": "org",
+      "entity_type": "verifier",
+      "name": "Acme Corp",
+      "private_key_hex": "303132333435363738393a3b3c3d3e3f404142434445464748494a4b4c4d4e4f",
+      "public_key_jwk": {
+        "kty": "OKP",
+        "crv": "Ed25519",
+        "x": "i7BOHBuD3d8xH1vN33xQ7ePAgC9H7HluKhMc9BKY2fM"
+      },
+      "did_key": "did:key:z6MkorYe7FmSkiL58NTYvrntwC2gnWiQGQeQ1PCz5chqLXXx",
+      "did_hedera": "did:hedera:testnet:z8bb04e1c1b83dddf311f5bcddf7c50ede3c0802f47ec_0.0.1001",
+      "did": "did:web:helix.test:acme",
+      "kid": "did:web:helix.test:acme#key-1",
+      "did_document_url": "https://helix.test/acme/did.json",
+      "card_url": "https://helix.test/acme/card.json",
+      "did_document": {
+        "@context": [
+          "https://www.w3.org/ns/did/v1",
+          "https://w3id.org/security/suites/ed25519-2020/v1"
+        ],
+        "id": "did:web:helix.test:acme",
+        "alsoKnownAs": [
+          "did:key:z6MkorYe7FmSkiL58NTYvrntwC2gnWiQGQeQ1PCz5chqLXXx",
+          "did:hedera:testnet:z8bb04e1c1b83dddf311f5bcddf7c50ede3c0802f47ec_0.0.1001"
+        ],
+        "verificationMethod": [
+          {
+            "id": "did:web:helix.test:acme#key-1",
+            "type": "Ed25519VerificationKey2020",
+            "controller": "did:web:helix.test:acme",
+            "publicKeyJwk": {
+              "kty": "OKP",
+              "crv": "Ed25519",
+              "x": "i7BOHBuD3d8xH1vN33xQ7ePAgC9H7HluKhMc9BKY2fM"
+            },
+            "publicKeyMultibase": "z6MkorYe7FmSkiL58NTYvrntwC2gnWiQGQeQ1PCz5chqLXXx"
+          }
+        ],
+        "authentication": [
+          "did:web:helix.test:acme#key-1"
+        ],
+        "assertionMethod": [
+          "did:web:helix.test:acme#key-1"
+        ],
+        "service": [
+          {
+            "id": "#kya-os-card",
+            "type": "KyaOsEntityCard",
+            "serviceEndpoint": "https://helix.test/acme/card.json"
+          }
+        ]
+      },
+      "card": {
+        "id": "did:web:helix.test:acme",
+        "entityType": "verifier",
+        "name": "Acme Corp",
+        "kid": "did:web:helix.test:acme#key-1",
+        "publicKeyJwk": {
+          "kty": "OKP",
+          "crv": "Ed25519",
+          "x": "i7BOHBuD3d8xH1vN33xQ7ePAgC9H7HluKhMc9BKY2fM",
+          "kid": "did:web:helix.test:acme#key-1"
+        },
+        "createdAt": "2026-11-21T00:00:00Z",
+        "capabilities": [
+          "attestation.issue"
+        ],
+        "didDocument": "https://helix.test/acme/did.json",
+        "proofProfile": "org.kya-os/proof.v1"
+      },
+      "summary": {
+        "id": "did:web:helix.test:acme",
+        "entityType": "verifier",
+        "name": "Acme Corp",
+        "capabilities": [
+          "attestation.issue"
+        ],
+        "proofProfile": "org.kya-os/proof.v1"
+      },
+      "server_meta": {
+        "org.kya-os/card": {
+          "id": "did:web:helix.test:acme",
+          "entityType": "verifier",
+          "name": "Acme Corp",
+          "capabilities": [
+            "attestation.issue"
+          ],
+          "proofProfile": "org.kya-os/proof.v1",
+          "org.kya-os/cardRef": "https://helix.test/acme/card.json"
+        }
+      }
+    },
+    "agent": {
+      "kind": "agent",
+      "entity_type": "agent",
+      "name": "Acme Ledger Agent",
+      "private_key_hex": "404142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f",
+      "public_key_jwk": {
+        "kty": "OKP",
+        "crv": "Ed25519",
+        "x": "JUO5L_EJVRFHatyDadtt3JM2ZaEZeN2hQE7hBmypVZ0"
+      },
+      "did_key": "did:key:z6Mkgxj2R3HLtQRpPnvfvpuKEceSqf3tZHBjdmZ3fFz3JHGG",
+      "did_hedera": "did:hedera:testnet:z2543b92ff1095511476adc8369db6ddc933665a11978_0.0.1002",
+      "did": "did:web:helix.test:acme:ledger-agent",
+      "kid": "did:web:helix.test:acme:ledger-agent#key-1",
+      "did_document_url": "https://helix.test/acme/ledger-agent/did.json",
+      "card_url": "https://helix.test/acme/ledger-agent/card.json",
+      "did_document": {
+        "@context": [
+          "https://www.w3.org/ns/did/v1",
+          "https://w3id.org/security/suites/ed25519-2020/v1"
+        ],
+        "id": "did:web:helix.test:acme:ledger-agent",
+        "alsoKnownAs": [
+          "did:key:z6Mkgxj2R3HLtQRpPnvfvpuKEceSqf3tZHBjdmZ3fFz3JHGG",
+          "did:hedera:testnet:z2543b92ff1095511476adc8369db6ddc933665a11978_0.0.1002"
+        ],
+        "verificationMethod": [
+          {
+            "id": "did:web:helix.test:acme:ledger-agent#key-1",
+            "type": "Ed25519VerificationKey2020",
+            "controller": "did:web:helix.test:acme:ledger-agent",
+            "publicKeyJwk": {
+              "kty": "OKP",
+              "crv": "Ed25519",
+              "x": "JUO5L_EJVRFHatyDadtt3JM2ZaEZeN2hQE7hBmypVZ0"
+            },
+            "publicKeyMultibase": "z6Mkgxj2R3HLtQRpPnvfvpuKEceSqf3tZHBjdmZ3fFz3JHGG"
+          }
+        ],
+        "authentication": [
+          "did:web:helix.test:acme:ledger-agent#key-1"
+        ],
+        "assertionMethod": [
+          "did:web:helix.test:acme:ledger-agent#key-1"
+        ],
+        "service": [
+          {
+            "id": "#kya-os-card",
+            "type": "KyaOsEntityCard",
+            "serviceEndpoint": "https://helix.test/acme/ledger-agent/card.json"
+          }
+        ]
+      },
+      "card": {
+        "id": "did:web:helix.test:acme:ledger-agent",
+        "entityType": "agent",
+        "name": "Acme Ledger Agent",
+        "kid": "did:web:helix.test:acme:ledger-agent#key-1",
+        "publicKeyJwk": {
+          "kty": "OKP",
+          "crv": "Ed25519",
+          "x": "JUO5L_EJVRFHatyDadtt3JM2ZaEZeN2hQE7hBmypVZ0",
+          "kid": "did:web:helix.test:acme:ledger-agent#key-1"
+        },
+        "createdAt": "2026-11-21T00:00:00Z",
+        "capabilities": [
+          "handshake",
+          "ledger.read",
+          "ledger.post"
+        ],
+        "responsibleParty": "did:web:helix.test:acme",
+        "principal": "did:key:z6MknVbixt4vJMcKzaXUWURZN8ZZ1tC1kxRFysKRFXYjQpDp",
+        "delegationRef": "vc_acme_root>del_ledger_1",
+        "didDocument": "https://helix.test/acme/ledger-agent/did.json",
+        "proofProfile": "org.kya-os/proof.v1",
+        "revocation": {
+          "statusListCredential": "https://helix.test/v1/status-list/cards",
+          "statusListIndex": "7"
+        }
+      },
+      "summary": {
+        "id": "did:web:helix.test:acme:ledger-agent",
+        "entityType": "agent",
+        "name": "Acme Ledger Agent",
+        "capabilities": [
+          "handshake",
+          "ledger.read",
+          "ledger.post"
+        ],
+        "responsibleParty": "did:web:helix.test:acme",
+        "delegationRef": "vc_acme_root>del_ledger_1",
+        "proofProfile": "org.kya-os/proof.v1",
+        "revocation": {
+          "statusListCredential": "https://helix.test/v1/status-list/cards",
+          "statusListIndex": "7"
+        }
+      },
+      "server_meta": {
+        "org.kya-os/card": {
+          "id": "did:web:helix.test:acme:ledger-agent",
+          "entityType": "agent",
+          "name": "Acme Ledger Agent",
+          "capabilities": [
+            "handshake",
+            "ledger.read",
+            "ledger.post"
+          ],
+          "responsibleParty": "did:web:helix.test:acme",
+          "delegationRef": "vc_acme_root>del_ledger_1",
+          "proofProfile": "org.kya-os/proof.v1",
+          "revocation": {
+            "statusListCredential": "https://helix.test/v1/status-list/cards",
+            "statusListIndex": "7"
+          },
+          "org.kya-os/cardRef": "https://helix.test/acme/ledger-agent/card.json"
+        }
+      }
+    },
+    "service": {
+      "kind": "service",
+      "entity_type": "mcp",
+      "name": "Acme Orders MCP",
+      "private_key_hex": "505152535455565758595a5b5c5d5e5f606162636465666768696a6b6c6d6e6f",
+      "public_key_jwk": {
+        "kty": "OKP",
+        "crv": "Ed25519",
+        "x": "P3cI1fXMK8YztZ0rOi7ZLnR5IgxvCK3iCL682FgKuTs"
+      },
+      "did_key": "did:key:z6Mkij11FdkRD1VWPeH2QZiJUibpZ7jurn6We4284XHBkxPk",
+      "did_hedera": "did:hedera:testnet:z3f7708d5f5cc2bc633b59d2b3a2ed92e7479220c6f08_0.0.1002",
+      "did": "did:web:helix.test:acme:orders-mcp",
+      "kid": "did:web:helix.test:acme:orders-mcp#key-1",
+      "did_document_url": "https://helix.test/acme/orders-mcp/did.json",
+      "card_url": "https://helix.test/acme/orders-mcp/card.json",
+      "did_document": {
+        "@context": [
+          "https://www.w3.org/ns/did/v1",
+          "https://w3id.org/security/suites/ed25519-2020/v1"
+        ],
+        "id": "did:web:helix.test:acme:orders-mcp",
+        "alsoKnownAs": [
+          "did:key:z6Mkij11FdkRD1VWPeH2QZiJUibpZ7jurn6We4284XHBkxPk",
+          "did:hedera:testnet:z3f7708d5f5cc2bc633b59d2b3a2ed92e7479220c6f08_0.0.1002"
+        ],
+        "verificationMethod": [
+          {
+            "id": "did:web:helix.test:acme:orders-mcp#key-1",
+            "type": "Ed25519VerificationKey2020",
+            "controller": "did:web:helix.test:acme:orders-mcp",
+            "publicKeyJwk": {
+              "kty": "OKP",
+              "crv": "Ed25519",
+              "x": "P3cI1fXMK8YztZ0rOi7ZLnR5IgxvCK3iCL682FgKuTs"
+            },
+            "publicKeyMultibase": "z6Mkij11FdkRD1VWPeH2QZiJUibpZ7jurn6We4284XHBkxPk"
+          }
+        ],
+        "authentication": [
+          "did:web:helix.test:acme:orders-mcp#key-1"
+        ],
+        "assertionMethod": [
+          "did:web:helix.test:acme:orders-mcp#key-1"
+        ],
+        "service": [
+          {
+            "id": "#kya-os-card",
+            "type": "KyaOsEntityCard",
+            "serviceEndpoint": "https://helix.test/acme/orders-mcp/card.json"
+          }
+        ]
+      },
+      "card": {
+        "id": "did:web:helix.test:acme:orders-mcp",
+        "entityType": "mcp",
+        "name": "Acme Orders MCP",
+        "kid": "did:web:helix.test:acme:orders-mcp#key-1",
+        "publicKeyJwk": {
+          "kty": "OKP",
+          "crv": "Ed25519",
+          "x": "P3cI1fXMK8YztZ0rOi7ZLnR5IgxvCK3iCL682FgKuTs",
+          "kid": "did:web:helix.test:acme:orders-mcp#key-1"
+        },
+        "createdAt": "2026-11-21T00:00:00Z",
+        "capabilities": [
+          "tools/list",
+          "tools/call"
+        ],
+        "responsibleParty": "did:web:helix.test:acme",
+        "delegationRef": "vc_acme_root>del_orders_1",
+        "didDocument": "https://helix.test/acme/orders-mcp/did.json",
+        "proofProfile": "org.kya-os/proof.v1"
+      },
+      "summary": {
+        "id": "did:web:helix.test:acme:orders-mcp",
+        "entityType": "mcp",
+        "name": "Acme Orders MCP",
+        "capabilities": [
+          "tools/list",
+          "tools/call"
+        ],
+        "responsibleParty": "did:web:helix.test:acme",
+        "delegationRef": "vc_acme_root>del_orders_1",
+        "proofProfile": "org.kya-os/proof.v1"
+      },
+      "server_meta": {
+        "org.kya-os/card": {
+          "id": "did:web:helix.test:acme:orders-mcp",
+          "entityType": "mcp",
+          "name": "Acme Orders MCP",
+          "capabilities": [
+            "tools/list",
+            "tools/call"
+          ],
+          "responsibleParty": "did:web:helix.test:acme",
+          "delegationRef": "vc_acme_root>del_orders_1",
+          "proofProfile": "org.kya-os/proof.v1",
+          "org.kya-os/cardRef": "https://helix.test/acme/orders-mcp/card.json"
+        }
+      }
+    }
+  },
+  "served": {
+    "https://helix.test/.well-known/did.json": {
+      "@context": [
+        "https://www.w3.org/ns/did/v1",
+        "https://w3id.org/security/suites/ed25519-2020/v1"
+      ],
+      "id": "did:web:helix.test",
+      "alsoKnownAs": [
+        "did:key:z6MkhFwXNFWosLeugvSf4wcL9t3uuRXueGSFTRgSvHhWj5G2",
+        "did:hedera:testnet:z29acbae141bccaf0b22e1a94d34d0bc7361e526d0bfe_0.0.1000"
+      ],
+      "verificationMethod": [
+        {
+          "id": "did:web:helix.test#key-1",
+          "type": "Ed25519VerificationKey2020",
+          "controller": "did:web:helix.test",
+          "publicKeyJwk": {
+            "kty": "OKP",
+            "crv": "Ed25519",
+            "x": "Kay64UG8yvCyLhqU000LxzYeUm0L_hLIl5S8kyKWbdc"
+          },
+          "publicKeyMultibase": "z6MkhFwXNFWosLeugvSf4wcL9t3uuRXueGSFTRgSvHhWj5G2"
+        }
+      ],
+      "authentication": [
+        "did:web:helix.test#key-1"
+      ],
+      "assertionMethod": [
+        "did:web:helix.test#key-1"
+      ],
+      "service": [
+        {
+          "id": "#kya-os-card",
+          "type": "KyaOsEntityCard",
+          "serviceEndpoint": "https://helix.test/.well-known/kya-os-card.json"
+        }
+      ]
+    },
+    "https://helix.test/.well-known/kya-os-card.json": {
+      "id": "did:web:helix.test",
+      "entityType": "verifier",
+      "name": "Helix (host)",
+      "kid": "did:web:helix.test#key-1",
+      "publicKeyJwk": {
+        "kty": "OKP",
+        "crv": "Ed25519",
+        "x": "Kay64UG8yvCyLhqU000LxzYeUm0L_hLIl5S8kyKWbdc",
+        "kid": "did:web:helix.test#key-1"
+      },
+      "createdAt": "2026-11-21T00:00:00Z",
+      "capabilities": [
+        "proof.verify",
+        "attestation.issue"
+      ],
+      "didDocument": "https://helix.test/.well-known/did.json",
+      "proofProfile": "org.kya-os/proof.v1"
+    },
+    "https://helix.test/acme/did.json": {
+      "@context": [
+        "https://www.w3.org/ns/did/v1",
+        "https://w3id.org/security/suites/ed25519-2020/v1"
+      ],
+      "id": "did:web:helix.test:acme",
+      "alsoKnownAs": [
+        "did:key:z6MkorYe7FmSkiL58NTYvrntwC2gnWiQGQeQ1PCz5chqLXXx",
+        "did:hedera:testnet:z8bb04e1c1b83dddf311f5bcddf7c50ede3c0802f47ec_0.0.1001"
+      ],
+      "verificationMethod": [
+        {
+          "id": "did:web:helix.test:acme#key-1",
+          "type": "Ed25519VerificationKey2020",
+          "controller": "did:web:helix.test:acme",
+          "publicKeyJwk": {
+            "kty": "OKP",
+            "crv": "Ed25519",
+            "x": "i7BOHBuD3d8xH1vN33xQ7ePAgC9H7HluKhMc9BKY2fM"
+          },
+          "publicKeyMultibase": "z6MkorYe7FmSkiL58NTYvrntwC2gnWiQGQeQ1PCz5chqLXXx"
+        }
+      ],
+      "authentication": [
+        "did:web:helix.test:acme#key-1"
+      ],
+      "assertionMethod": [
+        "did:web:helix.test:acme#key-1"
+      ],
+      "service": [
+        {
+          "id": "#kya-os-card",
+          "type": "KyaOsEntityCard",
+          "serviceEndpoint": "https://helix.test/acme/card.json"
+        }
+      ]
+    },
+    "https://helix.test/acme/card.json": {
+      "id": "did:web:helix.test:acme",
+      "entityType": "verifier",
+      "name": "Acme Corp",
+      "kid": "did:web:helix.test:acme#key-1",
+      "publicKeyJwk": {
+        "kty": "OKP",
+        "crv": "Ed25519",
+        "x": "i7BOHBuD3d8xH1vN33xQ7ePAgC9H7HluKhMc9BKY2fM",
+        "kid": "did:web:helix.test:acme#key-1"
+      },
+      "createdAt": "2026-11-21T00:00:00Z",
+      "capabilities": [
+        "attestation.issue"
+      ],
+      "didDocument": "https://helix.test/acme/did.json",
+      "proofProfile": "org.kya-os/proof.v1"
+    },
+    "https://helix.test/acme/ledger-agent/did.json": {
+      "@context": [
+        "https://www.w3.org/ns/did/v1",
+        "https://w3id.org/security/suites/ed25519-2020/v1"
+      ],
+      "id": "did:web:helix.test:acme:ledger-agent",
+      "alsoKnownAs": [
+        "did:key:z6Mkgxj2R3HLtQRpPnvfvpuKEceSqf3tZHBjdmZ3fFz3JHGG",
+        "did:hedera:testnet:z2543b92ff1095511476adc8369db6ddc933665a11978_0.0.1002"
+      ],
+      "verificationMethod": [
+        {
+          "id": "did:web:helix.test:acme:ledger-agent#key-1",
+          "type": "Ed25519VerificationKey2020",
+          "controller": "did:web:helix.test:acme:ledger-agent",
+          "publicKeyJwk": {
+            "kty": "OKP",
+            "crv": "Ed25519",
+            "x": "JUO5L_EJVRFHatyDadtt3JM2ZaEZeN2hQE7hBmypVZ0"
+          },
+          "publicKeyMultibase": "z6Mkgxj2R3HLtQRpPnvfvpuKEceSqf3tZHBjdmZ3fFz3JHGG"
+        }
+      ],
+      "authentication": [
+        "did:web:helix.test:acme:ledger-agent#key-1"
+      ],
+      "assertionMethod": [
+        "did:web:helix.test:acme:ledger-agent#key-1"
+      ],
+      "service": [
+        {
+          "id": "#kya-os-card",
+          "type": "KyaOsEntityCard",
+          "serviceEndpoint": "https://helix.test/acme/ledger-agent/card.json"
+        }
+      ]
+    },
+    "https://helix.test/acme/ledger-agent/card.json": {
+      "id": "did:web:helix.test:acme:ledger-agent",
+      "entityType": "agent",
+      "name": "Acme Ledger Agent",
+      "kid": "did:web:helix.test:acme:ledger-agent#key-1",
+      "publicKeyJwk": {
+        "kty": "OKP",
+        "crv": "Ed25519",
+        "x": "JUO5L_EJVRFHatyDadtt3JM2ZaEZeN2hQE7hBmypVZ0",
+        "kid": "did:web:helix.test:acme:ledger-agent#key-1"
+      },
+      "createdAt": "2026-11-21T00:00:00Z",
+      "capabilities": [
+        "handshake",
+        "ledger.read",
+        "ledger.post"
+      ],
+      "responsibleParty": "did:web:helix.test:acme",
+      "principal": "did:key:z6MknVbixt4vJMcKzaXUWURZN8ZZ1tC1kxRFysKRFXYjQpDp",
+      "delegationRef": "vc_acme_root>del_ledger_1",
+      "didDocument": "https://helix.test/acme/ledger-agent/did.json",
+      "proofProfile": "org.kya-os/proof.v1",
+      "revocation": {
+        "statusListCredential": "https://helix.test/v1/status-list/cards",
+        "statusListIndex": "7"
+      }
+    },
+    "https://helix.test/acme/orders-mcp/did.json": {
+      "@context": [
+        "https://www.w3.org/ns/did/v1",
+        "https://w3id.org/security/suites/ed25519-2020/v1"
+      ],
+      "id": "did:web:helix.test:acme:orders-mcp",
+      "alsoKnownAs": [
+        "did:key:z6Mkij11FdkRD1VWPeH2QZiJUibpZ7jurn6We4284XHBkxPk",
+        "did:hedera:testnet:z3f7708d5f5cc2bc633b59d2b3a2ed92e7479220c6f08_0.0.1002"
+      ],
+      "verificationMethod": [
+        {
+          "id": "did:web:helix.test:acme:orders-mcp#key-1",
+          "type": "Ed25519VerificationKey2020",
+          "controller": "did:web:helix.test:acme:orders-mcp",
+          "publicKeyJwk": {
+            "kty": "OKP",
+            "crv": "Ed25519",
+            "x": "P3cI1fXMK8YztZ0rOi7ZLnR5IgxvCK3iCL682FgKuTs"
+          },
+          "publicKeyMultibase": "z6Mkij11FdkRD1VWPeH2QZiJUibpZ7jurn6We4284XHBkxPk"
+        }
+      ],
+      "authentication": [
+        "did:web:helix.test:acme:orders-mcp#key-1"
+      ],
+      "assertionMethod": [
+        "did:web:helix.test:acme:orders-mcp#key-1"
+      ],
+      "service": [
+        {
+          "id": "#kya-os-card",
+          "type": "KyaOsEntityCard",
+          "serviceEndpoint": "https://helix.test/acme/orders-mcp/card.json"
+        }
+      ]
+    },
+    "https://helix.test/acme/orders-mcp/card.json": {
+      "id": "did:web:helix.test:acme:orders-mcp",
+      "entityType": "mcp",
+      "name": "Acme Orders MCP",
+      "kid": "did:web:helix.test:acme:orders-mcp#key-1",
+      "publicKeyJwk": {
+        "kty": "OKP",
+        "crv": "Ed25519",
+        "x": "P3cI1fXMK8YztZ0rOi7ZLnR5IgxvCK3iCL682FgKuTs",
+        "kid": "did:web:helix.test:acme:orders-mcp#key-1"
+      },
+      "createdAt": "2026-11-21T00:00:00Z",
+      "capabilities": [
+        "tools/list",
+        "tools/call"
+      ],
+      "responsibleParty": "did:web:helix.test:acme",
+      "delegationRef": "vc_acme_root>del_orders_1",
+      "didDocument": "https://helix.test/acme/orders-mcp/did.json",
+      "proofProfile": "org.kya-os/proof.v1"
+    }
+  },
+  "resolution": [
+    {
+      "did": "did:web:helix.test",
+      "steps": [
+        "https://helix.test/.well-known/did.json",
+        "https://helix.test/.well-known/kya-os-card.json"
+      ],
+      "card_id": "did:web:helix.test"
+    },
+    {
+      "did": "did:web:helix.test:acme",
+      "steps": [
+        "https://helix.test/acme/did.json",
+        "https://helix.test/acme/card.json"
+      ],
+      "card_id": "did:web:helix.test:acme"
+    },
+    {
+      "did": "did:web:helix.test:acme:ledger-agent",
+      "steps": [
+        "https://helix.test/acme/ledger-agent/did.json",
+        "https://helix.test/acme/ledger-agent/card.json"
+      ],
+      "card_id": "did:web:helix.test:acme:ledger-agent"
+    },
+    {
+      "did": "did:web:helix.test:acme:orders-mcp",
+      "steps": [
+        "https://helix.test/acme/orders-mcp/did.json",
+        "https://helix.test/acme/orders-mcp/card.json"
+      ],
+      "card_id": "did:web:helix.test:acme:orders-mcp"
+    }
+  ],
+  "refusals": [
+    {
+      "name": "unknown_top_level_field",
+      "card": {
+        "id": "did:web:helix.test:acme:orders-mcp",
+        "entityType": "mcp",
+        "name": "Acme Orders MCP",
+        "kid": "did:web:helix.test:acme:orders-mcp#key-1",
+        "publicKeyJwk": {
+          "kty": "OKP",
+          "crv": "Ed25519",
+          "x": "P3cI1fXMK8YztZ0rOi7ZLnR5IgxvCK3iCL682FgKuTs",
+          "kid": "did:web:helix.test:acme:orders-mcp#key-1"
+        },
+        "createdAt": "2026-11-21T00:00:00Z",
+        "capabilities": [
+          "tools/list",
+          "tools/call"
+        ],
+        "responsibleParty": "did:web:helix.test:acme",
+        "delegationRef": "vc_acme_root>del_orders_1",
+        "didDocument": "https://helix.test/acme/orders-mcp/did.json",
+        "proofProfile": "org.kya-os/proof.v1",
+        "bogusField": true
+      },
+      "reason": "additionalProperties"
+    },
+    {
+      "name": "proof_on_card",
+      "card": {
+        "id": "did:web:helix.test:acme:orders-mcp",
+        "entityType": "mcp",
+        "name": "Acme Orders MCP",
+        "kid": "did:web:helix.test:acme:orders-mcp#key-1",
+        "publicKeyJwk": {
+          "kty": "OKP",
+          "crv": "Ed25519",
+          "x": "P3cI1fXMK8YztZ0rOi7ZLnR5IgxvCK3iCL682FgKuTs",
+          "kid": "did:web:helix.test:acme:orders-mcp#key-1"
+        },
+        "createdAt": "2026-11-21T00:00:00Z",
+        "capabilities": [
+          "tools/list",
+          "tools/call"
+        ],
+        "responsibleParty": "did:web:helix.test:acme",
+        "delegationRef": "vc_acme_root>del_orders_1",
+        "didDocument": "https://helix.test/acme/orders-mcp/did.json",
+        "proofProfile": "org.kya-os/proof.v1",
+        "proof": {
+          "type": "DataIntegrityProof"
+        }
+      },
+      "reason": "additionalProperties"
+    },
+    {
+      "name": "did_key_by_discovery",
+      "did": "did:key:z6MknVbixt4vJMcKzaXUWURZN8ZZ1tC1kxRFysKRFXYjQpDp",
+      "reason": "did_key_not_resolvable"
+    },
+    {
+      "name": "malformed_did_web",
+      "did": "did:web:helix.test:acme:ledger-agent#key-1",
+      "reason": "malformed_did"
+    },
+    {
+      "name": "no_card_service",
+      "did": "did:web:helix.test:acme:stranger",
+      "served": {
+        "https://helix.test/acme/stranger/did.json": {
+          "@context": [
+            "https://www.w3.org/ns/did/v1",
+            "https://w3id.org/security/suites/ed25519-2020/v1"
+          ],
+          "id": "did:web:helix.test:acme:stranger",
+          "alsoKnownAs": [
+            "did:key:z6Mkg26jczDiqsPK4momfvhZTTyFefWEyxYiSisFJ2wWJFkg",
+            "did:hedera:testnet:z174553b456dddfc6908ecab1c101fe6ab21e2baa0617_0.0.1002"
+          ],
+          "verificationMethod": [
+            {
+              "id": "did:web:helix.test:acme:stranger#key-1",
+              "type": "Ed25519VerificationKey2020",
+              "controller": "did:web:helix.test:acme:stranger",
+              "publicKeyJwk": {
+                "kty": "OKP",
+                "crv": "Ed25519",
+                "x": "F0VTtFbd38aQjsqxwQH-arIeK6oGF3lbfUOmNIKZP9U"
+              },
+              "publicKeyMultibase": "z6Mkg26jczDiqsPK4momfvhZTTyFefWEyxYiSisFJ2wWJFkg"
+            }
+          ],
+          "authentication": [
+            "did:web:helix.test:acme:stranger#key-1"
+          ],
+          "assertionMethod": [
+            "did:web:helix.test:acme:stranger#key-1"
+          ],
+          "service": []
+        }
+      },
+      "reason": "no_card_service"
+    },
+    {
+      "name": "card_for_another_did",
+      "did": "did:web:helix.test:acme:ledger-agent",
+      "served": {
+        "https://helix.test/acme/ledger-agent/did.json": {
+          "@context": [
+            "https://www.w3.org/ns/did/v1",
+            "https://w3id.org/security/suites/ed25519-2020/v1"
+          ],
+          "id": "did:web:helix.test:acme:ledger-agent",
+          "alsoKnownAs": [
+            "did:key:z6Mkgxj2R3HLtQRpPnvfvpuKEceSqf3tZHBjdmZ3fFz3JHGG",
+            "did:hedera:testnet:z2543b92ff1095511476adc8369db6ddc933665a11978_0.0.1002"
+          ],
+          "verificationMethod": [
+            {
+              "id": "did:web:helix.test:acme:ledger-agent#key-1",
+              "type": "Ed25519VerificationKey2020",
+              "controller": "did:web:helix.test:acme:ledger-agent",
+              "publicKeyJwk": {
+                "kty": "OKP",
+                "crv": "Ed25519",
+                "x": "JUO5L_EJVRFHatyDadtt3JM2ZaEZeN2hQE7hBmypVZ0"
+              },
+              "publicKeyMultibase": "z6Mkgxj2R3HLtQRpPnvfvpuKEceSqf3tZHBjdmZ3fFz3JHGG"
+            }
+          ],
+          "authentication": [
+            "did:web:helix.test:acme:ledger-agent#key-1"
+          ],
+          "assertionMethod": [
+            "did:web:helix.test:acme:ledger-agent#key-1"
+          ],
+          "service": [
+            {
+              "id": "#kya-os-card",
+              "type": "KyaOsEntityCard",
+              "serviceEndpoint": "https://helix.test/acme/ledger-agent/card.json"
+            }
+          ]
+        },
+        "https://helix.test/acme/ledger-agent/card.json": {
+          "id": "did:web:helix.test:acme:stranger",
+          "entityType": "agent",
+          "name": "Stranger",
+          "kid": "did:web:helix.test:acme:stranger#key-1",
+          "publicKeyJwk": {
+            "kty": "OKP",
+            "crv": "Ed25519",
+            "x": "F0VTtFbd38aQjsqxwQH-arIeK6oGF3lbfUOmNIKZP9U",
+            "kid": "did:web:helix.test:acme:stranger#key-1"
+          },
+          "createdAt": "2026-11-21T00:00:00Z",
+          "didDocument": "https://helix.test/acme/stranger/did.json",
+          "proofProfile": "org.kya-os/proof.v1"
+        }
+      },
+      "reason": "card_mismatch"
+    },
+    {
+      "name": "did_document_for_another_did",
+      "did": "did:web:helix.test:acme:ledger-agent",
+      "served": {
+        "https://helix.test/acme/ledger-agent/did.json": {
+          "@context": [
+            "https://www.w3.org/ns/did/v1",
+            "https://w3id.org/security/suites/ed25519-2020/v1"
+          ],
+          "id": "did:web:helix.test:acme:stranger",
+          "alsoKnownAs": [
+            "did:key:z6Mkg26jczDiqsPK4momfvhZTTyFefWEyxYiSisFJ2wWJFkg",
+            "did:hedera:testnet:z174553b456dddfc6908ecab1c101fe6ab21e2baa0617_0.0.1002"
+          ],
+          "verificationMethod": [
+            {
+              "id": "did:web:helix.test:acme:stranger#key-1",
+              "type": "Ed25519VerificationKey2020",
+              "controller": "did:web:helix.test:acme:stranger",
+              "publicKeyJwk": {
+                "kty": "OKP",
+                "crv": "Ed25519",
+                "x": "F0VTtFbd38aQjsqxwQH-arIeK6oGF3lbfUOmNIKZP9U"
+              },
+              "publicKeyMultibase": "z6Mkg26jczDiqsPK4momfvhZTTyFefWEyxYiSisFJ2wWJFkg"
+            }
+          ],
+          "authentication": [
+            "did:web:helix.test:acme:stranger#key-1"
+          ],
+          "assertionMethod": [
+            "did:web:helix.test:acme:stranger#key-1"
+          ],
+          "service": [
+            {
+              "id": "#kya-os-card",
+              "type": "KyaOsEntityCard",
+              "serviceEndpoint": "https://helix.test/acme/stranger/card.json"
+            }
+          ]
+        }
+      },
+      "reason": "did_document_mismatch"
+    },
+    {
+      "name": "did_document_not_served",
+      "did": "did:web:helix.test:acme:ledger-agent",
+      "served": {},
+      "reason": "did_document_unavailable"
+    }
+  ],
+  "build_cases": [
+    {
+      "name": "conformance_level_ignored",
+      "input": {
+        "id": "did:web:helix.test:acme:orders-mcp",
+        "entityType": "mcp",
+        "name": "Acme Orders MCP",
+        "kid": "key-1",
+        "publicKeyJwk": {
+          "kty": "OKP",
+          "crv": "Ed25519",
+          "x": "P3cI1fXMK8YztZ0rOi7ZLnR5IgxvCK3iCL682FgKuTs"
+        },
+        "capabilities": [
+          "tools/list"
+        ],
+        "conformanceLevel": "L3"
+      },
+      "expected": "card",
+      "card": {
+        "id": "did:web:helix.test:acme:orders-mcp",
+        "entityType": "mcp",
+        "name": "Acme Orders MCP",
+        "kid": "did:web:helix.test:acme:orders-mcp#key-1",
+        "publicKeyJwk": {
+          "kty": "OKP",
+          "crv": "Ed25519",
+          "x": "P3cI1fXMK8YztZ0rOi7ZLnR5IgxvCK3iCL682FgKuTs",
+          "kid": "did:web:helix.test:acme:orders-mcp#key-1"
+        },
+        "capabilities": [
+          "tools/list"
+        ],
+        "didDocument": "https://helix.test/acme/orders-mcp/did.json",
+        "proofProfile": "org.kya-os/proof.v1"
+      },
+      "absent": [
+        "conformanceLevel"
+      ]
+    },
+    {
+      "name": "proof_refused",
+      "input": {
+        "id": "did:web:helix.test:acme:orders-mcp",
+        "entityType": "mcp",
+        "name": "Acme Orders MCP",
+        "kid": "key-1",
+        "publicKeyJwk": {
+          "kty": "OKP",
+          "crv": "Ed25519",
+          "x": "P3cI1fXMK8YztZ0rOi7ZLnR5IgxvCK3iCL682FgKuTs"
+        },
+        "capabilities": [
+          "tools/list"
+        ],
+        "proof": {
+          "type": "DataIntegrityProof",
+          "proofValue": "z"
+        }
+      },
+      "expected": "refused"
+    },
+    {
+      "name": "unknown_member_refused",
+      "input": {
+        "id": "did:web:helix.test:acme:orders-mcp",
+        "entityType": "mcp",
+        "name": "Acme Orders MCP",
+        "kid": "key-1",
+        "publicKeyJwk": {
+          "kty": "OKP",
+          "crv": "Ed25519",
+          "x": "P3cI1fXMK8YztZ0rOi7ZLnR5IgxvCK3iCL682FgKuTs"
+        },
+        "capabilities": [
+          "tools/list"
+        ],
+        "bogusField": true
+      },
+      "expected": "refused"
+    },
+    {
+      "name": "private_key_refused",
+      "input": {
+        "id": "did:web:helix.test:acme:orders-mcp",
+        "entityType": "mcp",
+        "name": "Acme Orders MCP",
+        "kid": "key-1",
+        "publicKeyJwk": {
+          "kty": "OKP",
+          "crv": "Ed25519",
+          "x": "P3cI1fXMK8YztZ0rOi7ZLnR5IgxvCK3iCL682FgKuTs",
+          "d": "AAAA"
+        },
+        "capabilities": [
+          "tools/list"
+        ]
+      },
+      "expected": "refused"
+    }
+  ],
+  "status_lists": {
+    "clear": {
+      "@context": [
+        "https://www.w3.org/ns/credentials/v2",
+        "https://helixid.io/contexts/v1"
+      ],
+      "id": "https://helix.test/v1/status-list/cards",
+      "type": [
+        "VerifiableCredential",
+        "BitstringStatusListCredential"
+      ],
+      "issuer": "did:web:helix.test:acme",
+      "validFrom": "2026-11-21T00:00:00Z",
+      "credentialSubject": {
+        "id": "https://helix.test/v1/status-list/cards#list",
+        "type": "BitstringStatusList",
+        "statusPurpose": "revocation",
+        "encodedList": "H4sIAAAAAAAAE2NggAAAad8iZQgAAAA"
+      }
+    },
+    "revoked": {
+      "@context": [
+        "https://www.w3.org/ns/credentials/v2",
+        "https://helixid.io/contexts/v1"
+      ],
+      "id": "https://helix.test/v1/status-list/cards",
+      "type": [
+        "VerifiableCredential",
+        "BitstringStatusListCredential"
+      ],
+      "issuer": "did:web:helix.test:acme",
+      "validFrom": "2026-11-21T00:00:00Z",
+      "credentialSubject": {
+        "id": "https://helix.test/v1/status-list/cards#list",
+        "type": "BitstringStatusList",
+        "statusPurpose": "revocation",
+        "encodedList": "H4sIAAAAAAAAE2NkgAAA99-IqQgAAAA"
+      }
+    }
+  },
+  "revocation_cases": [
+    {
+      "name": "no_checker",
+      "card": {
+        "id": "did:web:helix.test:acme:ledger-agent",
+        "entityType": "agent",
+        "name": "Acme Ledger Agent",
+        "kid": "did:web:helix.test:acme:ledger-agent#key-1",
+        "publicKeyJwk": {
+          "kty": "OKP",
+          "crv": "Ed25519",
+          "x": "JUO5L_EJVRFHatyDadtt3JM2ZaEZeN2hQE7hBmypVZ0",
+          "kid": "did:web:helix.test:acme:ledger-agent#key-1"
+        },
+        "createdAt": "2026-11-21T00:00:00Z",
+        "capabilities": [
+          "handshake",
+          "ledger.read",
+          "ledger.post"
+        ],
+        "responsibleParty": "did:web:helix.test:acme",
+        "principal": "did:key:z6MknVbixt4vJMcKzaXUWURZN8ZZ1tC1kxRFysKRFXYjQpDp",
+        "delegationRef": "vc_acme_root>del_ledger_1",
+        "didDocument": "https://helix.test/acme/ledger-agent/did.json",
+        "proofProfile": "org.kya-os/proof.v1",
+        "revocation": {
+          "statusListCredential": "https://helix.test/v1/status-list/cards",
+          "statusListIndex": "7"
+        }
+      },
+      "expected": {
+        "ok": false,
+        "conformanceLevel": "L1",
+        "revoked": true,
+        "code": "configuration_error"
+      }
+    },
+    {
+      "name": "clear",
+      "card": {
+        "id": "did:web:helix.test:acme:ledger-agent",
+        "entityType": "agent",
+        "name": "Acme Ledger Agent",
+        "kid": "did:web:helix.test:acme:ledger-agent#key-1",
+        "publicKeyJwk": {
+          "kty": "OKP",
+          "crv": "Ed25519",
+          "x": "JUO5L_EJVRFHatyDadtt3JM2ZaEZeN2hQE7hBmypVZ0",
+          "kid": "did:web:helix.test:acme:ledger-agent#key-1"
+        },
+        "createdAt": "2026-11-21T00:00:00Z",
+        "capabilities": [
+          "handshake",
+          "ledger.read",
+          "ledger.post"
+        ],
+        "responsibleParty": "did:web:helix.test:acme",
+        "principal": "did:key:z6MknVbixt4vJMcKzaXUWURZN8ZZ1tC1kxRFysKRFXYjQpDp",
+        "delegationRef": "vc_acme_root>del_ledger_1",
+        "didDocument": "https://helix.test/acme/ledger-agent/did.json",
+        "proofProfile": "org.kya-os/proof.v1",
+        "revocation": {
+          "statusListCredential": "https://helix.test/v1/status-list/cards",
+          "statusListIndex": "7"
+        }
+      },
+      "expected": {
+        "ok": true,
+        "conformanceLevel": "L1",
+        "revoked": false
+      }
+    },
+    {
+      "name": "revoked",
+      "card": {
+        "id": "did:web:helix.test:acme:ledger-agent",
+        "entityType": "agent",
+        "name": "Acme Ledger Agent",
+        "kid": "did:web:helix.test:acme:ledger-agent#key-1",
+        "publicKeyJwk": {
+          "kty": "OKP",
+          "crv": "Ed25519",
+          "x": "JUO5L_EJVRFHatyDadtt3JM2ZaEZeN2hQE7hBmypVZ0",
+          "kid": "did:web:helix.test:acme:ledger-agent#key-1"
+        },
+        "createdAt": "2026-11-21T00:00:00Z",
+        "capabilities": [
+          "handshake",
+          "ledger.read",
+          "ledger.post"
+        ],
+        "responsibleParty": "did:web:helix.test:acme",
+        "principal": "did:key:z6MknVbixt4vJMcKzaXUWURZN8ZZ1tC1kxRFysKRFXYjQpDp",
+        "delegationRef": "vc_acme_root>del_ledger_1",
+        "didDocument": "https://helix.test/acme/ledger-agent/did.json",
+        "proofProfile": "org.kya-os/proof.v1",
+        "revocation": {
+          "statusListCredential": "https://helix.test/v1/status-list/cards",
+          "statusListIndex": "7"
+        }
+      },
+      "expected": {
+        "ok": false,
+        "conformanceLevel": "L1",
+        "revoked": true,
+        "code": "card_revoked"
+      }
+    },
+    {
+      "name": "no_revocation_entry",
+      "card": {
+        "id": "did:web:helix.test:acme:orders-mcp",
+        "entityType": "mcp",
+        "name": "Acme Orders MCP",
+        "kid": "did:web:helix.test:acme:orders-mcp#key-1",
+        "publicKeyJwk": {
+          "kty": "OKP",
+          "crv": "Ed25519",
+          "x": "P3cI1fXMK8YztZ0rOi7ZLnR5IgxvCK3iCL682FgKuTs",
+          "kid": "did:web:helix.test:acme:orders-mcp#key-1"
+        },
+        "createdAt": "2026-11-21T00:00:00Z",
+        "capabilities": [
+          "tools/list",
+          "tools/call"
+        ],
+        "responsibleParty": "did:web:helix.test:acme",
+        "delegationRef": "vc_acme_root>del_orders_1",
+        "didDocument": "https://helix.test/acme/orders-mcp/did.json",
+        "proofProfile": "org.kya-os/proof.v1"
+      },
+      "expected": {
+        "ok": true,
+        "conformanceLevel": "L1",
+        "revoked": false
+      }
+    }
+  ],
+  "safe_fetch_refusals": [
+    {
+      "url": "http://helix.test/acme/card.json",
+      "reason": "scheme_refused"
+    },
+    {
+      "url": "https://127.0.0.1/acme/card.json",
+      "reason": "host_refused"
+    },
+    {
+      "url": "https://169.254.169.254/latest/meta-data/",
+      "reason": "host_refused"
+    },
+    {
+      "url": "https://10.0.0.1/card.json",
+      "reason": "host_refused"
+    },
+    {
+      "url": "https://[::1]/card.json",
+      "reason": "host_refused"
+    },
+    {
+      "url": "https://localhost/card.json",
+      "reason": "host_refused"
+    },
+    {
+      "url": "https://user:secret@helix.test/card.json",
+      "reason": "host_refused"
+    },
+    {
+      "url": "file:///etc/passwd",
+      "reason": "scheme_refused"
+    },
+    {
+      "url": "not a url",
+      "reason": "invalid_url"
+    }
+  ],
+  "public_addresses": [
+    "93.184.216.34",
+    "8.8.8.8",
+    "2606:4700:4700::1111",
+    "::ffff:93.184.216.34"
+  ],
+  "non_public_addresses": [
+    "127.0.0.1",
+    "127.255.255.255",
+    "10.0.0.1",
+    "172.16.0.1",
+    "172.31.255.255",
+    "192.168.1.1",
+    "169.254.169.254",
+    "100.64.0.1",
+    "0.0.0.0",
+    "224.0.0.1",
+    "255.255.255.255",
+    "::1",
+    "::",
+    "fe80::1",
+    "fc00::1",
+    "fd12::1",
+    "ff02::1",
+    "::ffff:127.0.0.1",
+    "::ffff:10.0.0.1",
+    "64:ff9b::7f00:1",
+    "2002:7f00:1::1"
+  ]
+}

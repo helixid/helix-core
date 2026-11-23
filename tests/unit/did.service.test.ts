@@ -11,12 +11,13 @@
 // limitations under the License.
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { TestAuditTrail } from '../utils/TestAuditTrail.js';
 import { DIDService } from '../../src/services/did/did.service.js';
 
 describe('DIDService Unit Tests', () => {
   let mockRepo: any;
   let mockHedera: any;
-  let mockAudit: any;
+  let mockAudit: TestAuditTrail;
   let service: DIDService;
 
   const validPublicKey = 'a'.repeat(64);
@@ -34,9 +35,7 @@ describe('DIDService Unit Tests', () => {
       anchorDocument: vi.fn().mockResolvedValue({ transactionId: 'tx-1', topicId: 'topic', sequenceNumber: 1 }),
       fetchMessage: vi.fn(),
     };
-    mockAudit = {
-      log: vi.fn().mockResolvedValue(undefined),
-    };
+    mockAudit = new TestAuditTrail();
     service = new DIDService(mockRepo, mockHedera, mockAudit);
   });
 
@@ -47,7 +46,8 @@ describe('DIDService Unit Tests', () => {
       await expect(service.createDID(validPublicKey, 'user', [], requestId))
         .rejects.toThrow(/DID already exists/);
       
-      expect(mockAudit.log).toHaveBeenCalledWith(expect.objectContaining({ event: 'DID_CREATION_FAILED' }));
+      await mockAudit.flush();
+      expect(mockAudit.ofType('configuration.changed')[0]).toMatchObject({ outcome: 'failed', reason: { code: 'DID_ALREADY_EXISTS' } });
     });
 
     it('successfully anchors and persists a new DID', async () => {
@@ -71,7 +71,9 @@ describe('DIDService Unit Tests', () => {
       await expect(service.createDID(validPublicKey, 'agent', [], requestId))
         .rejects.toThrow('Hedera down');
       
-      expect(mockAudit.log).toHaveBeenCalledWith(expect.objectContaining({ event: 'DID_CREATION_FAILED', reason: 'Hedera anchoring failed' }));
+      await mockAudit.flush();
+      expect(mockAudit.ofType('configuration.changed')[0]).toMatchObject({ outcome: 'failed', reason: { code: 'HEDERA_ANCHOR_FAILED' } });
+      expect(JSON.stringify(mockAudit.events)).not.toContain('Hedera anchoring failed');
     });
   });
 
@@ -154,7 +156,8 @@ describe('DIDService Unit Tests', () => {
 
       await service.deactivateDID('did:123', requestId);
       expect(mockRepo.deactivateDid).toHaveBeenCalled();
-      expect(mockAudit.log).toHaveBeenCalledWith(expect.objectContaining({ event: 'DID_DEACTIVATED' }));
+      await mockAudit.flush();
+      expect(mockAudit.ofType('configuration.changed').map((event) => event.action.name)).toContain('deactivated');
     });
   });
 });

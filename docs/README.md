@@ -35,7 +35,7 @@ HelixID is a **5-layer trust stack** for AI agents, not just an identity library
 | **1. Identity**    | Every agent gets a DID (Decentralized Identifier) bound to a cryptographic keypair                               | W3C DID (`did:web` default, `did:key` local) |
 | **2. Authority**   | Scoped, time-bound credentials that prove what an agent is allowed to do                                         | W3C Verifiable Credentials with delegation chains     |
 | **3. Enforcement** | Runtime verification and authorization checks at execution boundaries                                              | SDK/core verification + verifier-owned policy checks  |
-| **4. Audit**       | Operational record of issuance, verification/session bridge, revocation, and lifecycle events                    | Adapter-based `audit_log` store + structured stdout/file |
+| **4. Audit**       | Operational record of issuance, verification/session bridge, revocation, and lifecycle events                    | KYA-OS typed producer events (AAP-1) in `audit_events` + encrypted evidence vault, with a stdout/file echo |
 | **5. Revocation**  | Decentralized, cacheable revocation that works offline                                                           | Bitstring Status List |
 
 ## Roles

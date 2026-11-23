@@ -10,12 +10,12 @@ import { EnvSigner, derivePublicKey, publicKeyToMultibase } from '../../src/core
 import { VcRepository } from '../../src/repositories/vc.repository.js';
 import { MockDIDService } from '../mocks/MockDIDService.js';
 import { MockVCService } from '../mocks/MockVCService.js';
-import { TestAuditLogger } from '../utils/TestAuditLogger.js';
+import { TestAuditTrail } from '../utils/TestAuditTrail.js';
 
 const ISSUER_KEY = 'a'.repeat(64);
 const ISSUER_DID = `did:key:${publicKeyToMultibase(derivePublicKey(ISSUER_KEY))}`;
 
-function makeApp(auditLogger = new TestAuditLogger()) {
+function makeApp(auditLogger = new TestAuditTrail()) {
   const app = Fastify();
   const didService = new MockDIDService({
     id: 'did:hedera:testnet:user-1',
@@ -93,6 +93,11 @@ describe('agent security', () => {
       url: '/v1/onboard',
       payload: { enrollmentToken: token, domains: [] }
     });
+    await auditLogger.flush();
+    // The onboarding did record: a token digest, never the token.
+    expect(auditLogger.eventTypes).toEqual(
+      expect.arrayContaining(['credential.required', 'credential.verified']),
+    );
     const allLogs = JSON.stringify(auditLogger.events);
     expect(allLogs.includes(token)).toBe(false);
   });

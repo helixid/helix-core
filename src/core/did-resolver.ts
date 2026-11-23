@@ -1,6 +1,7 @@
 import { buildDIDDocument, type DIDDocument } from './crypto/did.js';
 import { base58btcDecode } from './crypto/vp.js';
 import { loadDidHederaResolver } from './did-hedera-loader.js';
+import { getOutboundFetch } from './net/outbound.js';
 import {
   DIDMethodNotAvailableError,
   UnsupportedDIDMethodError,
@@ -105,7 +106,8 @@ function resolveDidKey(did: string): DIDDocument {
 }
 
 async function resolveDidWeb(did: string): Promise<DIDDocument> {
-  const response = await fetch(didWebToUrl(did), {
+  // KYA-OS story C-A: every DID document is read through SafeFetch (net/outbound.ts).
+  const response = await getOutboundFetch()(didWebToUrl(did), {
     headers: { accept: 'application/did+json, application/json' },
   });
   if (!response.ok) {

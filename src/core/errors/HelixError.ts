@@ -419,7 +419,7 @@ export class ConsentGrantScopeNotAllowedError extends HelixError {
   constructor(scopes: string[]) {
     super(
       'CONSENT_GRANT_SCOPE_NOT_ALLOWED',
-      `Consent grant scopes are not held by the agent's own credential: ${scopes.join(', ')}`,
+      `Consent grant scopes are not attested for the agent (no active capability attestation): ${scopes.join(', ')}`,
       400,
     );
   }
@@ -578,7 +578,7 @@ export class DelegateeNotAnAgentError extends HelixError {
 
 export class AgentActiveCredentialNotFoundError extends HelixError {
   constructor(did: string) {
-    super('AGENT_ACTIVE_CREDENTIAL_NOT_FOUND', `No active credential for agent DID: ${did}`, 404);
+    super('AGENT_ACTIVE_CREDENTIAL_NOT_FOUND', `No active identity credential for agent DID: ${did}`, 404);
   }
 }
 
@@ -691,5 +691,27 @@ export class AccountQuotaExceededError extends HelixError {
 export class CaptchaFailedError extends HelixError {
   constructor(message = 'CAPTCHA verification failed') {
     super('CAPTCHA_FAILED', message, 400);
+  }
+}
+
+/** KYA-OS story C-A: a value that is not an Entity Card as SPEC-ENTITY-CARD §4 and its strict schema write one. */
+export class EntityCardInvalidError extends HelixError {
+  constructor(message: string, details?: Record<string, unknown>) {
+    super('ENTITY_CARD_INVALID', message, 400, details);
+  }
+}
+
+/**
+ * KYA-OS story C-A: SafeFetch (SPEC-ENTITY-CARD §6.6) refused an outbound
+ * read, or the read failed: a scheme other than https, a non-public address,
+ * a cross-origin redirect, a body over the cap, a read over the deadline.
+ */
+export class SafeFetchRefusedError extends HelixError {
+  constructor(
+    public readonly reason: string,
+    message: string,
+    details?: Record<string, unknown>,
+  ) {
+    super('SAFE_FETCH_REFUSED', message, 502, { reason, ...details });
   }
 }

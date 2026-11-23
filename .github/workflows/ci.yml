@@ -57,6 +57,10 @@ jobs:
         run: pnpm run workspace:test:non-live
         env:
           DATABASE_URL: postgresql://helixid_test:helixid_test@localhost:5433/helixid_test
+          # KYA-OS A-2: the journal provider contract, 100 concurrent submissions,
+          # restore epochs and the tamper cases run against this PostgreSQL (each
+          # test in its own schema).
+          AUDIT_JOURNAL_DATABASE_URL: postgresql://helixid_test:helixid_test@localhost:5433/helixid_test
           NODE_ENV: test
           HEDERA_NETWORK: testnet
           HEDERA_OPERATOR_ID: ${{ secrets.HEDERA_OPERATOR_ID }}
