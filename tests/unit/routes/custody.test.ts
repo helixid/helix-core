@@ -116,6 +116,8 @@ describe('custody routes', () => {
       ['GET', `/v1/agents/${enc(custodial.did)}/custody`],
       ['POST', `/v1/agents/${enc(custodial.did)}/custody`],
       ['POST', `/v1/agents/${enc(custodial.did)}/custody/finalize`],
+      ['POST', `/v1/agents/${enc(custodial.did)}/keys/rotate`],
+      ['POST', `/v1/agents/${enc(custodial.did)}/keys/revoke`],
       ['POST', `/v1/agents/${enc(custodial.did)}/activate`],
       ['GET', '/v1/custody/defaults'],
       ['GET', '/v1/conformance/report'],
@@ -141,13 +143,77 @@ describe('custody routes', () => {
     expect(changed.statusCode, changed.body).toBe(200);
     expect(changed.json()).toMatchObject({ keyCustody: 'self', previousKeyShredded: true, hopReissue: { pending: true } });
     const finalized = await post(a, `/v1/agents/${enc(did)}/custody/finalize`, { force: true });
-    expect(finalized.json()).toMatchObject({ revoked: [kid] });
+    expect(finalized.json()).toMatchObject({ retired: [kid] });
     const wrongType = await post(a, `/v1/services/${enc(did)}/sign`, { payload: 'AQ' });
     expect(wrongType.statusCode).toBe(404);
     expect(wrongType.json()).toMatchObject({ error: { code: 'CUSTODY_SUBJECT_NOT_FOUND' } });
     const bad = await post(a, '/v1/agents', { name: 'x', keyCustody: 'nope' });
     expect(bad.statusCode).toBe(400);
     expect(bad.json()).toMatchObject({ error: { code: 'CUSTODY_CHOICE_INVALID' } });
+  });
+
+  it('rotation, compromise and recovery over HTTP (story C-E)', async () => {
+    const a = await app();
+    const custodial = (await post(a, '/v1/agents', { name: 'Custodial', keyCustody: 'helix' })).json() as { did: string; kid: string };
+    const rotated = await post(a, `/v1/agents/${enc(custodial.did)}/keys/rotate`, {});
+    expect(rotated.statusCode, rotated.body).toBe(200);
+    expect(rotated.json()).toMatchObject({ kid: `${custodial.did}#key-2`, previousKid: custodial.kid, rotationSequence: 2 });
+    const revoked = await post(a, `/v1/agents/${enc(custodial.did)}/keys/revoke`, { kid: 'key-1' });
+    expect(revoked.statusCode, revoked.body).toBe(200);
+    expect(revoked.json()).toMatchObject({ revokedKid: custodial.kid, rotationSequence: 3 });
+    // The served document and its jwks.json projection carry the version and the revoked key.
+    const path = custodial.did.slice(`did:web:${HOST}:`.length).split(':').join('/');
+    const document = (await a.app.inject({ method: 'GET', url: `/${path}/did.json` })).json();
+    expect(document).toMatchObject({ rotationSequence: 3 });
+    const jwks = await a.app.inject({ method: 'GET', url: `/${path}/jwks.json` });
+    expect(jwks.statusCode, jwks.body).toBe(200);
+    expect(jwks.json()).toMatchObject({ rotationSequence: 3, keys: [{ kid: `${custodial.did}#key-2` }, { kid: custodial.kid, revoked: expect.any(String) }] });
+    expect((await a.app.inject({ method: 'GET', url: '/nothing/here/jwks.json' })).statusCode).toBe(404);
+
+    // A self-custody agent rotates with its current key, no admin key.
+    const self = (await post(a, '/v1/agents', { name: 'Self', keyCustody: 'self' })).json() as { did: string; enrollmentToken: string };
+    const key = clientKey();
+    const challenge = (await post(a, '/v1/agents/enroll/challenge', { enrollmentToken: self.enrollmentToken }, {})).json() as { did: string; kid: string; nonce: string };
+    await post(a, '/v1/agents/enroll', { enrollmentToken: self.enrollmentToken, publicKeyJwk: key.publicKeyJwk, signature: enrollmentSignature(key, challenge.did, challenge.kid, challenge.nonce) }, {});
+    const next = clientKey();
+    const newKid = `${self.did}#key-2`;
+    const proof = rotationProof(next, self.did, newKid, a.h.now.value.toISOString());
+    const byKey = await post(
+      a,
+      `/v1/agents/${enc(self.did)}/keys/rotate`,
+      { publicKeyJwk: next.publicKeyJwk, kid: 'key-2', proof, currentKeyProof: { signature: rotationProof(key, self.did, newKid, proof.issuedAt).signature } },
+      {},
+    );
+    expect(byKey.statusCode, byKey.body).toBe(200);
+    expect(byKey.json()).toMatchObject({ kid: newKid });
+    const withPrivate = await post(a, `/v1/agents/${enc(self.did)}/keys/rotate`, { publicKeyJwk: { ...next.publicKeyJwk, d: 'secret' }, currentKeyProof: {} }, {});
+    expect(withPrivate.statusCode).toBe(400);
+
+    const recover = await post(a, `/v1/agents/${enc(self.did)}/keys/recover`, {}, {});
+    expect(recover.statusCode).toBe(501);
+    expect(recover.json()).toMatchObject({ error: { code: 'KEY_RECOVERY_UNAVAILABLE' } });
+    const missing = await post(a, `/v1/services/${enc(self.did)}/keys/revoke`, { kid: 'key-1' });
+    expect(missing.statusCode).toBe(404);
+  });
+
+  it('an ancestor issuer revokes a key with its signed request, no admin key; the request is judged by the hook (story C-E)', async () => {
+    const verifyKeyRevocation = vi.fn(async (jws: unknown, did: string, kid: string) => {
+      if (jws !== 'signed-by-issuer') throw Object.assign(new Error('refused'), { code: 'REVOCATION_FORBIDDEN', httpStatus: 403 });
+      return `did:web:issuer.example:for:${did.length}:${kid}`;
+    });
+    const a = await app({ keyRevocations: { verifyKeyRevocation } });
+    const agent = (await post(a, '/v1/agents', { name: 'Custodial', keyCustody: 'helix' })).json() as { did: string; kid: string };
+    await post(a, `/v1/agents/${enc(agent.did)}/keys/rotate`, {});
+    const refused = await post(a, `/v1/agents/${enc(agent.did)}/keys/revoke`, { kid: 'key-1', request: 'forged' }, {});
+    expect(refused.statusCode).toBe(403);
+    const revoked = await post(a, `/v1/agents/${enc(agent.did)}/keys/revoke`, { kid: 'key-1', request: 'signed-by-issuer' }, {});
+    expect(revoked.statusCode, revoked.body).toBe(200);
+    expect(revoked.json()).toMatchObject({ revokedKid: agent.kid });
+    expect(verifyKeyRevocation).toHaveBeenLastCalledWith('signed-by-issuer', agent.did, 'key-1');
+    // Without a hook, a request is no authorisation: the admin key is still needed.
+    const plain = await app();
+    const other = (await post(plain, '/v1/agents', { name: 'Custodial', keyCustody: 'helix' })).json() as { did: string };
+    expect((await post(plain, `/v1/agents/${enc(other.did)}/keys/revoke`, { kid: 'key-1', request: 'signed-by-issuer' }, {})).statusCode).toBe(403);
   });
 
   it('POST /v1/agents with an enrollmentToken goes unchanged to story F-1 token onboarding, without the custody authorization', async () => {

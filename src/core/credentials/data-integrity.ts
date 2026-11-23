@@ -43,6 +43,7 @@ import { InvalidJWSError } from '../errors/HelixError.js';
 import type { Signer } from '../crypto/signer.js';
 import { base58btcDecode, base58btcEncode } from '../crypto/vp.js';
 import type { DataIntegrityProof } from './types.js';
+import { keyValidityProblem, proofTime } from '../did/key-validity.js';
 
 export type { DidResolver } from '../crypto/jws.js';
 
@@ -59,6 +60,12 @@ export const ProofReasons = {
   DID_UNRESOLVED: 'did_unresolved',
   KEY_REJECTED: 'key_rejected',
   SIGNATURE_INVALID: 'signature_invalid',
+  /** Story C-E: the key carries `revoked`; nothing it signed is accepted. */
+  KEY_REVOKED: 'key_revoked',
+  /** Story C-E: the proof's `created` is outside the key's validity. */
+  KEY_SUPERSEDED: 'key_superseded',
+  /** Story C-E: the key's validity members are not RFC 3339 instants. */
+  KEY_VALIDITY_MALFORMED: 'key_validity_malformed',
 } as const;
 
 export type ProofReason = (typeof ProofReasons)[keyof typeof ProofReasons];
@@ -76,6 +83,8 @@ export interface SignDataIntegrityOptions {
 
 export interface VerifyDataIntegrityOptions {
   proofPurpose?: 'assertionMethod';
+  /** Epoch ms for a proof that states no `created`; default `Date.now()`. */
+  now?: number;
 }
 
 const ED25519_SIGNATURE_LENGTH = 64;
@@ -214,13 +223,17 @@ export async function verifyDataIntegrity(
     return refused(ProofReasons.DID_UNRESOLVED, `could not resolve ${did}`);
   }
   let publicKey: Uint8Array;
+  let method: ReturnType<typeof selectAssertionMethod>;
   try {
-    const method = selectAssertionMethod(resolved, did, verificationMethod);
+    method = selectAssertionMethod(resolved, did, verificationMethod);
     publicKey = base64UrlDecodeStrict(verificationMethodToJwk(method).x)!;
   } catch (error: unknown) {
     const reason = error instanceof InvalidJWSError ? error.reason : JwsReasons.KEY_UNSUPPORTED;
     return refused(ProofReasons.KEY_REJECTED, `${reason}: ${(error as Error).message}`);
   }
+  // Story C-E point 3: the key `kid` names must have been valid at `created`.
+  const validity = keyValidityProblem(method, proofTime(members['created']), options.now);
+  if (validity) return refused(validity.reason, validity.message);
   let data: Uint8Array;
   try {
     data = hashData(config, unsecured);

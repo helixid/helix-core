@@ -25,6 +25,16 @@
  *   GET  /{agents|services|owners}/:did/custody         the custody record
  *   POST /{agents|services|owners}/:did/custody         change custody (rotation)
  *   POST /{agents|services|owners}/:did/custody/finalize  end a rotation overlap
+ *   POST /{agents|services|owners}/:did/keys/rotate     rotate the key in place
+ *                                        (story C-E); a self-custody key may be
+ *                                        rotated with the current key's
+ *                                        signature (`currentKeyProof`) instead
+ *                                        of the caller's authorisation
+ *   POST /{agents|services|owners}/:did/keys/revoke     a compromised key (C-E):
+ *                                        the caller's authorisation, or `request`,
+ *                                        a key-revocation request an ancestor
+ *                                        issuer of the subject's delegations signed
+ *   POST /agents/:did/keys/recover       lost-key recovery: 501 until story L3-H
  *   GET  /custody/defaults               the caller's resolved default choice
  *   GET  /conformance/report             claim set and `custody: helix` exclusions
  *
@@ -59,7 +69,7 @@ import type { CustodyContext, CustodyService, OnboardingResult } from '../../ser
 export type CustodyAction =
   | { action: 'createAgent' }
   | { action: 'createOwner' }
-  | { action: 'read' | 'sign' | 'changeCustody' | 'activate' | 'finalize'; subjectType: CustodySubjectType; did: string }
+  | { action: 'read' | 'sign' | 'changeCustody' | 'activate' | 'finalize' | 'rotateKey' | 'revokeKey'; subjectType: CustodySubjectType; did: string }
   | { action: 'defaults' }
   | { action: 'report' };
 
@@ -88,6 +98,12 @@ export interface CustodyRouteOptions {
    * account, so the hosted build finds the account from its own link.
    */
   onActivated?: ((request: FastifyRequest, result: OnboardingResult) => Promise<void> | void) | undefined;
+  /**
+   * Story C-E point 5: judges a key-revocation request an ancestor issuer
+   * signed (`RevocationService.verifyKeyRevocation`), resolving to the
+   * revoker DID. Without it, only the caller's own authorisation revokes a key.
+   */
+  keyRevocations?: { verifyKeyRevocation(jws: unknown, did: string, kid: string): Promise<string> } | undefined;
   /** The subjects the caller's conformance report covers; the hosted build keeps it to the account's own. Default: all. */
   reportSubjects?: ((request: FastifyRequest, subjects: ConformanceSubject[]) => Promise<ConformanceSubject[]> | ConformanceSubject[]) | undefined;
   /** What the conformance report says the implementation claims. Default: no claims. */
@@ -269,6 +285,53 @@ const custodyRoutes: FastifyPluginAsync<CustodyRouteOptions> = async (fastify, o
       }
     });
   }
+
+  // KYA-OS story C-E: rotation, compromise and (later) recovery.
+  for (const { path, subjectType } of SUBJECT_PATHS) {
+    fastify.post<{ Params: { did: string } }>(`/${path}/:did/keys/rotate`, async (request, reply) => {
+      try {
+        const did = request.params.did;
+        const input = body(request);
+        refusePrivateMaterial(input);
+        // The SDK's rotateKey(): the current self-held key signs the rotation, so the subject itself is the actor.
+        const byCurrentKey = input['currentKeyProof'] !== undefined;
+        if (!byCurrentKey) await authorize(request, { action: 'rotateKey', subjectType, did });
+        const result = await service.rotateKey(did, input as never, await context(request, byCurrentKey ? did : undefined), {
+          expectedSubjectType: subjectType,
+          authorizedBy: byCurrentKey ? 'current-key' : 'route',
+        });
+        return reply.code(200).send(result);
+      } catch (error) {
+        return send(reply, request, error);
+      }
+    });
+
+    fastify.post<{ Params: { did: string } }>(`/${path}/:did/keys/revoke`, async (request, reply) => {
+      try {
+        const did = request.params.did;
+        const input = body(request);
+        let actor: string | undefined;
+        if (input['request'] !== undefined && options.keyRevocations) {
+          // An ancestor issuer of the subject's delegations signed the request: it is the actor.
+          actor = await options.keyRevocations.verifyKeyRevocation(input['request'], did, String(input['kid'] ?? ''));
+        } else {
+          await authorize(request, { action: 'revokeKey', subjectType, did });
+        }
+        return reply.code(200).send(await service.revokeKey(did, input['kid'], await context(request, actor), subjectType));
+      } catch (error) {
+        return send(reply, request, error);
+      }
+    });
+  }
+
+  // Story C-E point 6 waits for story L3-H (the responsible party authorises recovery).
+  fastify.post<{ Params: { did: string } }>('/agents/:did/keys/recover', async (request, reply) => {
+    try {
+      return await service.recoverAgentKey(request.params.did);
+    } catch (error) {
+      return send(reply, request, error);
+    }
+  });
 
   fastify.get('/custody/defaults', async (request, reply) => {
     try {

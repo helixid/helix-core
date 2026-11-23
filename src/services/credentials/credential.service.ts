@@ -32,6 +32,7 @@ import {
   delegationRef,
   UNKNOWN_DELEGATION_REF,
   evaluateDelegationChain,
+  invokerOf,
   publicDid,
   resolveDID as resolveDIDCore,
   rootHopInput,
@@ -64,6 +65,7 @@ import type { IKeyCustody } from '../key-custody/key-custody.js';
 import type { IDIDService } from '../did/IDIDService.js';
 import { CustodySigner } from './custody-signer.js';
 import { CUSTODIAL_SIGNING_SUBJECTS, type CustodialKeys } from '../custody/custodial-keys.js';
+import type { BoundWindow, HopReissueInput, HopReissueResult, HopReissuer, KidHopsInput, PendingIssuerHop } from '../custody/hop-reissue.js';
 
 /** The two years a credential lives by default; attestations and hops may be shorter. */
 const DEFAULT_VALID_MS = 2 * 365 * 24 * 60 * 60 * 1000;
@@ -161,7 +163,41 @@ function stored<T>(record: VCRecord): StoredCredential<T> {
   };
 }
 
-export class CredentialService {
+/**
+ * When a hop was issued: its proof's `created`, stamped by the API that
+ * signed it, as the key windows are (story C-E); the row's time only for a
+ * hop without one. Database clocks are not mixed with the API's.
+ */
+function issuedAt(record: VCRecord): number | undefined {
+  const created = (stored<SignedDelegationHop>(record).credential.proof as { created?: unknown } | undefined)?.created;
+  const at = typeof created === 'string' ? Date.parse(created) : Number.NaN;
+  return Number.isNaN(at) ? record.createdAt?.getTime() : at;
+}
+
+/** Whether a hop record was issued while the key of `bound` was current (story C-E point 4). */
+function issuedIn(record: VCRecord, bound: BoundWindow | undefined): boolean {
+  if (!bound) return true;
+  const at = issuedAt(record);
+  if (at === undefined) return false;
+  return at >= bound.from.getTime() && (bound.until === null || at < bound.until.getTime());
+}
+
+/** The grant a hop carries, apart from its id, status entry and proof: what a reissue keeps. */
+function grantOf(hop: SignedDelegationHop): string {
+  const subject = hop.credentialSubject;
+  return JSON.stringify([
+    hop.issuer,
+    subject.invoker ?? subject.controller,
+    subject.parentCapability,
+    subject.invocationTarget,
+    [...subject.allowedAction].sort(),
+    subject.caveats ?? [],
+    hop.validFrom ?? null,
+    hop.validUntil,
+  ]);
+}
+
+export class CredentialService implements HopReissuer {
   private custodialKeys: CustodialKeys | undefined;
 
   constructor(
@@ -189,7 +225,7 @@ export class CredentialService {
    * reference with its digest; `parentRef` names the hop it derives from or
    * the credential it renews.
    */
-  private auditIssued(credential: unknown, subjectDid: string, name: 'issued' | 'registered' | 'renewed', requestId: string, parentRef?: string): void {
+  private auditIssued(credential: unknown, subjectDid: string, name: 'issued' | 'registered' | 'renewed' | 'reissued', requestId: string, parentRef?: string): void {
     const record = credential as Record<string, unknown>;
     const ref = delegationRef(credential) ?? UNKNOWN_DELEGATION_REF;
     const digest = credentialDigest(credential);
@@ -280,7 +316,7 @@ export class CredentialService {
     scopes: string[] | undefined,
     parentVcId: string | undefined,
     requestId: string,
-    name: 'issued' | 'registered' | 'renewed' = 'issued',
+    name: 'issued' | 'registered' | 'renewed' | 'reissued' = 'issued',
     userDid: string | null = null,
     auditParent?: string,
   ): Promise<void> {
@@ -565,6 +601,92 @@ export class CredentialService {
     }
     for (const id of order) await this.statusStore.revokeVC(id, requestId);
     return order;
+  }
+
+  /** Story C-E point 5: a fresh identity credential for the same agent after a key compromise; its id, or null for a non-identity. */
+  async reissueIdentity(input: { vcId: string }, requestId: string): Promise<string | null> {
+    return (await this.renewIdentity(input.vcId, {}, requestId))?.vcId ?? null;
+  }
+
+  /** The active hops delegated to `did` while the key of `bound` was current, oldest first. */
+  private async hopsBoundTo(did: string, bound: BoundWindow | undefined): Promise<VCRecord[]> {
+    const hops = await this.vcRepo.findActiveBySubjectDid(did, DELEGATION_CREDENTIAL_TYPE);
+    return hops
+      .filter((record) => issuedIn(record, bound) && invokerOf(stored<SignedDelegationHop>(record).credential) === did)
+      .sort((a, b) => (issuedAt(a) ?? 0) - (issuedAt(b) ?? 0));
+  }
+
+  /**
+   * Story C-E point 4: the agent's leaf hops bound to its old key, reissued
+   * by their issuers bound to the new one: same parent, target, actions,
+   * caveats and window, a new id and status entry. Hops with hops below them
+   * stay as they are (the agent signed those children with a key that stays
+   * valid for what it signed). A hop whose issuer holds its own key is
+   * reported for that issuer's SDK to reissue.
+   */
+  async reissueHopsForKid(input: HopReissueInput): Promise<HopReissueResult> {
+    const reissuedHops: Record<string, string> = {};
+    const pendingIssuers: PendingIssuerHop[] = [];
+    for (const record of await this.hopsBoundTo(input.did, input.bound)) {
+      if ((await this.vcRepo.findActiveChildren(record.vcId)).length > 0) continue;
+      const hop = stored<SignedDelegationHop>(record).credential;
+      let signer: Signer;
+      try {
+        signer = await this.signerFor(hop.issuer, input.requestId);
+      } catch {
+        pendingIssuers.push({ hopId: hop.id, issuer: hop.issuer });
+        continue;
+      }
+      const subject = hop.credentialSubject;
+      const fresh = await buildDelegationHop(
+        {
+          invoker: input.did,
+          parentCapability: subject.parentCapability,
+          invocationTarget: subject.invocationTarget,
+          allowedAction: subject.allowedAction,
+          ...(subject.caveats === undefined ? {} : { caveats: subject.caveats }),
+          ...(hop.validFrom === undefined ? {} : { validFrom: hop.validFrom }),
+          validUntil: hop.validUntil,
+          statusEntry: await this.statusEntry(signer.did),
+        },
+        signer,
+      );
+      await this.store(fresh, input.did, [...subject.allowedAction], record.parentVcId ?? undefined, input.requestId, 'reissued');
+      reissuedHops[hop.id] = fresh.id;
+    }
+    return { reissued: Object.keys(reissuedHops).length, pending: false, reissuedHops, pendingIssuers };
+  }
+
+  /**
+   * Story C-E point 4: the overlap of `kid` ended, so the hops bound to it
+   * that were reissued for the new key expire (revoked through the status
+   * lists). A hop with no reissued twin (one that has hops below it, or
+   * whose issuer has not reissued it yet) runs to its own `validUntil`.
+   */
+  async expireHopsForKid(input: KidHopsInput): Promise<string[]> {
+    const ended = input.bound?.until;
+    if (!ended) return [];
+    const bound = await this.hopsBoundTo(input.did, input.bound);
+    if (bound.length === 0) return [];
+    const later = await this.hopsBoundTo(input.did, { from: ended, until: null });
+    const successors = new Set(later.map((record) => grantOf(stored<SignedDelegationHop>(record).credential)));
+    const expired: string[] = [];
+    for (const record of bound) {
+      if (!successors.has(grantOf(stored<SignedDelegationHop>(record).credential))) continue;
+      if ((await this.vcRepo.findActiveChildren(record.vcId)).length > 0) continue;
+      expired.push(...(await this.revokeHop(record.vcId, input.requestId)));
+    }
+    return expired;
+  }
+
+  /** Story C-E point 5: `kid` is compromised, so every hop bound to it is revoked with every hop below it (L3-C cascade). */
+  async revokeHopsForKid(input: KidHopsInput): Promise<string[]> {
+    const revoked: string[] = [];
+    for (const record of await this.hopsBoundTo(input.did, input.bound)) {
+      if (revoked.includes(record.vcId)) continue;
+      revoked.push(...(await this.revokeHop(record.vcId, input.requestId)));
+    }
+    return revoked;
   }
 
   /** Everything Helix keeps for one agent, in issuance order; the active identity not yet renewed, else the latest. */

@@ -165,6 +165,9 @@ export const ErrorCodes = {
   CONSENT_STEP_UP_REQUIRED: 'CONSENT_STEP_UP_REQUIRED',
   CONSENT_SERVICE_UNKNOWN: 'CONSENT_SERVICE_UNKNOWN',
   USER_KEY_NOT_SIGNABLE: 'USER_KEY_NOT_SIGNABLE',
+
+  // KYA-OS story C-E: key rotation; lost-key recovery waits for story L3-H
+  KEY_RECOVERY_UNAVAILABLE: 'KEY_RECOVERY_UNAVAILABLE',
 } as const;
 
 export const ErrorCode = ErrorCodes;

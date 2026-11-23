@@ -16,11 +16,20 @@
  * signed under either verifies; it is still the one key of the DID.
  */
 
-import type { DIDDocument, DidResolver } from '../../core/index.js';
+import { RotationSequenceGuard, type DIDDocument, type DidResolver } from '../../core/index.js';
 
-export function publicDidResolver(resolve: (did: string) => Promise<DIDDocument>): DidResolver {
+/**
+ * Story C-E point 2: every document passes `guard` first, so a version with
+ * a lower `rotationSequence` than one already seen throws
+ * `StaleDidDocumentError` (a verifier reports the DID unresolved).
+ */
+export function publicDidResolver(
+  resolve: (did: string) => Promise<DIDDocument>,
+  guard: RotationSequenceGuard = new RotationSequenceGuard(),
+): DidResolver {
   return async (did) => {
     const document = await resolve(did);
+    await guard.assertCurrent(did, document);
     if (!did.startsWith('did:key:')) return document as unknown as Awaited<ReturnType<DidResolver>>;
     const fingerprint = did.slice('did:key:'.length);
     const standardId = `${did}#${fingerprint}`;

@@ -15,9 +15,10 @@
  * change and custodial signature, with the actor and the agent, service or
  * owner. One place emits them, as typed events on story A-1's audit trail:
  *
- *   choice, activation, key revocation and shredding
+ *   choice, activation, end of an overlap, key shredding
  *       `configuration.changed`, action category `custody`
- *   custody change (a key rotation)  `key.rotated`, previous and next signer
+ *   key rotation, custody change     `key.rotated`, previous and next signer
+ *   compromised key revoked (C-E)    `key.rotated`, action `key_revoked`
  *   custodial signature              `proof.generated`, the payload digest
  *   refused custodial signing        `proof.rejected`, a reason code
  *   agent activated                  `credential.verified`, action
@@ -147,21 +148,51 @@ export class CustodyAudit {
     });
   }
 
-  changed(event: Base & {
+  /**
+   * A key rotation (story C-E point 8; F-3 point 6 when the custody changes):
+   * `key.rotated` with the old and the new kid as previous and next signer,
+   * the actor (as `actor` when it is a DID) and, committed, the document's
+   * new `rotationSequence`. `name` is `changed` for a custody change,
+   * `rotated` for a rotation in place.
+   */
+  rotated(event: Base & {
+    name: 'changed' | 'rotated';
     from: KeyCustodyMode;
     to: KeyCustodyMode;
     oldKid: string;
     newKid: string;
+    rotationSequence: number;
     retiresAt: string;
     hopReissue: HopReissueResult;
   }): void {
+    const { requestId, did, oldKid, newKid, name, ...facts } = event;
+    this.keyEvent(name, { requestId, did, actor: event.actor, oldKid, newKid }, facts);
+  }
+
+  /**
+   * A compromised key revoked (story C-E points 5 and 8): `key.rotated`
+   * naming the revoked kid as previous signer and the current one as next,
+   * action `key_revoked`; the sequence, the hops revoked and the card's new
+   * backing credential are committed.
+   */
+  keyCompromised(event: Base & { oldKid: string; newKid: string; rotationSequence: number; location: 'self' | 'helix'; revokedHops: number; credentialVcId: string | null }): void {
     const { requestId, did, oldKid, newKid, ...facts } = event;
+    this.keyEvent('key_revoked', { requestId, did, actor: event.actor, oldKid, newKid }, facts);
+  }
+
+  private keyEvent(
+    name: string,
+    base: { requestId: string; did: string; actor: CustodyActor; oldKid: string; newKid: string },
+    facts: Record<string, unknown>,
+  ): void {
+    const { requestId, did, actor, oldKid, newKid } = base;
     this.record({
       eventType: 'key.rotated',
-      action: { category: CUSTODY_AUDIT_CATEGORY, name: 'changed' },
+      action: { category: CUSTODY_AUDIT_CATEGORY, name },
       outcome: 'succeeded',
       correlationId: requestId,
       resource: publicDid(did),
+      ...(actor.startsWith('did:') ? { actor: publicDid(actor) } : {}),
       details: {
         family: 'key',
         phase: 'rotated',
@@ -172,9 +203,10 @@ export class CustodyAudit {
     });
   }
 
-  keyRevoked(event: Base & { kid: string; location: 'self' | 'helix' }): void {
+  /** A superseded key's overlap ended (story C-E): it stays in the document with `validUntil`. */
+  keyRetired(event: Base & { kid: string; location: 'self' | 'helix'; expiredHops: number }): void {
     const { requestId, actor, subjectType, did, ...facts } = event;
-    this.configurationChanged('key_revoked', { requestId, actor, subjectType, did }, facts);
+    this.configurationChanged('key_retired', { requestId, actor, subjectType, did }, facts);
   }
 
   keyShredded(event: Base & { kid: string }): void {

@@ -80,8 +80,9 @@ import {
   sameDid,
   verificationMethodId,
   verifyProofOfPossession,
+  versionDidDocument,
   type AgentDidDocument,
-  type AgentVerificationMethod,
+  type DocumentKey,
   type CustodyDefaults,
   type CustodyLabel,
   type CustodySubjectType,
@@ -110,7 +111,7 @@ import { hashToken, normalizeDomain } from '../agent/agent.service.js';
 import { generateServiceId } from '../service-provider/service-provider.service.js';
 import { hostedUrls } from '../../routes/entity-card/index.js';
 import { CustodyAudit, type CustodyActor, type CustodyFactsSink } from './custody-audit.js';
-import { pendingHopReissuer, type HopReissueResult, type HopReissuer } from './hop-reissue.js';
+import { pendingHopReissuer, type BoundWindow, type HopReissueResult, type HopReissuer } from './hop-reissue.js';
 import type { CustodialKeys, CustodialSigningSubject, CustodialSigningUse } from './custodial-keys.js';
 import type { EntityCardDetails } from '../entity-card/entity-card.source.js';
 
@@ -134,6 +135,8 @@ export interface CustodyRecords {
   listRecords(filter?: CustodyRecordFilter): Promise<CustodyRecordRow[]>;
   addKey(row: NewCustodyKey): Promise<CustodyKeyRow>;
   listKeys(did: string): Promise<CustodyKeyRow[]>;
+  /** Story C-E: subjects with a retiring key whose overlap ended by `now`. */
+  listRetiringDue?(now: Date, limit: number): Promise<string[]>;
   updateKey(did: string, kid: string, patch: Partial<Pick<CustodyKeyRow, 'status' | 'retiresAt' | 'revokedAt'>>): Promise<CustodyKeyRow>;
 }
 
@@ -163,6 +166,12 @@ export interface CustodyCredentials {
   readonly issuerDid: string;
   issueIdentity(input: { agentDid: string; name: string; ownerDid: string }, requestId: string): Promise<{ id: string }>;
   issueAttestations(input: { agentDid: string; capabilities: readonly string[] }, requestId: string): Promise<readonly { id: string }[]>;
+  /**
+   * Story C-E point 5: a fresh identity credential for the same agent after a
+   * key compromise, so the card's backing credential and revocation entry are
+   * new; resolves to its id, or null when `vcId` is not an identity.
+   */
+  reissueIdentity?(input: { vcId: string; agentDid: string }, requestId: string): Promise<string | null>;
 }
 
 export interface CustodyServices {
@@ -300,7 +309,7 @@ export interface CreateOwnerInput extends ChoiceInput {
 export interface CustodyKeyView {
   kid: string;
   location: 'self' | 'helix';
-  status: 'active' | 'retiring' | 'revoked';
+  status: 'active' | 'retiring' | 'retired' | 'revoked';
   createdAt: string;
   retiresAt: string | null;
   revokedAt: string | null;
@@ -370,8 +379,25 @@ export interface ChangeCustodyInput {
   overlapSeconds?: number | undefined;
 }
 
+/** Story C-E: a rotation, in place (no `keyCustody`, or the current one) or into the other custody. */
+export interface RotateKeyInput extends Omit<ChangeCustodyInput, 'keyCustody'> {
+  keyCustody?: unknown;
+  /** SDK `rotateKey()`: the current key's signature over the same rotation message (base64url). */
+  currentKeyProof?: { signature?: unknown } | undefined;
+}
+
+export interface RevokeKeyResult extends CustodyView {
+  revokedKid: string;
+  /** Delegation hops bound to the revoked kid, revoked with their descendants. */
+  revokedHops: string[];
+  rotationSequence: number;
+  documents: PublishedDocuments;
+}
+
 export interface ChangeCustodyResult extends CustodyView {
   previousKid: string;
+  /** The DID document's version after the rotation (story C-E point 2). */
+  rotationSequence: number;
   previousKeyShredded: boolean;
   retiresAt: string;
   hopReissue: HopReissueResult;
@@ -422,6 +448,44 @@ function iso(value: Date | null): string | null {
 function nextFragment(keys: CustodyKeyRow[]): { fragment: string; sequence: number } {
   const sequence = keys.reduce((max, key) => Math.max(max, key.sequence), 0) + 1;
   return { fragment: `key-${sequence}`, sequence };
+}
+
+/**
+ * Story C-E point 2: the version of a subject's DID document, derived from
+ * its keys so it can only grow: one step per key added and one per key
+ * revoked (the two changes that alter the document's key set); `updated`
+ * is the latest of those instants.
+ */
+export function documentVersion(keys: readonly CustodyKeyRow[]): { rotationSequence: number; updated: string } {
+  let latest = 0;
+  for (const key of keys) {
+    latest = Math.max(latest, key.createdAt.getTime(), key.status === 'revoked' && key.revokedAt ? key.revokedAt.getTime() : 0);
+  }
+  const revoked = keys.filter((key) => key.status === 'revoked').length;
+  return { rotationSequence: Math.max(1, keys.length + revoked), updated: new Date(latest || Date.now()).toISOString() };
+}
+
+/** When `kid` was current: from its creation until the next key's (story C-E: the hops issued then are bound to it). */
+export function boundWindow(keys: readonly CustodyKeyRow[], kid: string): BoundWindow | undefined {
+  const key = keys.find((candidate) => candidate.kid === kid);
+  if (!key) return undefined;
+  const next = keys.filter((candidate) => candidate.sequence > key.sequence).sort((a, b) => a.sequence - b.sequence)[0];
+  return { from: key.createdAt, until: next ? next.createdAt : null };
+}
+
+/**
+ * The keys of the document, current first: a superseded key with
+ * `validUntil` (the end of its overlap), a compromised one also with
+ * `revoked`.
+ */
+function documentKeys(keys: readonly CustodyKeyRow[], currentKid: string | null): DocumentKey[] {
+  const ordered = [...keys.filter((key) => key.kid === currentKid), ...keys.filter((key) => key.kid !== currentKid)];
+  return ordered.map((key) => ({
+    kid: key.kid,
+    publicKeyJwk: key.publicKeyJwk,
+    ...(key.kid !== currentKid && key.retiresAt ? { validUntil: key.retiresAt.toISOString() } : {}),
+    ...(key.status === 'revoked' && key.revokedAt ? { revoked: key.revokedAt.toISOString() } : {}),
+  }));
 }
 
 function definedOnly<T extends object>(value: T): { [K in keyof T]?: Exclude<T[K], undefined> } {
@@ -747,17 +811,48 @@ export class CustodyService implements CustodialKeys {
     return { did, kid, alg: 'EdDSA', signature: base64UrlEncode(signature) };
   }
 
-  // ---------------------------------------------------------- custody change
+  // ---------------------------------------------------- rotation (story C-E)
 
-  /** Point 6: changing custody is a key rotation. */
+  /** F-3 point 6: changing custody is a key rotation into the other place. */
   async changeCustody(did: string, input: ChangeCustodyInput, context: CustodyContext, expectedSubjectType?: CustodySubjectType): Promise<ChangeCustodyResult> {
-    let record = await this.requireRecord(did, expectedSubjectType);
     if (!isKeyCustodyMode(input?.keyCustody)) throw new ValidationError('keyCustody must be self or helix');
-    const target = input.keyCustody;
+    return this.rotate(did, input, context, { expectedSubjectType, custodyChange: true });
+  }
+
+  /**
+   * Story C-E points 1 and 7: a new key in the same place (or, with
+   * `keyCustody`, the other place), both keys in the DID document for the
+   * overlap, the old one then kept with `validUntil`. A self-custody key is
+   * generated client side and only its public half arrives, with a proof of
+   * possession; a Helix-held key is generated in the KeyStore.
+   *
+   * `authorizedBy: 'current-key'` is the SDK's `rotateKey()` without an
+   * account: `currentKeyProof` must be the current (self-held) key's
+   * signature over the same rotation message, so only the holder of the
+   * current key may replace it. Otherwise the route authorised the caller.
+   */
+  async rotateKey(
+    did: string,
+    input: RotateKeyInput,
+    context: CustodyContext,
+    options: { expectedSubjectType?: CustodySubjectType | undefined; authorizedBy?: 'route' | 'current-key' } = {},
+  ): Promise<ChangeCustodyResult> {
+    if (input?.keyCustody !== undefined && !isKeyCustodyMode(input.keyCustody)) throw new ValidationError('keyCustody must be self or helix');
+    return this.rotate(did, input, context, { expectedSubjectType: options.expectedSubjectType, custodyChange: false, authorizedBy: options.authorizedBy ?? 'route' });
+  }
+
+  private async rotate(
+    did: string,
+    input: RotateKeyInput,
+    context: CustodyContext,
+    mode: { expectedSubjectType?: CustodySubjectType | undefined; custodyChange: boolean; authorizedBy?: 'route' | 'current-key' },
+  ): Promise<ChangeCustodyResult> {
+    let record = await this.requireRecord(did, mode.expectedSubjectType);
+    const target: KeyCustodyMode = isKeyCustodyMode(input.keyCustody) ? input.keyCustody : record.keyCustody;
     if (record.status !== 'active') {
-      throw new CustodyStateInvalidError(`${did} is ${record.status}; custody changes on an active subject`, { status: record.status });
+      throw new CustodyStateInvalidError(`${did} is ${record.status}; keys rotate on an active subject`, { status: record.status });
     }
-    if (record.keyCustody === target) throw new CustodyStateInvalidError(`${did} already has key custody ${target}`);
+    if (mode.custodyChange && record.keyCustody === target) throw new CustodyStateInvalidError(`${did} already has key custody ${target}`);
     const overlapSeconds = input.overlapSeconds ?? this.options.rotationOverlapSeconds ?? DEFAULT_ROTATION_OVERLAP_SECONDS;
     if (!Number.isInteger(overlapSeconds) || overlapSeconds < 0) throw new ValidationError('overlapSeconds must be a whole number of seconds, 0 or more');
 
@@ -768,6 +863,19 @@ export class CustodyService implements CustodialKeys {
     const next = nextFragment(keys);
     const newKid = verificationMethodId(did, target === 'self' && input.kid ? input.kid : next.fragment);
     if (keys.some((key) => key.kid === newKid)) throw new ValidationError(`${newKid} was already used by this subject`);
+
+    if (mode.authorizedBy === 'current-key') {
+      // Only the holder of the current self-held key may replace it without an account.
+      if (previous.location !== 'self' || target !== 'self') {
+        throw new CustodialSigningRefusedError(did, 'a rotation authorised by the current key is for a self-custody key replaced by another self-custody key');
+      }
+      if (!input.kid) throw new ValidationError('kid is required when the current key authorises the rotation');
+      const issuedAt = input.proof?.issuedAt;
+      const message = typeof issuedAt === 'string' ? rotationProofMessage({ did, kid: newKid, issuedAt }) : undefined;
+      if (!message || !verifyProofOfPossession(message, input.currentKeyProof?.signature, publicKeyJwkBytes(previous.publicKeyJwk))) {
+        throw new EnrollmentProofInvalidError('currentKeyProof is not the current key\'s signature over the rotation message');
+      }
+    }
 
     let publicKeyJwk: PublicKeyJwk;
     if (target === 'self') {
@@ -781,36 +889,41 @@ export class CustodyService implements CustodialKeys {
       }
       publicKeyJwk = { kty: 'OKP', crv: 'Ed25519', x: base64UrlEncode(publicKey) };
     } else {
-      if (input.publicKeyJwk !== undefined) throw new ValidationError('A change to helix custody generates the key in Helix; send no publicKeyJwk');
+      if (input.publicKeyJwk !== undefined) throw new ValidationError('A Helix-held key is generated in Helix; send no publicKeyJwk');
       publicKeyJwk = await this.options.keyStore.generate({ did, kid: newKid, subjectType: record.subjectType });
     }
 
     const now = this.clock();
     const retiresAt = new Date(now.getTime() + overlapSeconds * 1000);
-    await this.options.records.addKey({ did, kid: newKid, location: target, publicKeyJwk, status: 'active', sequence: next.sequence, retiresAt: null, revokedAt: null });
+    await this.options.records.addKey({ did, kid: newKid, location: target, publicKeyJwk, status: 'active', sequence: next.sequence, retiresAt: null, revokedAt: null, createdAt: now });
     await this.options.records.updateKey(did, previous.kid, { status: 'retiring', retiresAt });
-    // Helix must hold no key for a self-custody subject: the old Helix-held
-    // key is shredded now. Its public half stays in the document through the
-    // overlap, so proofs it made before the change still verify.
+    // Helix must hold no key for a self-custody subject: an old Helix-held
+    // key leaving Helix is shredded now (F-3 point 6). Its public half stays
+    // in the document, so proofs it made before still verify. A rotation
+    // inside the KeyStore keeps the old key until its overlap ends.
     let previousKeyShredded = false;
-    if (previous.location === 'helix') {
+    if (previous.location === 'helix' && target === 'self') {
       previousKeyShredded = await this.options.keyStore.shred({ did, kid: previous.kid });
       if (previousKeyShredded) this.audit.keyShredded({ requestId: context.requestId, actor: context.actor, subjectType: record.subjectType, did, kid: previous.kid });
     }
-    const hopReissue = await this.hopReissuer.reissueHopsForKid({ did, oldKid: previous.kid, newKid, requestId: context.requestId });
 
     // The identity credential carries no custody facts (story F-1), so a
-    // custody change keeps it; the custody record says who holds the key now.
+    // rotation keeps it; the custody record says which key is current.
     record = await this.options.records.updateRecord(did, { keyCustody: target, kid: newKid });
-    this.audit.changed({
+    const keysNow = await this.options.records.listKeys(did);
+    const hopReissue = await this.hopReissuer.reissueHopsForKid({ did, oldKid: previous.kid, newKid, requestId: context.requestId, bound: boundWindow(keysNow, previous.kid) });
+    const version = documentVersion(keysNow);
+    this.audit.rotated({
       requestId: context.requestId,
       actor: context.actor,
       subjectType: record.subjectType,
       did,
+      name: mode.custodyChange ? 'changed' : 'rotated',
       from: previous.location,
       to: target,
       oldKid: previous.kid,
       newKid,
+      rotationSequence: version.rotationSequence,
       retiresAt: retiresAt.toISOString(),
       hopReissue,
     });
@@ -823,6 +936,7 @@ export class CustodyService implements CustodialKeys {
       previousKid: previous.kid,
       previousKeyShredded,
       retiresAt: retiresAt.toISOString(),
+      rotationSequence: documentVersion(await this.options.records.listKeys(did)).rotationSequence,
       hopReissue,
       documents,
       publishRequired: record.didHosting === 'own',
@@ -830,17 +944,92 @@ export class CustodyService implements CustodialKeys {
   }
 
   /**
-   * Ends the overlap of every retiring key whose time is up (or all of them
-   * with `force`): the key is revoked, dropped from the DID document and, if
-   * Helix still holds it, shredded.
+   * Story C-E point 5, the compromise path: `kid` (a superseded key; the
+   * current key is replaced by a rotation first) is revoked at once. It stays
+   * in the DID document marked `revoked`, so nothing it signed is accepted
+   * any more; its overlap ends; every delegation hop bound to it is revoked
+   * through the status lists, cascading (L3-C); a Helix-held copy is
+   * shredded; and the card's backing credential is reissued, so the card
+   * names the current key and a fresh revocation entry.
    */
-  async finalizeRotation(did: string, context: CustodyContext, options: { force?: boolean } = {}, expectedSubjectType?: CustodySubjectType): Promise<CustodyView & { revoked: string[]; documents: PublishedDocuments }> {
+  async revokeKey(did: string, kid: unknown, context: CustodyContext, expectedSubjectType?: CustodySubjectType): Promise<RevokeKeyResult> {
+    let record = await this.requireRecord(did, expectedSubjectType);
+    if (typeof kid !== 'string' || kid.length === 0) throw new ValidationError('kid is required');
+    const fullKid = verificationMethodId(did, kid);
+    const key = (await this.options.records.listKeys(did)).find((candidate) => candidate.kid === fullKid);
+    if (!key) throw new ValidationError(`${fullKid} is not a key of ${did}`);
+    if (key.kid === record.kid) {
+      throw new CustodyStateInvalidError(`${fullKid} is the current key; rotate to a new key first, then revoke this one (lost-key recovery waits for the responsible party, story L3-H)`);
+    }
+    if (key.status === 'revoked') throw new CustodyStateInvalidError(`${fullKid} is already revoked`, { status: 'revoked' });
+    const now = this.clock();
+    await this.options.records.updateKey(did, fullKid, { status: 'revoked', revokedAt: now, retiresAt: key.retiresAt && key.retiresAt.getTime() < now.getTime() ? key.retiresAt : now });
+    if (key.location === 'helix' && (await this.options.keyStore.shred({ did, kid: fullKid }))) {
+      this.audit.keyShredded({ requestId: context.requestId, actor: context.actor, subjectType: record.subjectType, did, kid: fullKid });
+    }
+    const revokedHops = (await this.hopReissuer.revokeHopsForKid?.({ did, kid: fullKid, requestId: context.requestId, bound: boundWindow(await this.options.records.listKeys(did), fullKid) })) ?? [];
+    let credentialVcId = record.credentialVcId;
+    if (record.subjectType === 'agent' && record.credentialVcId && this.options.credentials.reissueIdentity) {
+      credentialVcId = (await this.options.credentials.reissueIdentity({ vcId: record.credentialVcId, agentDid: did }, context.requestId)) ?? record.credentialVcId;
+      if (credentialVcId !== record.credentialVcId) record = await this.options.records.updateRecord(did, { credentialVcId });
+    }
+    const rotationSequence = documentVersion(await this.options.records.listKeys(did)).rotationSequence;
+    this.audit.keyCompromised({
+      requestId: context.requestId,
+      actor: context.actor,
+      subjectType: record.subjectType,
+      did,
+      oldKid: fullKid,
+      newKid: record.kid!,
+      rotationSequence,
+      location: key.location,
+      revokedHops: revokedHops.length,
+      credentialVcId,
+    });
+    const documents = await this.republish(record);
+    return { ...(await this.view(record)), revokedKid: fullKid, revokedHops, rotationSequence, documents };
+  }
+
+  /**
+   * Story C-E point 6, not built: lost-key recovery is authorised by the
+   * responsible party as root issuer (story L3-H decides who that is per
+   * journey). Until then it is refused, and never possible from the agent
+   * side alone.
+   */
+  async recoverAgentKey(did: string): Promise<never> {
+    throw new HelixError(
+      ErrorCode.KEY_RECOVERY_UNAVAILABLE,
+      `Lost-key recovery for ${String(did)} needs the responsible party's authorisation (story L3-H); rotate with the current key or the account instead`,
+      501,
+    );
+  }
+
+  /**
+   * Ends the overlap of every retiring key whose time is up (or all of them
+   * with `force`): the key is retired (it stays in the document with
+   * `validUntil`), a Helix-held copy is shredded, and the hops bound to it
+   * expire.
+   */
+  async finalizeRotation(did: string, context: CustodyContext, options: { force?: boolean } = {}, expectedSubjectType?: CustodySubjectType): Promise<CustodyView & { retired: string[]; documents: PublishedDocuments }> {
     const record = await this.requireRecord(did, expectedSubjectType);
-    const before = (await this.options.records.listKeys(did)).filter((key) => key.status === 'revoked').map((key) => key.kid);
+    const before = (await this.options.records.listKeys(did)).filter((key) => key.status === 'retired').map((key) => key.kid);
     const updated = await this.finalizeDue(record, context, options.force === true);
-    const after = (await this.options.records.listKeys(did)).filter((key) => key.status === 'revoked').map((key) => key.kid);
+    const after = (await this.options.records.listKeys(did)).filter((key) => key.status === 'retired').map((key) => key.kid);
     const documents = await this.republish(updated);
-    return { ...(await this.view(updated)), revoked: after.filter((kid) => !before.includes(kid)), documents };
+    return { ...(await this.view(updated)), retired: after.filter((kid) => !before.includes(kid)), documents };
+  }
+
+  /** The background half of `finalizeRotation`: every subject whose overlap ended, at most `limit` per run. */
+  async finalizeDueRotations(limit = this.recheckSettings.batchSize): Promise<string[]> {
+    const dids = (await this.options.records.listRetiringDue?.(this.clock(), limit)) ?? [];
+    const finalized: string[] = [];
+    for (const did of dids) {
+      const record = await this.options.records.findRecord(did);
+      if (!record) continue;
+      await this.finalizeDue(record, { requestId: `rotation-finalize-${randomBytes(6).toString('hex')}`, actor: RECHECK_ACTOR });
+      finalized.push(did);
+    }
+    return finalized;
   }
 
   // ----------------------------------------------------------------- reading
@@ -1019,10 +1208,10 @@ export class CustodyService implements CustodialKeys {
     context: CustodyContext,
     ownerEntityType?: EntityType,
   ): Promise<OnboardingResult> {
-    await this.options.records.addKey({ did, kid, location, publicKeyJwk, status: 'active', sequence: 1, retiresAt: null, revokedAt: null });
+    await this.options.records.addKey({ did, kid, location, publicKeyJwk, status: 'active', sequence: 1, retiresAt: null, revokedAt: null, createdAt: this.clock() });
     const record = (await this.options.records.findRecord(did))!;
     const publicKey = publicKeyJwkBytes(publicKeyJwk);
-    const documents = await this.documentsFor(record, [{ kid, publicKeyJwk }], ownerEntityType);
+    const documents = await this.documentsFor(record, [{ kid, publicKeyJwk }], documentVersion(await this.options.records.listKeys(did)), ownerEntityType);
     await this.options.didRepository.createDid({
       id: did,
       subjectType: record.subjectType,
@@ -1084,12 +1273,11 @@ export class CustodyService implements CustodialKeys {
     return { ...(await this.view(active)), ...(vcId ? { vcId } : {}), ...(documents ? { documents } : {}) };
   }
 
-  /** The subject's documents from its active and retiring keys, current key first (what `republish` stores). */
+  /** The subject's documents from all its keys, current key first (what `republish` stores). */
   private async currentDocuments(record: CustodyRecordRow): Promise<PublishedDocuments | undefined> {
-    const keys = (await this.options.records.listKeys(record.did)).filter((key) => key.status !== 'revoked');
+    const keys = await this.options.records.listKeys(record.did);
     if (!keys.some((key) => key.kid === record.kid)) return undefined;
-    const ordered = [...keys.filter((key) => key.kid === record.kid), ...keys.filter((key) => key.kid !== record.kid)];
-    return this.documentsFor(record, ordered);
+    return this.documentsFor(record, documentKeys(keys, record.kid), documentVersion(keys));
   }
 
   /**
@@ -1112,26 +1300,27 @@ export class CustodyService implements CustodialKeys {
   /** The DID document listing `keys` (current first) and the card anchored to it. */
   private async documentsFor(
     record: CustodyRecordRow,
-    keys: { kid: string; publicKeyJwk: PublicKeyJwk }[],
+    keys: DocumentKey[],
+    version: { rotationSequence: number; updated: string },
     ownerEntityType?: EntityType,
   ): Promise<PublishedDocuments> {
     const urls = this.urlsFor(record.did, record.didHosting);
     const [current, ...others] = keys;
     const currentBytes = publicKeyJwkBytes(current!.publicKeyJwk);
-    const document = buildDidDocument({
-      did: record.did,
-      publicKeyJwk: current!.publicKeyJwk,
-      kid: current!.kid,
-      alsoKnownAs: [didKeyFromPublicKey(currentBytes)],
-      service: domainServices(record.requestedDomains),
-      cardServiceEndpoint: urls.card,
-    });
-    for (const other of others) {
-      const method: AgentVerificationMethod = buildDidDocument({ did: record.did, publicKeyJwk: other.publicKeyJwk, kid: other.kid }).verificationMethod[0]!;
-      document.verificationMethod.push(method);
-      document.authentication.push(method.id);
-      document.assertionMethod.push(method.id);
-    }
+    // Story C-E: every key the subject had, current first, each superseded
+    // one with its validity, under the document's version.
+    const document = versionDidDocument(
+      buildDidDocument({
+        did: record.did,
+        publicKeyJwk: current!.publicKeyJwk,
+        kid: current!.kid,
+        alsoKnownAs: [didKeyFromPublicKey(currentBytes)],
+        service: domainServices(record.requestedDomains),
+        cardServiceEndpoint: urls.card,
+      }),
+      others,
+      version,
+    );
     const fromCredentials = record.status === 'active' ? await this.options.credentialDetails?.(record.did, record.subjectType) : undefined;
     const card = buildEntityCard({
       id: record.did,
@@ -1147,22 +1336,27 @@ export class CustodyService implements CustodialKeys {
     return { didDocument: document, card, didDocumentUrl: urls.didDocument, cardUrl: urls.card };
   }
 
-  /** Rewrites the stored DID document from the subject's active and retiring keys. */
+  /**
+   * Rewrites the stored DID document from all the subject's keys (story
+   * C-E: superseded keys stay with `validUntil`, compromised ones with
+   * `revoked`) under its current `rotationSequence`.
+   */
   private async republish(record: CustodyRecordRow): Promise<PublishedDocuments> {
-    const keys = (await this.options.records.listKeys(record.did)).filter((key) => key.status !== 'revoked');
-    const ordered = [...keys.filter((key) => key.kid === record.kid), ...keys.filter((key) => key.kid !== record.kid)];
-    const documents = await this.documentsFor(record, ordered);
+    const keys = await this.options.records.listKeys(record.did);
+    const ordered = documentKeys(keys, record.kid);
+    const version = documentVersion(keys);
+    const documents = await this.documentsFor(record, ordered, version);
     await this.options.didRepository.updateDidDocument(record.did, documents.didDocument, {
       updateType: CUSTODY_DID_UPDATE_TYPE,
       hederaTransactionId: '',
-      payload: { keyCustody: record.keyCustody, kids: ordered.map((key) => key.kid) },
+      payload: { keyCustody: record.keyCustody, kids: ordered.map((key) => key.kid), rotationSequence: version.rotationSequence },
     });
     evictDIDCache(record.did);
     await this.options.didCache?.delete(record.did);
     return documents;
   }
 
-  /** Revokes retiring keys whose overlap ended (all of them with `force`). */
+  /** Retires the retiring keys whose overlap ended (all of them with `force`). */
   private async finalizeDue(record: CustodyRecordRow, context: CustodyContext, force = false): Promise<CustodyRecordRow> {
     const now = this.clock();
     const due = (await this.options.records.listKeys(record.did)).filter(
@@ -1170,11 +1364,15 @@ export class CustodyService implements CustodialKeys {
     );
     if (due.length === 0) return record;
     for (const key of due) {
-      await this.options.records.updateKey(record.did, key.kid, { status: 'revoked', revokedAt: now });
+      // A forced end moves validUntil to now: the key signs nothing later.
+      const retiresAt = key.retiresAt && key.retiresAt.getTime() <= now.getTime() ? key.retiresAt : now;
+      await this.options.records.updateKey(record.did, key.kid, { status: 'retired', retiresAt });
       if (key.location === 'helix' && (await this.options.keyStore.shred({ did: record.did, kid: key.kid }))) {
         this.audit.keyShredded({ requestId: context.requestId, actor: context.actor, subjectType: record.subjectType, did: record.did, kid: key.kid });
       }
-      this.audit.keyRevoked({ requestId: context.requestId, actor: context.actor, subjectType: record.subjectType, did: record.did, kid: key.kid, location: key.location });
+      const bound = boundWindow(await this.options.records.listKeys(record.did), key.kid);
+      const expired = (await this.hopReissuer.expireHopsForKid?.({ did: record.did, kid: key.kid, requestId: context.requestId, bound })) ?? [];
+      this.audit.keyRetired({ requestId: context.requestId, actor: context.actor, subjectType: record.subjectType, did: record.did, kid: key.kid, location: key.location, expiredHops: expired.length });
     }
     await this.republish(record);
     return record;

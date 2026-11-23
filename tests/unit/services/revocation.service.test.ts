@@ -420,3 +420,29 @@ describe('POST /v1/revocations service: revoke(credentialId, revokerSigner)', ()
     expect((await w.revocations.revokeSigned(await w.revocations.signRequest(root.id, helixSigner), 'req')).revoked).toHaveLength(3);
   });
 });
+
+describe('key revocation by an ancestor issuer (story C-E point 5)', () => {
+  it('accepts the issuer of a hop delegated to the subject, or of a hop above one; refuses the subject, a stranger and a malformed request', async () => {
+    const w = world();
+    const { parent, childDid, grandDid } = await chainOf(w);
+    const parentSigner = await w.credentials.signerFor(parent);
+    const childSigner = await w.credentials.signerFor(childDid);
+    // The grand agent's key: its direct issuer (child), the issuer above it (parent) and the root (Helix) may revoke it.
+    for (const signer of [childSigner, parentSigner, helixSigner]) {
+      expect(await w.revocations.verifyKeyRevocation(await w.revocations.signKeyRevocation(grandDid, `${grandDid}#key-1`, signer), grandDid, 'key-1')).toBe(signer.did);
+    }
+    const grandSigner = await w.credentials.signerFor(grandDid);
+    await expect(w.revocations.verifyKeyRevocation(await w.revocations.signKeyRevocation(grandDid, 'key-1', grandSigner), grandDid, 'key-1')).rejects.toMatchObject({ code: ErrorCode.REVOCATION_FORBIDDEN, httpStatus: 403 });
+    // The owner issued nothing in this chain.
+    await expect(w.revocations.verifyKeyRevocation(await w.revocations.signKeyRevocation(grandDid, 'key-1', ownerSigner), grandDid, 'key-1')).rejects.toThrow(/issued no delegation/);
+    // The request names another subject or key, has the credential typ, or is not a JWS.
+    const forParent = await w.revocations.signKeyRevocation(parent, 'key-1', helixSigner);
+    await expect(w.revocations.verifyKeyRevocation(forParent, grandDid, 'key-1')).rejects.toThrow(/did must be/);
+    await expect(w.revocations.verifyKeyRevocation(forParent, parent, 'key-2')).rejects.toThrow(/kid must be/);
+    await expect(w.revocations.verifyKeyRevocation(await w.revocations.signRequest('urn:x', helixSigner), parent, 'key-1')).rejects.toThrow(/typ must be kya-os-key-revocation\+jwt/);
+    await expect(w.revocations.verifyKeyRevocation('nope', parent, 'key-1')).rejects.toMatchObject({ code: ErrorCode.REVOCATION_REQUEST_INVALID });
+    // A repository that cannot list a subject's hops accepts nobody.
+    const blind = new RevocationService({ repo: { findByVcId: w.vcRepo.findByVcId.bind(w.vcRepo), findActiveChildren: w.vcRepo.findActiveChildren.bind(w.vcRepo) }, statusLists: w.statusLists, resolveDid: w.resolve, audience: AUDIENCE, clock: w.now });
+    await expect(blind.verifyKeyRevocation(await blind.signKeyRevocation(grandDid, 'key-1', helixSigner), grandDid, 'key-1')).rejects.toThrow(/issued no delegation/);
+  });
+});

@@ -245,6 +245,9 @@ const custodyService = new CustodyService({
   didCache,
   recheck: custodyRecheckSettings(config),
   credentialDetails: credentialCardDetails(vcService, { actsOnUserConsent: (did) => consentRepository.hasRequestForAgent(did) }),
+  // KYA-OS story C-E: rotations keep both keys for the overlap, then reissue and expire hops bound to the old kid.
+  rotationOverlapSeconds: config.KEY_ROTATION_OVERLAP_SECONDS,
+  hopReissuer: credentialService,
 });
 // Own-hosted subjects waiting for their documents are re-checked in the background.
 const custodyRecheck = new CustodyRecheckScheduler(custodyService, { tickSeconds: config.CUSTODY_RECHECK_TICK_SECONDS });
@@ -422,6 +425,8 @@ await app.register(custodyRoutes, {
   adminApiKey: config.HELIX_ADMIN_API_KEY,
   // A POST /v1/agents body with enrollmentToken is story F-1's token onboarding, unchanged.
   enrollmentOnboarding: enrollmentOnboardingHandler(agentService),
+  // KYA-OS story C-E point 5: an ancestor issuer of an agent's delegations may revoke its compromised key.
+  keyRevocations: revocationService,
 });
 // KYA-OS story L3-H: consent requests, the consent page at authorizationUrl, renewal, withdrawal.
 await app.register(consentRoutes, {
