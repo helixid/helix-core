@@ -53,6 +53,14 @@ export interface VerifyRouteOptions {
   resolveDidKeys?: kyaos.verifier.VerifierSeams['resolveDidKeys'];
   fetchStatusList?: kyaos.verifier.FetchStatusList | undefined;
   resolveCard?: ((did: string) => Promise<unknown>) | undefined;
+  /**
+   * The status cache (story L3-C): lists and verdicts, `statusCacheTtl`,
+   * high-privilege scopes at ≤ 60 s; a cached read is `fresh: false`.
+   * Default one in memory for this process.
+   */
+  statusCache?: kyaos.verifier.StatusCache | undefined;
+  /** Issuer DID to the status-list URLs or `https:` origins bound to it (SPEC.md §6.6 keeper rules 1 and 2). */
+  statusListIssuers?: Record<string, string[]> | undefined;
   /** Milliseconds since the epoch; default `Date.now`. */
   clock?: (() => number) | undefined;
 }
@@ -127,10 +135,27 @@ const verifyRoutes: FastifyPluginAsync<VerifyRouteOptions> = async (fastify, opt
         return doFetch(target);
       },
     });
+  // Every list's proof is verified, by its issuer's assertionMethod key, before any bit is read (story L3-C).
+  const fetchStatusList =
+    options.fetchStatusList ??
+    verifier.createStatusListFetcher({
+      fetch: async (url) => {
+        const target = readableUrl(url, allowLoopbackHttp);
+        if (target === undefined) throw new Error(`refusing to fetch ${url}: only https: URLs are read`);
+        return doFetch(target);
+      },
+      resolveDid,
+    });
+  const statusCache = options.statusCache ?? new verifier.StatusCache({ clock });
   const seams: kyaos.verifier.VerifierSeams = {
     resolveDid,
     resolveDidKeys: options.resolveDidKeys ?? verifier.createDidKeysResolver(resolveDid),
-    fetchStatusList: options.fetchStatusList ?? (async (url): Promise<kyaos.verifier.StatusListRead> => verifier.decodeStatusListCredential(await fetchJson(url))),
+    fetchStatusList,
+    checkRevocation: verifier.createRevocationChecker({
+      fetchStatusList,
+      cache: statusCache,
+      ...(options.statusListIssuers === undefined ? {} : { statusListIssuers: options.statusListIssuers }),
+    }),
     resolveCard:
       options.resolveCard ??
       (async (did): Promise<unknown> => {

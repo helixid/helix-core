@@ -11,23 +11,38 @@
 // limitations under the License.
 
 import { gzipSync, gunzipSync } from 'node:zlib';
-import { VC_CONTEXTS } from '../schemas/vc.js';
+import { signDataIntegrity } from '../credentials/data-integrity.js';
+import type { DataIntegrityProof } from '../credentials/types.js';
+import type { Signer } from '../crypto/signer.js';
 
 export { StatusListCredentialSchema } from './schema.js';
 
+/** W3C VC 2.0 context: a Bitstring Status List v1.0 credential is a VC 2.0 credential. */
+export const STATUS_LIST_CONTEXT = 'https://www.w3.org/ns/credentials/v2';
+
+/**
+ * A W3C Bitstring Status List v1.0 credential (KYA-OS story L3-C point 1):
+ * one per issuer DID, `validFrom`/`validUntil` set so a verifier can compute
+ * freshness, signed by that issuer with a `DataIntegrityProof`
+ * (`eddsa-jcs-2022`).
+ */
 export interface StatusListCredential {
   '@context': string[];
   id: string;
   type: string[];
   issuer: string;
   validFrom: string;
+  validUntil?: string;
   credentialSubject: {
     id: string;
     type: 'BitstringStatusList';
     statusPurpose: 'revocation';
     encodedList: string;
   };
+  proof?: DataIntegrityProof;
 }
+
+export type SignedStatusListCredential = StatusListCredential & { validUntil: string; proof: DataIntegrityProof };
 
 /**
  * Encodes a buffer to a base64url string.
@@ -107,26 +122,78 @@ export function getStatusListLength(encodedList: string): number {
   return buffer.length * 8;
 }
 
+export interface StatusListCredentialInput {
+  /** The URL the list is served at: its `id`, byte for byte what credentials name as `statusListCredential`. */
+  id: string;
+  /** The issuer DID: the one whose credentials the list covers, and its signer. */
+  issuer: string;
+  /** GZIP + base64url bitstring (multibase `u` prefix added when missing). */
+  encodedList: string;
+  validFrom: string;
+  validUntil: string;
+}
+
+/** The encoded list with the multibase base64url `u` prefix Bitstring Status List v1.0 requires. */
+export function multibaseEncodedList(encodedList: string): string {
+  return encodedList.startsWith('u') ? encodedList : `u${encodedList}`;
+}
+
+/** The bare base64url payload of an encoded list, with or without its multibase `u`. */
+export function bareEncodedList(encodedList: string): string {
+  return encodedList.startsWith('u') ? encodedList.slice(1) : encodedList;
+}
+
 /**
- * Builds the W3C Bitstring Status List credential JSON.
+ * The signed W3C Bitstring Status List v1.0 credential of one issuer
+ * (story L3-C point 1): `validFrom` and `validUntil` set, signed by
+ * `signer`, whose DID must be `issuer`.
  */
-export function buildStatusListCredential(
-  listId: string, 
-  encodedList: string, 
-  issuerDid: string, 
-  apiBaseUrl: string
-): StatusListCredential {
+export async function buildStatusListCredential(input: StatusListCredentialInput, signer: Signer): Promise<SignedStatusListCredential> {
+  if (Date.parse(input.validUntil) <= Date.parse(input.validFrom)) {
+    throw new Error('buildStatusListCredential: validUntil must be after validFrom');
+  }
+  const unsigned = unsignedStatusListCredential(input);
+  return (await signDataIntegrity(unsigned as unknown as Record<string, unknown>, signer, { created: input.validFrom })) as unknown as SignedStatusListCredential;
+}
+
+/** The same credential before its proof: what a self-custody issuer signs itself (story L3-C, issuers without a Helix-held key). */
+export function unsignedStatusListCredential(input: StatusListCredentialInput): StatusListCredential & { validUntil: string } {
   return {
-    '@context': [...VC_CONTEXTS],
-    id: `${apiBaseUrl}/v1/status-list/${listId}`,
+    '@context': [STATUS_LIST_CONTEXT],
+    id: input.id,
     type: ['VerifiableCredential', 'BitstringStatusListCredential'],
-    issuer: issuerDid,
-    validFrom: new Date().toISOString(),
+    issuer: input.issuer,
+    validFrom: input.validFrom,
+    validUntil: input.validUntil,
     credentialSubject: {
-      id: `${apiBaseUrl}/v1/status-list/${listId}#list`,
+      id: `${input.id}#list`,
       type: 'BitstringStatusList',
       statusPurpose: 'revocation',
-      encodedList
-    }
+      encodedList: multibaseEncodedList(input.encodedList),
+    },
   };
+}
+
+/** The list id of the platform list legacy credentials and the Helix issuer use. */
+export const DEFAULT_STATUS_LIST_ID = 'helix-status-list-1';
+const ISSUER_LIST_PREFIX = 'iss-';
+
+/**
+ * The list id of an issuer's list: one list per issuer DID. The Helix
+ * issuer keeps the platform list; every other issuer's id carries its DID,
+ * base64url-encoded, so the id alone names whose list it is.
+ */
+export function statusListIdFor(issuerDid: string, helixIssuerDid: string): string {
+  if (issuerDid === helixIssuerDid) return DEFAULT_STATUS_LIST_ID;
+  return `${ISSUER_LIST_PREFIX}${Buffer.from(issuerDid, 'utf8').toString('base64url')}`;
+}
+
+/** The issuer DID a list id names, or undefined for an id that names none. */
+export function issuerOfStatusListId(listId: string, helixIssuerDid: string): string | undefined {
+  if (listId === DEFAULT_STATUS_LIST_ID) return helixIssuerDid;
+  if (!listId.startsWith(ISSUER_LIST_PREFIX)) return undefined;
+  const encoded = listId.slice(ISSUER_LIST_PREFIX.length);
+  if (!/^[A-Za-z0-9_-]+$/.test(encoded)) return undefined;
+  const did = Buffer.from(encoded, 'base64url').toString('utf8');
+  return did.startsWith('did:') && Buffer.from(did, 'utf8').toString('base64url') === encoded ? did : undefined;
 }

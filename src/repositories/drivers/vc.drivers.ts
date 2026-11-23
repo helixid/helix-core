@@ -22,10 +22,12 @@ import {
 import type {
   CreateVcParams,
   ListVcFilters,
+  RevokeVcItem,
   StatusListEntryRecord,
   VcIdentity,
   VCRecord,
 } from '../vc.repository.js';
+import { setBit } from '../../core/status-list/index.js';
 
 type PrismaRaw = PrismaClient & {
   $queryRawUnsafe<T = unknown>(query: string, ...values: unknown[]): Promise<T>;
@@ -64,7 +66,28 @@ export interface VcStorageDriver {
   createStatusList(listId: string, encodedList: string): Promise<StatusListEntryRecord>;
   claimNextIndex(listId: string): Promise<{ list: StatusListEntryRecord; claimedIndex: number }>;
   revokeVc(vcId: string, listId: string, newEncodedList: string): Promise<VCRecord>;
+  /**
+   * Revokes every item at once (KYA-OS story L3-C: a cascade is atomic): each
+   * item's bit is set on its list, read and written under a lock so two
+   * concurrent revocations on one list never lose a bit, and every record is
+   * marked revoked, in one transaction.
+   */
+  revokeVcs(items: readonly RevokeVcItem[]): Promise<VCRecord[]>;
   markAsRenewed(oldVcId: string, newVcId: string): Promise<VCRecord>;
+}
+
+/** The bits to set, by list, in the order the lists first appear. */
+function bitsByList(items: readonly RevokeVcItem[]): Map<string, number[]> {
+  const lists = new Map<string, number[]>();
+  for (const item of items) {
+    if (item.listId === undefined || item.index === undefined) continue;
+    lists.set(item.listId, [...(lists.get(item.listId) ?? []), item.index]);
+  }
+  return lists;
+}
+
+function withBits(encodedList: string, indexes: readonly number[]): string {
+  return indexes.reduce((encoded, index) => setBit(encoded, index, 1), encodedList);
 }
 
 function asRecord(value: unknown): Record<string, unknown> {
@@ -337,6 +360,25 @@ export class PrismaVcStorageDriver implements VcStorageDriver {
     });
   }
 
+  async revokeVcs(items: readonly RevokeVcItem[]): Promise<VCRecord[]> {
+    return this.prisma.$transaction(async (tx) => {
+      const db = tx as unknown as PrismaLike & Partial<PrismaRaw>;
+      for (const [listId, indexes] of bitsByList(items)) {
+        // Row lock: a concurrent revocation on the same list waits, then reads the bits this one wrote.
+        if (typeof db.$queryRawUnsafe === 'function') {
+          await db.$queryRawUnsafe(`SELECT "listId" FROM "status_list_entries" WHERE "listId" = $1 FOR UPDATE`, listId);
+        }
+        const list = await db.statusListEntry.findUnique({ where: { listId } });
+        if (!list) throw new Error(`Status list not found: ${listId}`);
+        await db.statusListEntry.update({ where: { listId }, data: { encodedList: withBits(list.encodedList, indexes) } });
+      }
+      const revokedAt = new Date();
+      const records: VCRecord[] = [];
+      for (const item of items) records.push(await db.vc.update({ where: { vcId: item.vcId }, data: { revokedAt } }));
+      return records;
+    });
+  }
+
   async markAsRenewed(oldVcId: string, newVcId: string): Promise<VCRecord> {
     return this.db.vc.update({
       where: { vcId: oldVcId },
@@ -595,6 +637,32 @@ export class SqliteVcStorageDriver implements VcStorageDriver {
     return updated;
   }
 
+  async revokeVcs(items: readonly RevokeVcItem[]): Promise<VCRecord[]> {
+    const now = new Date();
+    // One synchronous transaction: nothing else runs on this connection between the read and the write.
+    const statements: string[] = ['BEGIN IMMEDIATE'];
+    for (const [listId, indexes] of bitsByList(items)) {
+      const rows = this.sqlite.query<SqliteStatusListRow>(`SELECT * FROM status_list_entries WHERE list_id = ${sqliteLiteral(listId)} LIMIT 1`);
+      const list = fromSqliteStatusListRow(rows[0]);
+      if (!list) throw new Error(`Status list not found: ${listId}`);
+      statements.push(
+        `UPDATE status_list_entries SET encoded_list = ${sqliteLiteral(withBits(list.encodedList, indexes))}, updated_at = ${sqliteLiteral(now)} WHERE list_id = ${sqliteLiteral(listId)}`,
+      );
+    }
+    for (const item of items) {
+      statements.push(`UPDATE vcs SET revoked_at = ${sqliteLiteral(now)}, updated_at = ${sqliteLiteral(now)} WHERE vc_id = ${sqliteLiteral(item.vcId)}`);
+    }
+    statements.push('COMMIT');
+    this.sqlite.execute(`${statements.join(';\n')};`);
+    const records: VCRecord[] = [];
+    for (const item of items) {
+      const record = await this.findByVcId(item.vcId);
+      if (!record) throw new Error(`VC not found: ${item.vcId}`);
+      records.push(record);
+    }
+    return records;
+  }
+
   async markAsRenewed(oldVcId: string, newVcId: string): Promise<VCRecord> {
     this.sqlite.execute(`
       UPDATE vcs
@@ -741,6 +809,22 @@ export class InMemoryVcStorageDriver implements VcStorageDriver {
     const updatedVc: VCRecord = { ...vc, revokedAt: new Date(), updatedAt: new Date() };
     this.vcs.set(vcId, updatedVc);
     return updatedVc;
+  }
+
+  async revokeVcs(items: readonly RevokeVcItem[]): Promise<VCRecord[]> {
+    const lists = bitsByList(items);
+    for (const listId of lists.keys()) if (!this.statusLists.has(listId)) throw new Error(`Status list not found: ${listId}`);
+    for (const item of items) if (!this.vcs.has(item.vcId)) throw new Error(`VC not found: ${item.vcId}`);
+    const now = new Date();
+    for (const [listId, indexes] of lists) {
+      const list = this.statusLists.get(listId)!;
+      this.statusLists.set(listId, { ...list, encodedList: withBits(list.encodedList, indexes), updatedAt: now });
+    }
+    return items.map((item) => {
+      const updated: VCRecord = { ...this.vcs.get(item.vcId)!, revokedAt: now, updatedAt: now };
+      this.vcs.set(item.vcId, updated);
+      return updated;
+    });
   }
 
   async markAsRenewed(oldVcId: string, newVcId: string): Promise<VCRecord> {

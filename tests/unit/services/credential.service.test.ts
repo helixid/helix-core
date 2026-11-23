@@ -291,10 +291,26 @@ describe('CredentialService', () => {
       const { hop } = await service.issueHop(root.id, { invoker: childDid, allowedAction: ['read:orders'] }, 'req');
       const grand = await service.issueHop(hop.id, { invoker: grandchildDid, allowedAction: ['read:orders'] }, 'req');
       const revoked = await service.revokeHop(hop.id, 'req');
-      expect(revoked).toEqual([grand.hop.id, hop.id]);
+      // Parents before children: the hop asked for first, then its cascade.
+      expect(revoked).toEqual([hop.id, grand.hop.id]);
       expect((await vcRepo.findByVcId(root.id))!.revokedAt).toBeNull();
       expect(await service.revokeHop(hop.id, 'req')).toEqual([]);
       await expect(service.revokeHop('urn:zcap:missing', 'req')).rejects.toMatchObject({ code: ErrorCode.VC_NOT_FOUND });
+    });
+
+    it('revokes the whole cascade in one call when the status store can (story L3-C: one transaction)', async () => {
+      const grandchildDid = await custodialAgent();
+      const root = await service.issueRootHop({ issuer: helixDid, invoker: parentDid, invocationTarget: RESOURCE, allowedAction: ['read:orders'] }, 'req');
+      const { hop } = await service.issueHop(root.id, { invoker: childDid, allowedAction: ['read:orders'] }, 'req');
+      const grand = await service.issueHop(hop.id, { invoker: grandchildDid, allowedAction: ['read:orders'] }, 'req');
+      const revokeMany = vi.fn(async (ids: readonly string[]) => ids.map((vcId) => ({ vcId })));
+      (statusStore as unknown as { revokeMany: typeof revokeMany }).revokeMany = revokeMany;
+      statusStore.revokeVC.mockClear();
+
+      expect(await service.revokeHop(hop.id, 'req-many')).toEqual([hop.id, grand.hop.id]);
+      expect(revokeMany).toHaveBeenCalledTimes(1);
+      expect(revokeMany).toHaveBeenCalledWith([hop.id, grand.hop.id], { requestId: 'req-many' });
+      expect(statusStore.revokeVC).not.toHaveBeenCalled();
     });
 
     it('refuses to walk a stored chain deeper than the maximum', async () => {

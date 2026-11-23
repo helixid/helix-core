@@ -23,14 +23,16 @@ import type { Signer } from '../../core/index.js';
 /**
  * Which server-side path asks for the signature, and its request: each
  * signature is audited as a custodial signature (F-3 point 8). Consent grants
- * signed by a custodial service, and delegation hops Helix issues on behalf
- * of a custodial agent or service (`POST /v1/grants`, `/v1/grants/:id/hops`).
- * There is no VP signing (story F-2 removed it). A custodial agent can still
- * sign its own hops and request proofs client side through the /sign route.
+ * signed by a custodial service; delegation hops Helix issues on behalf of a
+ * custodial agent or service (`POST /v1/grants`, `/v1/grants/:id/hops`); and
+ * (story L3-C) the issuer's own status list, which the StatusListPublisher
+ * signs. There is no VP signing (story F-2 removed it). A custodial agent can
+ * still sign its own hops and request proofs client side through the /sign
+ * route.
  */
 export interface CustodialSigningUse {
   requestId: string;
-  purpose: 'grant' | 'hop';
+  purpose: 'grant' | 'hop' | 'status_list';
 }
 
 export interface CustodialKeys {

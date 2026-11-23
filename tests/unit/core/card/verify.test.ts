@@ -3,15 +3,19 @@
 // fails closed, and derives the level; the status-list checker reads one bit through SafeFetch.
 import { describe, expect, it, vi } from 'vitest';
 import {
+  EnvSigner,
+  buildDIDDocument,
   buildEntityCard,
   buildStatusListCredential,
   createStatusList,
+  derivePublicKey,
   createStatusListChecker,
   makeAccountabilityVerifier,
   setBit,
   validateDelegationChain,
   verifyEntityCard,
   type BitstringStatusListEntry,
+  type DIDDocument,
   type DelegationHop,
   type EntityCard,
   type OutboundFetch,
@@ -48,7 +52,13 @@ const leaf = hop({
   subject: { id: 'urn:zcap:del1', invoker: 'did:web:helix.test:acme:sub-agent', parentCapability: 'urn:zcap:root', allowedAction: ['ledger.read'], caveats: [{ type: 'MaxAmount', limit: '500.00', currency: 'USD' }, { type: 'ValidUntil', date: '2026-12-01T00:00:00Z' }] },
 });
 
-const list = (encoded: string): unknown => buildStatusListCredential('cards', encoded, ORG, 'https://helix.test');
+// The org signs its own list (story L3-C): a Bitstring Status List v1.0 credential with its window and proof.
+const ORG_KEY = '5'.repeat(64);
+const orgSigner = new EnvSigner({ did: ORG, envVar: 'K', env: { K: ORG_KEY } });
+const orgDocument: DIDDocument = buildDIDDocument(ORG, derivePublicKey(ORG_KEY));
+const resolveDid = async (did: string): Promise<DIDDocument | null> => (did === ORG ? orgDocument : null);
+const signedList = (encoded: string, window: { validFrom?: string; validUntil?: string } = {}): Promise<unknown> =>
+  buildStatusListCredential({ id: LIST_URL, issuer: ORG, encodedList: encoded, validFrom: window.validFrom ?? '2026-11-20T23:00:00Z', validUntil: window.validUntil ?? '2026-11-21T01:00:00Z' }, orgSigner);
 const clear = createStatusList(64);
 const revoked = setBit(clear, 7, 1);
 const card = (extra: Partial<EntityCard> = {}): EntityCard => buildEntityCard({ id: AGENT, entityType: 'agent', name: 'Ledger', capabilities: ['handshake', 'ledger.read'], ...extra });
@@ -167,24 +177,57 @@ describe('verifyEntityCard', () => {
 
 describe('createStatusListChecker', () => {
   const entry: BitstringStatusListEntry = { statusListCredential: LIST_URL, statusListIndex: '7' };
+  const seams = { resolveDid: resolveDid as never, clock: () => NOW };
 
-  it('reads the bit live through the outbound fetch, fresh, and from a list in hand, not fresh', async () => {
-    expect(await createStatusListChecker({ fetch: serving({ [LIST_URL]: list(clear) }) })(entry, { credentialIssuer: AGENT })).toEqual({ revoked: false, fresh: true });
-    expect(await createStatusListChecker({ fetch: serving({ [LIST_URL]: list(revoked) }) })(entry, { credentialIssuer: AGENT })).toEqual({ revoked: true, fresh: true, code: 'card_revoked', reason: 'the card credential is revoked' });
-    expect(await createStatusListChecker({ lists: { [LIST_URL]: list(clear) } })(entry, { credentialIssuer: AGENT })).toEqual({ revoked: false, fresh: false });
+  it('reads the bit of a signed list live through the outbound fetch, fresh, and from a list in hand, not fresh', async () => {
+    const [clearList, revokedList] = [await signedList(clear), await signedList(revoked)];
+    expect(await createStatusListChecker({ ...seams, fetch: serving({ [LIST_URL]: clearList }) })(entry, { credentialIssuer: AGENT })).toEqual({ revoked: false, fresh: true });
+    expect(await createStatusListChecker({ ...seams, fetch: serving({ [LIST_URL]: revokedList }) })(entry, { credentialIssuer: AGENT })).toEqual({ revoked: true, fresh: true, code: 'card_revoked', reason: 'the card credential is revoked' });
+    expect(await createStatusListChecker({ ...seams, lists: { [LIST_URL]: clearList } })(entry, { credentialIssuer: AGENT })).toEqual({ revoked: false, fresh: false });
+  });
+
+  it('verifies the list before any bit (story L3-C): no resolver, an unsigned, a tampered or a foreign-signed list is unavailable', async () => {
+    const clearList = (await signedList(clear)) as Record<string, unknown> & { credentialSubject: Record<string, unknown> };
+    const read = async (checker: ReturnType<typeof createStatusListChecker>) => checker(entry, { credentialIssuer: AGENT });
+    expect(await read(createStatusListChecker({ clock: () => NOW, lists: { [LIST_URL]: clearList } }))).toMatchObject({ revoked: true, fresh: false, code: 'status_unavailable', reason: 'no resolveDid seam to verify the status list proof' });
+    const unsigned: Record<string, unknown> = { ...clearList };
+    delete unsigned['proof'];
+    expect(await read(createStatusListChecker({ ...seams, lists: { [LIST_URL]: unsigned } }))).toMatchObject({ code: 'status_unavailable', reason: 'status list failed schema validation' });
+    // The revoked bit swapped into a list signed over the clear one.
+    const tampered = { ...clearList, credentialSubject: { ...clearList.credentialSubject, encodedList: `u${revoked}` } };
+    expect(await read(createStatusListChecker({ ...seams, lists: { [LIST_URL]: tampered } }))).toMatchObject({ code: 'status_unavailable', reason: expect.stringMatching(/^status list proof invalid/) });
+    expect(await read(createStatusListChecker({ resolveDid: async () => null, clock: () => NOW, lists: { [LIST_URL]: clearList } }))).toMatchObject({ code: 'status_unavailable', reason: expect.stringMatching(/^status list proof invalid/) });
+  });
+
+  it('a list past its validUntil is read but never fresh; one whose validFrom lies ahead is unavailable', async () => {
+    const stale = await signedList(clear, { validFrom: '2026-11-20T00:00:00Z', validUntil: '2026-11-20T12:00:00Z' });
+    expect(await createStatusListChecker({ ...seams, fetch: serving({ [LIST_URL]: stale }) })(entry, { credentialIssuer: AGENT })).toEqual({ revoked: false, fresh: false });
+    const staleRevoked = await signedList(revoked, { validFrom: '2026-11-20T00:00:00Z', validUntil: '2026-11-20T12:00:00Z' });
+    expect(await createStatusListChecker({ ...seams, fetch: serving({ [LIST_URL]: staleRevoked }) })(entry, { credentialIssuer: AGENT })).toEqual({ revoked: true, fresh: false, code: 'card_revoked', reason: 'the card credential is revoked' });
+    const early = await signedList(clear, { validFrom: '2026-11-21T00:05:00Z', validUntil: '2026-11-21T02:00:00Z' });
+    expect(await createStatusListChecker({ ...seams, fetch: serving({ [LIST_URL]: early }) })(entry, { credentialIssuer: AGENT })).toMatchObject({ code: 'status_unavailable', reason: 'status list is not valid yet' });
+    expect(await createStatusListChecker({ ...seams, clockSkewMs: 600_000, fetch: serving({ [LIST_URL]: early }) })(entry, { credentialIssuer: AGENT })).toEqual({ revoked: false, fresh: true });
+    // Without an injected clock the checker reads the real one.
+    const wide = await signedList(clear, { validFrom: '2020-01-01T00:00:00Z', validUntil: '2100-01-01T00:00:00Z' });
+    expect(await createStatusListChecker({ resolveDid: resolveDid as never, fetch: serving({ [LIST_URL]: wide }) })(entry, { credentialIssuer: AGENT })).toEqual({ revoked: false, fresh: true });
+    // A window that is not a pair of date-times, signed as it stands.
+    const undated = await buildStatusListCredential({ id: LIST_URL, issuer: ORG, encodedList: clear, validFrom: 'soon', validUntil: '2026-11-21T01:00:00Z' }, orgSigner);
+    expect(await createStatusListChecker({ ...seams, lists: { [LIST_URL]: undated } })(entry, { credentialIssuer: AGENT })).toMatchObject({ code: 'status_unavailable', reason: 'status list window is not a pair of date-times' });
   });
 
   it('fails closed as status_unavailable on an unreachable, non-2xx, non-JSON, malformed or unreadable list, a wide entry, a bad index', async () => {
+    const clearList = await signedList(clear);
     const code = async (checker: ReturnType<typeof createStatusListChecker>, candidate = entry): Promise<string | undefined> => (await checker(candidate, { credentialIssuer: AGENT })).code;
-    expect(await code(createStatusListChecker({ fetch: serving({}) }))).toBe('status_unavailable');
-    expect(await code(createStatusListChecker({ fetch: async () => { throw new Error('refused'); } }))).toBe('status_unavailable');
-    expect(await code(createStatusListChecker({ fetch: async () => new Response('<html>', { status: 200 }) }))).toBe('status_unavailable');
-    expect(await code(createStatusListChecker({ lists: { [LIST_URL]: { not: 'a list' } } }))).toBe('status_unavailable');
-    expect(await code(createStatusListChecker({ lists: { [LIST_URL]: { ...(list(clear) as object), credentialSubject: { ...(list(clear) as { credentialSubject: object }).credentialSubject, encodedList: '!!' } } } }))).toBe('status_unavailable');
-    expect(await code(createStatusListChecker({ lists: { [LIST_URL]: list(clear) } }), { ...entry, statusListIndex: '999999' })).toBe('status_unavailable');
-    expect(await code(createStatusListChecker({ lists: { [LIST_URL]: list(clear) } }), { ...entry, statusSize: 2 })).toBe('status_unavailable');
-    expect(await code(createStatusListChecker({ lists: { [LIST_URL]: list(clear) } }), { ...entry, statusListIndex: '7.5' })).toBe('status_unavailable');
-    expect(await code(createStatusListChecker({ lists: { [LIST_URL]: list(clear) } }), { ...entry, statusListIndex: '99999999999999999999' })).toBe('status_unavailable');
-    expect(await code(createStatusListChecker({ lists: { [LIST_URL]: list(clear) } }), { ...entry, statusSize: 1 })).toBeUndefined();
+    expect(await code(createStatusListChecker({ ...seams, fetch: serving({}) }))).toBe('status_unavailable');
+    expect(await code(createStatusListChecker({ ...seams, fetch: async () => { throw new Error('refused'); } }))).toBe('status_unavailable');
+    expect(await code(createStatusListChecker({ ...seams, fetch: async () => new Response('<html>', { status: 200 }) }))).toBe('status_unavailable');
+    expect(await code(createStatusListChecker({ ...seams, lists: { [LIST_URL]: { not: 'a list' } } }))).toBe('status_unavailable');
+    // Signed over bits that do not decode.
+    expect(await code(createStatusListChecker({ ...seams, lists: { [LIST_URL]: await signedList('!!') } }))).toBe('status_unavailable');
+    expect(await code(createStatusListChecker({ ...seams, lists: { [LIST_URL]: clearList } }), { ...entry, statusListIndex: '999999' })).toBe('status_unavailable');
+    expect(await code(createStatusListChecker({ ...seams, lists: { [LIST_URL]: clearList } }), { ...entry, statusSize: 2 })).toBe('status_unavailable');
+    expect(await code(createStatusListChecker({ ...seams, lists: { [LIST_URL]: clearList } }), { ...entry, statusListIndex: '7.5' })).toBe('status_unavailable');
+    expect(await code(createStatusListChecker({ ...seams, lists: { [LIST_URL]: clearList } }), { ...entry, statusListIndex: '99999999999999999999' })).toBe('status_unavailable');
+    expect(await code(createStatusListChecker({ ...seams, lists: { [LIST_URL]: clearList } }), { ...entry, statusSize: 1 })).toBeUndefined();
   });
 });

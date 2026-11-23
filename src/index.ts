@@ -97,6 +97,14 @@ export type {
   UserChallengeVerifyResult,
 } from './services/agent/IAgentService.js';
 export { CredentialService } from './services/credentials/credential.service.js';
+// KYA-OS story L3-C: signed per-issuer status lists, revocation and the revocation signal.
+export { StatusListPublisher, StatusListService, STATUS_LIST_LENGTH } from './services/status-lists/status-list.service.js';
+export type { StatusListPublisherOptions, StatusListRepository, RevocationSignalSink, RevokeContext } from './services/status-lists/status-list.service.js';
+export { RevocationService, REVOCATION_REQUEST_TYP } from './services/revocation/revocation.service.js';
+export type { RevocationOutcome, RevocationRequestClaims, RevocationServiceOptions } from './services/revocation/revocation.service.js';
+export { RevocationSignalPublisher, InProcessSignalBus, RedisSignalBus } from './services/revocation/signal-publisher.js';
+export type { RevocationEvent, SignalBus, RedisPubSubLike, RevocationSignalPublisherOptions } from './services/revocation/signal-publisher.js';
+export { publicDidResolver } from './services/revocation/public-resolver.js';
 export type {
   AgentCredentials,
   CredentialStatus,
@@ -127,6 +135,8 @@ export { default as didWebRoutes } from './routes/did-web/index.js';
 export { default as vcRoutes, type VcRouteOptions } from './routes/vc/index.js';
 export { default as statusListRoutes } from './routes/status-list/index.js';
 export { default as verifyRoutes } from './routes/verify/index.js';
+export { default as revocationRoutes } from './routes/revocations/index.js';
+export { default as eventRoutes } from './routes/events/index.js';
 export type { VerifyRouteOptions } from './routes/verify/index.js';
 export { default as agentRoutes } from './routes/agent/index.js';
 // KYA-OS F-1 credential routes with a host authorize hook (F-3 parity: helix-server-enterprise mounts them account-scoped).

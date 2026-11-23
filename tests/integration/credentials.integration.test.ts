@@ -205,7 +205,8 @@ describe('grants (delegation hops)', () => {
     expect((await app.inject({ method: 'GET', url: '/v1/grants/urn:zcap:missing/chain', headers: admin })).statusCode).toBe(404);
 
     const revoke = await app.inject({ method: 'DELETE', url: `/v1/grants/${encodeURIComponent(rootHop.id)}`, headers: admin });
-    expect(revoke.json().revokedVcIds).toEqual([hop.json().hop.id, rootHop.id]);
+    // Parents before children: the hop asked for first, then its cascade (story L3-C).
+    expect(revoke.json().revokedVcIds).toEqual([rootHop.id, hop.json().hop.id]);
     expect((await app.inject({ method: 'DELETE', url: '/v1/grants/urn:zcap:missing', headers: admin })).statusCode).toBe(404);
   });
 

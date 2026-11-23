@@ -36,6 +36,7 @@ import { fileURLToPath } from 'node:url';
 import {
   buildDidDocument,
   buildEntityCard,
+  EnvSigner,
   buildStatusListCredential,
   createStatusList,
   derivePublicKey,
@@ -53,6 +54,7 @@ import {
   type EntityType,
   type PublicKeyJwk,
   type ServerCardMeta,
+  type SignedStatusListCredential,
 } from '../src/core/index.js';
 
 export interface EntityFixture {
@@ -86,6 +88,8 @@ export interface EntityCardFixtures {
   refusals: { name: string; did?: string; card?: unknown; served?: Record<string, unknown>; reason: string }[];
   build_cases: { name: string; input: Record<string, unknown>; expected: 'card' | 'refused'; card?: EntityCard; absent?: string[] }[];
   status_lists: Record<string, unknown>;
+  /** The clock the revocation cases read `status_lists` with: inside their window. */
+  status_list_now: string;
   revocation_cases: { name: string; card: EntityCard; expected: { ok: boolean; conformanceLevel: string; revoked: boolean; code?: string } }[];
   safe_fetch_refusals: { url: string; reason: string }[];
   public_addresses: string[];
@@ -125,7 +129,7 @@ function entity(kind: EntityFixture['kind'], entityType: EntityType, name: strin
   };
 }
 
-export function buildEntityCardFixtures(): EntityCardFixtures {
+export async function buildEntityCardFixtures(): Promise<EntityCardFixtures> {
   const userDidKey = didKeyFromPublicKey(new Uint8Array(Buffer.from(derivePublicKey(USER_SEED), 'hex')));
   const orgDid = `did:web:${HOST}:${ORG}`;
   const statusListUrl = `https://${HOST}/v1/status-list/cards`;
@@ -176,8 +180,12 @@ export function buildEntityCardFixtures(): EntityCardFixtures {
 
   const clear = createStatusList(64);
   const revoked = setBit(clear, 7, 1);
-  const list = (encoded: string): unknown => ({ ...buildStatusListCredential('cards', encoded, orgDid, `https://${HOST}`), validFrom: '2026-11-21T00:00:00Z' });
-  const status_lists = { clear: list(clear), revoked: list(revoked) };
+  // The org signs its own list (story L3-C): Bitstring Status List v1.0 with its window and an eddsa-jcs-2022 proof.
+  // Read with `status_list_now` (inside the window) and the org's DID document.
+  const orgSigner = new EnvSigner({ did: org.did, kid: 'key-1', envVar: 'K', env: { K: org.private_key_hex } });
+  const list = (encoded: string): Promise<SignedStatusListCredential> =>
+    buildStatusListCredential({ id: `https://${HOST}/v1/status-list/cards`, issuer: orgDid, encodedList: encoded, validFrom: '2026-11-21T00:00:00Z', validUntil: '2026-11-22T00:00:00Z' }, orgSigner);
+  const status_lists = { clear: await list(clear), revoked: await list(revoked) };
   const revocation_cases: EntityCardFixtures['revocation_cases'] = [
     { name: 'no_checker', card: agent.card, expected: { ok: false, conformanceLevel: 'L1', revoked: true, code: 'configuration_error' } },
     { name: 'clear', card: agent.card, expected: { ok: true, conformanceLevel: 'L1', revoked: false } },
@@ -197,6 +205,7 @@ export function buildEntityCardFixtures(): EntityCardFixtures {
     refusals,
     build_cases,
     status_lists,
+    status_list_now: '2026-11-21T12:00:00Z',
     revocation_cases,
     safe_fetch_refusals: [
       { url: 'http://helix.test/acme/card.json', reason: 'scheme_refused' },
@@ -221,7 +230,7 @@ export function serializeEntityCardFixtures(fixtures: EntityCardFixtures): strin
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   const outDir = fileURLToPath(new URL('../fixtures/kya-os-helix/', import.meta.url));
   mkdirSync(outDir, { recursive: true });
-  const fixtures = buildEntityCardFixtures();
+  const fixtures = await buildEntityCardFixtures();
   writeFileSync(`${outDir}entity-card.json`, serializeEntityCardFixtures(fixtures));
   // eslint-disable-next-line no-console
   console.log(`wrote fixtures/kya-os-helix/entity-card.json (${Object.keys(fixtures.entities).length} entities, ${fixtures.refusals.length} refusals)`);

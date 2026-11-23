@@ -31,8 +31,8 @@ const fixture = JSON.parse(checkedIn) as EntityCardFixtures;
 const serving = (map: Record<string, unknown>): OutboundFetch => async (url) => (map[url] === undefined ? new Response('not found', { status: 404 }) : new Response(JSON.stringify(map[url]), { status: 200 }));
 
 describe('fixtures/kya-os-helix/entity-card.json', () => {
-  it('is what the generator produces from current source (regenerate with pnpm generate:entity-card-fixtures)', () => {
-    expect(serializeEntityCardFixtures(buildEntityCardFixtures())).toBe(checkedIn);
+  it('is what the generator produces from current source (regenerate with pnpm generate:entity-card-fixtures)', async () => {
+    expect(serializeEntityCardFixtures(await buildEntityCardFixtures())).toBe(checkedIn);
   });
 
   it('every entity: the document anchors the card, lists did:key and did:hedera, and the card validates and names the key', () => {
@@ -110,7 +110,10 @@ describe('fixtures/kya-os-helix/entity-card.json', () => {
     const lists = fixture.status_lists as { clear: unknown; revoked: unknown };
     const url = fixture.entities.agent.card.revocation!.statusListCredential;
     for (const c of fixture.revocation_cases) {
-      const deps = c.name === 'no_checker' ? {} : { statusListChecker: createStatusListChecker({ fetch: serving({ [url]: c.name === 'revoked' ? lists.revoked : lists.clear }) }) };
+      // Lists are signed by the org (story L3-C): read with its DID document, at a time inside their window.
+      const resolveDid = async (did: string) => (did === fixture.entities.org.did ? (fixture.entities.org.did_document as never) : null);
+      const clock = () => Date.parse(fixture.status_list_now);
+      const deps = c.name === 'no_checker' ? {} : { statusListChecker: createStatusListChecker({ resolveDid, clock, fetch: serving({ [url]: c.name === 'revoked' ? lists.revoked : lists.clear }) }) };
       const accountable = c.card.responsibleParty === undefined ? deps : { ...deps, accountabilityVerifier: async () => true };
       const result = await verifyEntityCard(c.card, accountable);
       expect({ ok: result.ok, conformanceLevel: result.conformanceLevel, revoked: result.revocation?.revoked ?? false, ...(result.revocation?.code ? { code: result.revocation.code } : {}) }, c.name).toEqual(c.expected);

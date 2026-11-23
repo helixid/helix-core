@@ -73,6 +73,12 @@ export const ConfigSchema = z.object({
   STATUS_LIST_CACHE_L1_TTL_SECONDS: z.coerce.number().int().min(1).max(3600).default(60),
   STATUS_LIST_CACHE_L2_TTL_SECONDS: z.coerce.number().int().min(1).max(86400).default(300),
 
+  // Signed per-issuer status lists and revocation signals (KYA-OS story L3-C)
+  STATUS_LIST_TTL_SECONDS: z.coerce.number().int().min(60).max(86400).default(3600),
+  STATUS_LIST_REFRESH_BEFORE_SECONDS: z.coerce.number().int().min(0).max(3600).default(300),
+  /** Comma-separated https endpoints every revocation SET is pushed to (RFC 8935). */
+  REVOCATION_WEBHOOK_URLS: z.string().optional(),
+
   // Audit (KYA-OS A-1). Events are stored in the database; AUDIT_LOG_DESTINATION
   // additionally echoes each canonical event as one JSON line to stdout and/or a file.
   AUDIT_LOG_DESTINATION: z.enum(['stdout', 'file', 'both', 'none']).default('stdout'),

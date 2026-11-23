@@ -229,7 +229,56 @@ paths:
           description: Prepared payload expired
   /v1/status-list/{listId}:
     get:
-      summary: Get StatusList2021 credential
+      summary: Get an issuer's signed status list (W3C Bitstring Status List v1.0, KYA-OS story L3-C)
+      description: >
+        One list per issuer DID, signed by that issuer with a DataIntegrityProof (eddsa-jcs-2022), validFrom and
+        validUntil set. Republished on change and before expiry. Cache-Control no-cache with an ETag. 503 while an
+        issuer that holds its own key has not signed the current bits (verifiers then read its credentials as revoked).
+      parameters:
+        - in: path
+          name: listId
+          required: true
+          schema:
+            type: string
+        - in: header
+          name: If-None-Match
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Signed BitstringStatusListCredential
+        "304":
+          description: Not modified
+        "404":
+          description: No such list
+        "503":
+          description: The list awaits its issuer's signature over its current bits
+    put:
+      summary: Submit a status list its self-custody issuer signed
+      description: Accepted only when it is this list with exactly the stored bits, a current window, and a proof by the issuer's assertionMethod key.
+      parameters:
+        - in: path
+          name: listId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        "200":
+          description: The list, now served
+        "400":
+          description: Not this list as it stands, or the proof does not verify
+        "404":
+          description: No such list
+  /v1/status-list/{listId}/unsigned:
+    get:
+      summary: The list as it stands, unsigned, with a fresh window, for a self-custody issuer to sign
       parameters:
         - in: path
           name: listId
@@ -238,10 +287,147 @@ paths:
             type: string
       responses:
         "200":
-          description: Status list credential
+          description: Unsigned BitstringStatusListCredential
+        "404":
+          description: No such list
+  /v1/status-list/entries:
+    post:
+      summary: An entry on an issuer's own list, for a credential a self-custody issuer signs itself
+      parameters:
+        - in: header
+          name: x-admin-api-key
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [issuer]
+              properties:
+                issuer:
+                  type: string
+      responses:
+        "201":
+          description: BitstringStatusListEntry
+  /v1/revocations:
+    post:
+      summary: Revoke a credential and, cascading, every delegation below it (KYA-OS story L3-C)
+      description: >
+        Either a request the revoker signed (compact JWS, typ kya-os-revocation+jwt, claims iss, credentialId, iat,
+        jti, aud = <API>/v1/revocations), or credentialId and revoker with the admin API key for a revoker whose key
+        Helix holds. Allowed revokers: the direct issuer, any ancestor issuer, the root Responsible Party, and an
+        identity credential's responsibleParty; never the subject. Every affected bit flips on its issuer's list in one
+        transaction, each list is republished, one audit event and one revocation signal (RFC 8417 SET) per credential.
+      parameters:
+        - in: header
+          name: x-admin-api-key
+          required: false
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                request:
+                  type: string
+                credentialId:
+                  type: string
+                revoker:
+                  type: string
+      responses:
+        "200":
+          description: "{ credentialId, revoker, revoked: [target, ...descendants] }"
+        "400":
+          description: Malformed request
+        "401":
+          description: The request's signature does not verify under the revoker's key
+        "403":
+          description: Not an allowed revoker (the subject never is), or no admin API key for the custodial form
+        "404":
+          description: No such credential
+        "409":
+          description: Already revoked
+  /v1/events/revocations:
+    get:
+      summary: Revocation signals as Server-Sent Events (one RFC 8417 SET per revoked credential)
+      description: Each event is `event revocation`, id the SET's jti, data the SET. Last-Event-ID replays missed events.
+      parameters:
+        - in: header
+          name: Last-Event-ID
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: text/event-stream
+  /v1/events/revocations/webhooks:
+    get:
+      summary: List the endpoints that receive every SET by push (RFC 8935)
+      parameters:
+        - in: header
+          name: x-admin-api-key
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: "{ webhooks }"
+    post:
+      summary: Register a push endpoint (https)
+      parameters:
+        - in: header
+          name: x-admin-api-key
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [url]
+              properties:
+                url:
+                  type: string
+      responses:
+        "201":
+          description: "{ webhooks }"
+        "400":
+          description: Not an https URL
+    delete:
+      summary: Remove a push endpoint
+      parameters:
+        - in: header
+          name: x-admin-api-key
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [url]
+              properties:
+                url:
+                  type: string
+      responses:
+        "200":
+          description: "{ webhooks }"
+        "404":
+          description: No such endpoint
   /v1/status-list:
     post:
-      summary: Create or replace the default StatusList2021 credential
+      summary: Create a status list (default the Helix issuer's) and return it signed
       parameters:
         - in: header
           name: x-admin-api-key

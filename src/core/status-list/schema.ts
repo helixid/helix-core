@@ -13,9 +13,10 @@
 import { z } from 'zod';
 
 /**
- * Runtime schema for a fetched StatusListCredential. One shared format for
- * helix-api-hosted and SP-hosted lists — one validation path, no
- * special-casing by host.
+ * Runtime schema for a status-list credential Helix serves or accepts: W3C
+ * Bitstring Status List v1.0 with its window and its issuer's
+ * `DataIntegrityProof` (KYA-OS story L3-C). One format for every issuer's
+ * list; the proof itself is checked by `verifyDataIntegrity`.
  */
 export const StatusListCredentialSchema = z.object({
   '@context': z.array(z.string()).min(1),
@@ -23,10 +24,19 @@ export const StatusListCredentialSchema = z.object({
   type: z.array(z.string()),
   issuer: z.string(),
   validFrom: z.string(),
+  validUntil: z.string(),
   credentialSubject: z.object({
     id: z.string(),
     type: z.literal('BitstringStatusList'),
     statusPurpose: z.literal('revocation'),
     encodedList: z.string(),
+  }),
+  proof: z.object({
+    type: z.literal('DataIntegrityProof'),
+    cryptosuite: z.literal('eddsa-jcs-2022'),
+    created: z.string().optional(),
+    verificationMethod: z.string(),
+    proofPurpose: z.literal('assertionMethod'),
+    proofValue: z.string(),
   }),
 });

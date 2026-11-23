@@ -16,19 +16,31 @@
  * (`net/outbound.ts`), must have the shape Helix's own lists have, and the
  * one bit at `statusListIndex` decides. Everything that cannot be shown
  * not-revoked reads as revoked and not fresh: an unreachable or malformed
- * list, an entry wider than one bit, an index out of range. Signature and
- * window checks of the list itself are story L3-C's.
+ * list, an entry wider than one bit, an index out of range.
+ *
+ * The list itself (story L3-C point 2): its issuer's `DataIntegrityProof`
+ * (`eddsa-jcs-2022`) is verified through the `resolveDid` seam before any
+ * bit is read, and without that seam nothing is read (fail closed). A list
+ * whose `validFrom` lies ahead (beyond the clock skew) is refused; one past
+ * its `validUntil` is still read, but never as fresh.
  */
 
-import { getBit } from '../status-list/index.js';
+import { bareEncodedList, getBit } from '../status-list/index.js';
 import { StatusListCredentialSchema } from '../status-list/schema.js';
 import { getOutboundFetch, type OutboundFetch } from '../net/outbound.js';
+import { verifyDataIntegrity, type DidResolver } from '../credentials/data-integrity.js';
 import type { RevocationVerdict, StatusListChecker } from './verify.js';
 
 export interface StatusListCheckerOptions {
   fetch?: OutboundFetch | undefined;
   /** Lists already in hand (tests, a cached copy): read without a fetch and reported not fresh. */
   lists?: Record<string, unknown> | undefined;
+  /** Resolves the list issuer's DID for its proof (story L3-C). Without it every list reads as unavailable. */
+  resolveDid?: DidResolver | undefined;
+  /** Milliseconds since the epoch; default `Date.now`. */
+  clock?: (() => number) | undefined;
+  /** Tolerance for a `validFrom` ahead of the clock; default 120 s. */
+  clockSkewMs?: number | undefined;
 }
 
 export function createStatusListChecker(options: StatusListCheckerOptions = {}): StatusListChecker {
@@ -57,9 +69,19 @@ export function createStatusListChecker(options: StatusListCheckerOptions = {}):
     }
     const parsed = StatusListCredentialSchema.safeParse(raw);
     if (!parsed.success) return unavailable('status list failed schema validation');
+    if (options.resolveDid === undefined) return unavailable('no resolveDid seam to verify the status list proof');
+    const proof = await verifyDataIntegrity(raw as Record<string, unknown>, options.resolveDid);
+    if (!proof.ok) return unavailable(`status list proof invalid: ${proof.reason}`);
+    const now = (options.clock ?? Date.now)();
+    const validFrom = Date.parse(parsed.data.validFrom);
+    const validUntil = Date.parse(parsed.data.validUntil);
+    if (Number.isNaN(validFrom) || Number.isNaN(validUntil)) return unavailable('status list window is not a pair of date-times');
+    if (validFrom > now + (options.clockSkewMs ?? 120_000)) return unavailable('status list is not valid yet');
+    // Past its window the list is still read, but only as a stale copy.
+    if (validUntil <= now) fresh = false;
     let bit: 0 | 1;
     try {
-      bit = getBit(parsed.data.credentialSubject.encodedList, index);
+      bit = getBit(bareEncodedList(parsed.data.credentialSubject.encodedList), index);
     } catch {
       return unavailable('status list entry could not be read');
     }
