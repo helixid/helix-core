@@ -67,6 +67,7 @@ import { ConsentRepository } from './repositories/consent.repository.js';
 import { UserKeyService } from './services/consent/user-key.service.js';
 import { ConsentService } from './services/consent/consent.service.js';
 import { consentAgentScopes, consentServiceDirectory } from './services/consent/directory.js';
+import { actsOnUserConsent } from './services/consent/acts-on-user-consent.js';
 import consentRoutes from './routes/consent/index.js';
 
 const config = loadConfigFromEnv();
@@ -244,7 +245,7 @@ const custodyService = new CustodyService({
   host: config.DID_DOMAIN,
   didCache,
   recheck: custodyRecheckSettings(config),
-  credentialDetails: credentialCardDetails(vcService, { actsOnUserConsent: (did) => consentRepository.hasRequestForAgent(did) }),
+  credentialDetails: credentialCardDetails(vcService, { actsOnUserConsent: (did) => agentActsOnUserConsent(did) }),
   // KYA-OS story C-E: rotations keep both keys for the overlap, then reissue and expire hops bound to the old kid.
   rotationOverlapSeconds: config.KEY_ROTATION_OVERLAP_SECONDS,
   hopReissuer: credentialService,
@@ -279,7 +280,9 @@ const consentService = new ConsentService({
   maxWindowSeconds: config.CONSENT_MAX_WINDOW_SECONDS,
 });
 // Cards of agents acting on user consent leave responsibleParty out (L3-H): each chain's root is its own.
-const consentCardDetails = credentialCardDetails(vcService, { actsOnUserConsent: (did) => consentRepository.hasRequestForAgent(did) });
+// That covers an agent given a hop under a user's consent by another agent, too.
+const agentActsOnUserConsent = actsOnUserConsent({ consents: consentRepository, credentials: credentialService });
+const consentCardDetails = credentialCardDetails(vcService, { actsOnUserConsent: agentActsOnUserConsent });
 
 const app = Fastify({
   logger: {

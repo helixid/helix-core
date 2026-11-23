@@ -527,6 +527,23 @@ export class CredentialService implements HopReissuer {
   }
 
   /** The chain a stored hop sits on, root to leaf, by following `parentVcId`. */
+  /**
+   * The root issuer of every chain that delegates to `agentDid`: for each hop
+   * Helix holds whose invoker is the agent, the issuer of the chain's root.
+   * Story L3-H follow-up: an agent given a hop under a user's consent acts on
+   * user consent, whoever forwarded it.
+   */
+  async rootIssuersOfHopsTo(agentDid: string): Promise<string[]> {
+    const roots = new Set<string>();
+    for (const record of await this.vcRepo.findMany({ subjectDid: agentDid })) {
+      if (record.vcType !== DELEGATION_CREDENTIAL_TYPE) continue;
+      let current: VCRecord | null = record;
+      for (let depth = 0; current?.parentVcId && depth < 10; depth += 1) current = await this.vcRepo.findByVcId(current.parentVcId);
+      if (current?.issuerDid && !current.parentVcId) roots.add(current.issuerDid);
+    }
+    return [...roots];
+  }
+
   async chainOf(hopId: string): Promise<SignedDelegationHop[]> {
     const chain: SignedDelegationHop[] = [];
     let current = await this.vcRepo.findByVcId(hopId);

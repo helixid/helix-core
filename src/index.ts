@@ -195,6 +195,8 @@ export {
 } from './services/consent/signed-request.js';
 export type { JtiStore, SignedRequestClaims, SignedRequestOptions } from './services/consent/signed-request.js';
 export { consentServiceDirectory, consentAgentScopes } from './services/consent/directory.js';
+export { actsOnUserConsent } from './services/consent/acts-on-user-consent.js';
+export type { ActsOnUserConsentDeps } from './services/consent/acts-on-user-consent.js';
 export type { ServiceDirectorySources } from './services/consent/directory.js';
 export { ConsentRepository, CONSENT_REQUEST_STATUSES } from './repositories/consent.repository.js';
 export type {
