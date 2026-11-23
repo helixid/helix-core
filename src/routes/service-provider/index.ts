@@ -4,8 +4,9 @@
 // You may obtain a copy of the License at
 //    http://www.apache.org/licenses/LICENSE-2.0
 //
-// Service Providers: enrollment and consent grants, both signed with the
-// service's custody-held key. Who may call is the one thing that differs
+// Service Providers: enrollment. (Consent grants a service signed for its
+// user are retired: since KYA-OS story L3-H the user's own did:key signs the
+// root hop at consent, routes/consent/.) Who may call is the one thing that differs
 // between a self-hosted instance (admin key) and a hosted one (the account
 // that owns the service), so it is injected as `authorize` rather than
 // decided here.
@@ -14,16 +15,9 @@ import type { FastifyPluginAsync, FastifyRequest } from 'fastify';
 import { AdminAuthRequiredError, ValidationError, findPrivateKeyMaterial, type CustodyDefaults } from '../../core/index.js';
 import type { CustodyService } from '../../services/custody/custody.service.js';
 import { mapAgentError } from '../../services/agent/agent.service.js';
-import type {
-  EnrollServiceInput,
-  IServiceProviderService,
-  IssueDelegationGrantInput,
-} from '../../services/service-provider/service-provider.service.js';
+import type { EnrollServiceInput, IServiceProviderService } from '../../services/service-provider/service-provider.service.js';
 
-export type ServiceProviderAction =
-  | { action: 'enroll' }
-  | { action: 'grant'; serviceDid: string; agentDid: string }
-  | { action: 'agentScopes'; serviceDid: string; agentDid: string };
+export type ServiceProviderAction = { action: 'enroll' };
 
 export interface ServiceProviderRouteOptions {
   serviceProviderService: IServiceProviderService;
@@ -81,42 +75,6 @@ const serviceProviderRoutes: FastifyPluginAsync<ServiceProviderRouteOptions> = a
         request.id,
       );
       return reply.code(201).send(result);
-    } catch (error) {
-      const mapped = mapAgentError(error);
-      return reply
-        .code(mapped.statusCode)
-        .send({ error: { code: mapped.code, message: mapped.message, requestId: request.id } });
-    }
-  });
-
-  // POST /v1/service-delegation-grants — a user, through a service, grants
-  // an agent scoped authority. The service signs; the user is recorded as
-  // `credentialSubject.userDid`.
-  fastify.post('/service-delegation-grants', async (request, reply) => {
-    try {
-      const body = (request.body ?? {}) as IssueDelegationGrantInput;
-      await authorize(request, { action: 'grant', serviceDid: body.serviceDid, agentDid: body.agentDid });
-      const result = await options.serviceProviderService.issueDelegationGrant(body, request.id);
-      return reply.code(201).send(result);
-    } catch (error) {
-      const mapped = mapAgentError(error);
-      return reply
-        .code(mapped.statusCode)
-        .send({ error: { code: mapped.code, message: mapped.message, requestId: request.id } });
-    }
-  });
-
-  // GET /v1/service-delegation-grants/agent-scopes?serviceDid=&agentDid= —
-  // the scopes a consent to this agent may grant, for the service's consent
-  // screen. Same caller as grant issuance, which enforces the same bound.
-  fastify.get('/service-delegation-grants/agent-scopes', async (request, reply) => {
-    try {
-      const query = (request.query ?? {}) as { serviceDid?: string; agentDid?: string };
-      const serviceDid = query.serviceDid ?? '';
-      const agentDid = query.agentDid ?? '';
-      await authorize(request, { action: 'agentScopes', serviceDid, agentDid });
-      const result = await options.serviceProviderService.getAgentScopes(agentDid);
-      return reply.code(200).send(result);
     } catch (error) {
       const mapped = mapAgentError(error);
       return reply

@@ -63,6 +63,11 @@ import { DbKeyStore, resolveKeyEncryptionKey } from './services/custody/db-key-s
 import { CustodyService } from './services/custody/custody.service.js';
 import { CustodyRecheckScheduler, custodyRecheckSettings } from './services/custody/custody-recheck.js';
 import custodyRoutes from './routes/custody/index.js';
+import { ConsentRepository } from './repositories/consent.repository.js';
+import { UserKeyService } from './services/consent/user-key.service.js';
+import { ConsentService } from './services/consent/consent.service.js';
+import { consentAgentScopes, consentServiceDirectory } from './services/consent/directory.js';
+import consentRoutes from './routes/consent/index.js';
 
 const config = loadConfigFromEnv();
 const storageAdapter =
@@ -158,6 +163,9 @@ const statusListPublisher: StatusListPublisher = new StatusListPublisher({
   apiBaseUrl: config.API_BASE_URL,
   // The Helix issuer, or a key Helix holds (KeyStore, rule 8); undefined for a self-custody issuer, who signs its own list.
   signerFor: async (did): Promise<Signer | undefined> => {
+    // KYA-OS story L3-H: a user's did:key signs its own list through the KeyStore while its key lives.
+    const userKeySigner = await userKeyService.statusListSignerFor(did);
+    if (userKeySigner !== undefined) return userKeySigner;
     try {
       return await credentialService.signerFor(did);
     } catch {
@@ -236,7 +244,7 @@ const custodyService = new CustodyService({
   host: config.DID_DOMAIN,
   didCache,
   recheck: custodyRecheckSettings(config),
-  credentialDetails: credentialCardDetails(vcService),
+  credentialDetails: credentialCardDetails(vcService, { actsOnUserConsent: (did) => consentRepository.hasRequestForAgent(did) }),
 });
 // Own-hosted subjects waiting for their documents are re-checked in the background.
 const custodyRecheck = new CustodyRecheckScheduler(custodyService, { tickSeconds: config.CUSTODY_RECHECK_TICK_SECONDS });
@@ -249,6 +257,26 @@ serviceProviderService.attachCustodialKeys(custodyService);
 credentialService.attachCustodialKeys(custodyService);
 // KYA-OS story L3-C: a custodial issuer's own status list is signed through its KeyStore key too.
 statusListPublisher.attachCustodialKeys(custodyService);
+
+// KYA-OS story L3-H: the root of a consent chain is signed by the user's pairwise did:key
+// (KeyStore, subjectType consent), only on the user's click on the consent page.
+const consentRepository = new ConsentRepository(prisma, sqlite);
+const userKeyService: UserKeyService = new UserKeyService({ repo: consentRepository, keyStore, audit: auditTrail });
+const consentService = new ConsentService({
+  repo: consentRepository,
+  userKeys: userKeyService,
+  credentials: credentialService,
+  revocations: revocationService,
+  resolveDid: resolvePublicDid,
+  apiBaseUrl: config.API_BASE_URL,
+  serviceOf: consentServiceDirectory({ services: serviceRepository, custody: custodyService }),
+  agentScopesOf: consentAgentScopes(serviceProviderService),
+  audit: auditTrail,
+  requestTtlSeconds: config.CONSENT_REQUEST_TTL_SECONDS,
+  maxWindowSeconds: config.CONSENT_MAX_WINDOW_SECONDS,
+});
+// Cards of agents acting on user consent leave responsibleParty out (L3-H): each chain's root is its own.
+const consentCardDetails = credentialCardDetails(vcService, { actsOnUserConsent: (did) => consentRepository.hasRequestForAgent(did) });
 
 const app = Fastify({
   logger: {
@@ -395,12 +423,20 @@ await app.register(custodyRoutes, {
   // A POST /v1/agents body with enrollmentToken is story F-1's token onboarding, unchanged.
   enrollmentOnboarding: enrollmentOnboardingHandler(agentService),
 });
+// KYA-OS story L3-H: consent requests, the consent page at authorizationUrl, renewal, withdrawal.
+await app.register(consentRoutes, {
+  consent: consentService,
+  userKeys: userKeyService,
+  adminApiKey: config.HELIX_ADMIN_API_KEY,
+  secureCookie: config.API_BASE_URL.startsWith('https:'),
+});
 // KYA-OS story C-A: /{path}/did.json, /{path}/card.json and /.well-known/kya-os-card.json; after the static routes, so the wildcard never shadows them.
-await app.register(entityCardRoutes, { source: createEntityCardSource({ host: config.DID_DOMAIN, didRepository, services: serviceRepository, details: (did) => custodyService.cardDetails(did), credentials: credentialCardDetails(vcService) }) });
+await app.register(entityCardRoutes, { source: createEntityCardSource({ host: config.DID_DOMAIN, didRepository, services: serviceRepository, details: (did) => custodyService.cardDetails(did), credentials: consentCardDetails }) });
 
 const shutdown = async (): Promise<void> => {
   app.log.info('Helix ID API shutting down...');
   await custodyRecheck.stop();
+  userKeyService.stopShredding();
   await app.close();
   statusListPublisher.stopRefresh();
   await revocationSignals.close();
@@ -417,6 +453,7 @@ const start = async (): Promise<void> => {
   try {
     await app.listen({ port: config.PORT, host: '0.0.0.0' });
     if (config.CUSTODY_RECHECK_ENABLED) custodyRecheck.start();
+    if (config.USER_KEY_SHRED_INTERVAL_SECONDS > 0) userKeyService.startShredding(config.USER_KEY_SHRED_INTERVAL_SECONDS * 1000);
   } catch (err) {
     app.log.error(err);
     process.exit(1);
