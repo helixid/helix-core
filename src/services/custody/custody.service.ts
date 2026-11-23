@@ -246,6 +246,14 @@ export interface CustodyContext {
   actor: CustodyActor;
   /** The account preference, when the caller belongs to an account that has one. */
   defaults?: CustodyDefaults | undefined;
+  /**
+   * The caller's own DID when it acts for an account (F-3 follow-up, Harish
+   * 2026-11-23): an agent it creates names it as owner, so the identity
+   * credential's and the card's `responsibleParty` is the account, and the
+   * account roots the agent's delegation chains (`responsibleParty ===
+   * issuer(root)`). An `ownerDid` in the request must be this DID.
+   */
+  owner?: string | undefined;
 }
 
 interface ChoiceInput {
@@ -459,6 +467,10 @@ export class CustodyService implements CustodialKeys {
     if (input.ownerDid !== undefined && (typeof input.ownerDid !== 'string' || !input.ownerDid.startsWith('did:'))) {
       throw new ValidationError('ownerDid must be a DID');
     }
+    if (context.owner !== undefined && input.ownerDid !== undefined && input.ownerDid !== context.owner) {
+      throw new ValidationError("ownerDid must be your account's DID: an agent answers to the account that creates it");
+    }
+    const ownerDid = context.owner ?? (input.ownerDid as string | undefined);
     if (input.expiry !== undefined && !(Number.isInteger(input.expiry) && input.expiry > 0)) {
       throw new ValidationError('expiry must be a positive whole number of days');
     }
@@ -474,7 +486,7 @@ export class CustodyService implements CustodialKeys {
       status: 'pending_key',
       kid: null,
       name,
-      ownerDid: input.ownerDid ?? null,
+      ownerDid: ownerDid ?? null,
       scopes,
       requestedDomains,
       maxDelegationDepth,
