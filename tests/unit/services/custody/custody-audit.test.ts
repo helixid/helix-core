@@ -130,4 +130,33 @@ describe('CustodyAudit on the typed trail (F-3 point 8, A-1)', () => {
     expect(error).toHaveBeenCalledWith('AUDIT_RECORD_FAILED', 'bad input');
     error.mockRestore();
   });
+
+  it('hands each committed digest to the facts sink with the exact facts it commits (F-4 point 6)', async () => {
+    const kept: Array<[string, Record<string, unknown>]> = [];
+    const trail = new TestAuditTrail();
+    const audit = new CustodyAudit(trail, (digest, facts) => void kept.push([digest, { ...facts }]));
+    audit.chosen({ ...base, keyCustody: 'self', didHosting: 'helix', source: { keyCustody: 'account', didHosting: 'account' } });
+    audit.changed({ ...base, from: 'self', to: 'helix', oldKid: KID, newKid: `${DID}#key-2`, retiresAt: '2026-11-24T00:00:00.000Z', hopReissue: { status: 'pending', note: 'later' } as never });
+    audit.signature({ ...base, kid: KID, payload: new Uint8Array([1]) });
+    await trail.flush();
+    expect(kept).toHaveLength(2);
+    const digests = trail.events.map((event) => (event.details as { configurationDigest?: string }).configurationDigest).filter(Boolean);
+    expect(kept.map(([digest]) => digest)).toEqual(digests);
+    for (const [digest, facts] of kept) expect(jsonDigest(facts)).toBe(digest);
+    expect(kept[0]![1]).toEqual({ did: DID, actor: 'account:acc_1', subjectType: 'agent', keyCustody: 'self', didHosting: 'helix', source: { keyCustody: 'account', didHosting: 'account' } });
+    expect(kept[1]![1]).toMatchObject({ did: DID, actor: 'account:acc_1', from: 'self', to: 'helix', oldKid: KID, newKid: `${DID}#key-2` });
+  });
+
+  it('still records when the facts sink fails, synchronously or not', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const trail = new TestAuditTrail();
+    new CustodyAudit(trail, () => Promise.reject(new Error('facts down'))).keyShredded({ ...base, kid: KID });
+    new CustodyAudit(trail, () => { throw new Error('facts bad'); }).keyRevoked({ ...base, kid: KID, location: 'self' });
+    await trail.flush();
+    await new Promise((resolve) => setImmediate(resolve));
+    expect(trail.events.map((event) => event.action.name)).toEqual(['key_shredded', 'key_revoked']);
+    expect(error).toHaveBeenCalledWith('AUDIT_RECORD_FAILED', 'facts down');
+    expect(error).toHaveBeenCalledWith('AUDIT_RECORD_FAILED', 'facts bad');
+    error.mockRestore();
+  });
 });
