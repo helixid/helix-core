@@ -5,10 +5,10 @@
 //    http://www.apache.org/licenses/LICENSE-2.0
 
 import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from 'fastify';
-import { AdminAuthRequiredError, ErrorCode, HelixError, type Caveat } from '../../core/index.js';
 import type { IAgentService } from '../../services/agent/IAgentService.js';
 import { mapAgentError } from '../../services/agent/agent.service.js';
 import type { CredentialService } from '../../services/credentials/credential.service.js';
+import credentialRoutes from '../credentials/index.js';
 
 export interface AgentRouteOptions {
   agentService: IAgentService;
@@ -26,6 +26,12 @@ export interface AgentRouteOptions {
    * `enrollmentToken` to `enrollmentOnboardingHandler`, unchanged.
    */
   createAgentRoute?: boolean | undefined;
+  /**
+   * Whether this plugin registers the F-1 credential routes (`credentialRoutes`:
+   * /agents/:did/credentials, attestations, /grants) behind the admin key.
+   * False when the host registers them itself with its own `authorize`.
+   */
+  credentialRoutes?: boolean | undefined;
 }
 
 function sendError(request: FastifyRequest, reply: FastifyReply, error: unknown): FastifyReply {
@@ -33,21 +39,6 @@ function sendError(request: FastifyRequest, reply: FastifyReply, error: unknown)
   return reply
     .code(mapped.statusCode)
     .send({ error: { code: mapped.code, message: mapped.message, requestId: request.id } });
-}
-
-function requireStringArray(value: unknown, name: string): string[] {
-  if (!Array.isArray(value) || value.some((item) => typeof item !== 'string' || item === '')) {
-    throw new HelixError(ErrorCode.VALIDATION_ERROR, `${name} must be an array of non-empty strings`, 400);
-  }
-  return value as string[];
-}
-
-function optionalCaveats(value: unknown): Caveat[] | undefined {
-  if (value === undefined) return undefined;
-  if (!Array.isArray(value) || value.some((item) => typeof item !== 'object' || item === null || typeof item.type !== 'string')) {
-    throw new HelixError(ErrorCode.VALIDATION_ERROR, 'caveats must be an array of objects with a type', 400);
-  }
-  return value as Caveat[];
 }
 
 /**
@@ -82,14 +73,6 @@ export function enrollmentOnboardingHandler(
 }
 
 const agentRoutes: FastifyPluginAsync<AgentRouteOptions> = async (fastify, options) => {
-  function requireAdmin(request: { headers: Record<string, string | string[] | undefined> }): void {
-    const submitted = request.headers['x-admin-api-key'];
-    const submittedKey = Array.isArray(submitted) ? submitted[0] : submitted;
-    if (!options.adminApiKey || submittedKey !== options.adminApiKey) {
-      throw new AdminAuthRequiredError();
-    }
-  }
-
   fastify.post('/enrollment-tokens', async (request, reply) => {
     try {
       const body = request.body as {
@@ -162,17 +145,6 @@ const agentRoutes: FastifyPluginAsync<AgentRouteOptions> = async (fastify, optio
   });
 
 
-  // ── KYA-OS story F-1: the credential split ────────────────────────────────
-  // Identity, capability attestations and delegation hops are three
-  // credentials; changing one never reissues or revokes another. Every
-  // route below is admin-gated for the same reason POST /agents/:did/vp is.
-
-  function credentials(): CredentialService {
-    if (!options.credentialService) {
-      throw new HelixError(ErrorCode.VALIDATION_ERROR, 'Credential issuance is not configured on this server', 503);
-    }
-    return options.credentialService;
-  }
 
   // POST /agents - see enrollmentOnboardingHandler. Not registered here when
   // the custody routes own the path (createAgentRoute: false).
@@ -180,141 +152,12 @@ const agentRoutes: FastifyPluginAsync<AgentRouteOptions> = async (fastify, optio
     fastify.post('/agents', enrollmentOnboardingHandler(options.agentService));
   }
 
-  // GET /agents/:did/credentials - the Helix copy of everything issued to the agent.
-  fastify.get('/agents/:did/credentials', async (request, reply) => {
-    try {
-      requireAdmin(request);
-      const params = request.params as { did: string };
-      return reply.code(200).send(await credentials().listAgentCredentials(params.did));
-    } catch (error) {
-      return sendError(request, reply, error);
-    }
-  });
-
-  // POST /agents/:did/attestations - issue one attestation. Body is either
-  // `{ capability }` (Helix issuer signs) or `{ attestation }` (an owner
-  // signed it through the SDK; verified, then kept).
-  fastify.post('/agents/:did/attestations', async (request, reply) => {
-    try {
-      requireAdmin(request);
-      const params = request.params as { did: string };
-      const body = (request.body ?? {}) as { capability?: unknown; attestation?: unknown; validUntil?: unknown };
-      if (body.attestation !== undefined) {
-        const attestation = await credentials().registerAttestation(params.did, body.attestation, request.id);
-        return reply.code(201).send({ attestation });
-      }
-      if (typeof body.capability !== 'string' || body.capability === '') {
-        throw new HelixError(ErrorCode.VALIDATION_ERROR, 'capability or attestation is required', 400);
-      }
-      const validUntil = typeof body.validUntil === 'string' ? new Date(body.validUntil) : undefined;
-      if (validUntil !== undefined && Number.isNaN(validUntil.getTime())) {
-        throw new HelixError(ErrorCode.VALIDATION_ERROR, 'validUntil must be a date-time', 400);
-      }
-      const [attestation] = await credentials().issueAttestations(
-        { agentDid: params.did, capabilities: [body.capability], ...(validUntil ? { validUntil } : {}) },
-        request.id,
-      );
-      return reply.code(201).send({ attestation });
-    } catch (error) {
-      return sendError(request, reply, error);
-    }
-  });
-
-  // DELETE /agents/:did/attestations/:capability - revoke that one scope through the status list.
-  fastify.delete('/agents/:did/attestations/:capability', async (request, reply) => {
-    try {
-      requireAdmin(request);
-      const params = request.params as { did: string; capability: string };
-      const revokedVcIds = await credentials().revokeAttestation(params.did, decodeURIComponent(params.capability), request.id);
-      return reply.code(200).send({ agentDid: params.did, capability: decodeURIComponent(params.capability), revokedVcIds });
-    } catch (error) {
-      return sendError(request, reply, error);
-    }
-  });
-
-  // POST /grants - a root delegation hop: parentCapability is the resource
-  // itself. Signed by `issuer` (the Helix issuer, or a DID whose key Helix
-  // holds in custody); the user-signed root of story L3-H takes this place
-  // at consent.
-  fastify.post('/grants', async (request, reply) => {
-    try {
-      requireAdmin(request);
-      const body = (request.body ?? {}) as Record<string, unknown>;
-      for (const name of ['issuer', 'invoker', 'invocationTarget'] as const) {
-        if (typeof body[name] !== 'string' || body[name] === '') {
-          throw new HelixError(ErrorCode.VALIDATION_ERROR, `${name} is required`, 400);
-        }
-      }
-      const hop = await credentials().issueRootHop(
-        {
-          issuer: body['issuer'] as string,
-          invoker: body['invoker'] as string,
-          invocationTarget: body['invocationTarget'] as string,
-          allowedAction: requireStringArray(body['allowedAction'], 'allowedAction'),
-          ...(optionalCaveats(body['caveats']) === undefined ? {} : { caveats: optionalCaveats(body['caveats'])! }),
-          ...(typeof body['validUntil'] === 'string' ? { validUntil: body['validUntil'] } : {}),
-        },
-        request.id,
-      );
-      return reply.code(201).send({ hop });
-    } catch (error) {
-      return sendError(request, reply, error);
-    }
-  });
-
-  // POST /grants/:id/hops - re-delegate under the stored hop :id to another
-  // DID; signed by the parent's invoker, refused when it would broaden.
-  fastify.post('/grants/:id/hops', async (request, reply) => {
-    try {
-      requireAdmin(request);
-      const params = request.params as { id: string };
-      const body = (request.body ?? {}) as Record<string, unknown>;
-      if (typeof body['invoker'] !== 'string' || body['invoker'] === '') {
-        throw new HelixError(ErrorCode.VALIDATION_ERROR, 'invoker is required', 400);
-      }
-      const result = await credentials().issueHop(
-        params.id,
-        {
-          invoker: body['invoker'],
-          allowedAction: requireStringArray(body['allowedAction'], 'allowedAction'),
-          ...(optionalCaveats(body['caveats']) === undefined ? {} : { caveats: optionalCaveats(body['caveats'])! }),
-          ...(typeof body['validUntil'] === 'string' ? { validUntil: body['validUntil'] } : {}),
-        },
-        request.id,
-      );
-      return reply.code(201).send(result);
-    } catch (error) {
-      return sendError(request, reply, error);
-    }
-  });
-
-  // GET /grants/:id/chain - the stored chain root to leaf that ends at :id.
-  fastify.get('/grants/:id/chain', async (request, reply) => {
-    try {
-      requireAdmin(request);
-      const params = request.params as { id: string };
-      const chain = await credentials().chainOf(params.id);
-      if (chain.length === 0) {
-        throw new HelixError(ErrorCode.VC_NOT_FOUND, `No delegation hop ${params.id}`, 404);
-      }
-      return reply.code(200).send({ chain });
-    } catch (error) {
-      return sendError(request, reply, error);
-    }
-  });
-
-  // DELETE /grants/:id - revoke a hop and every hop below it (cascading, SPEC.md §6.5).
-  fastify.delete('/grants/:id', async (request, reply) => {
-    try {
-      requireAdmin(request);
-      const params = request.params as { id: string };
-      const revokedVcIds = await credentials().revokeHop(params.id, request.id);
-      return reply.code(200).send({ revokedVcIds });
-    } catch (error) {
-      return sendError(request, reply, error);
-    }
-  });
-
+  // The F-1 credential routes (credentials, attestations, grants and hops),
+  // admin-gated here; a build with accounts registers credentialRoutes itself
+  // with its own authorize hook and sets credentialRoutes: false.
+  if (options.credentialRoutes !== false) {
+    await fastify.register(credentialRoutes, { credentialService: options.credentialService, adminApiKey: options.adminApiKey });
+  }
 };
 
 export default agentRoutes;

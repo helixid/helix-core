@@ -3,6 +3,7 @@
 import Fastify from 'fastify';
 import { describe, expect, it } from 'vitest';
 import agentRoutes from '../../src/routes/agent/index.js';
+import credentialRoutes, { type CredentialRouteAction } from '../../src/routes/credentials/index.js';
 import {
   EnvSigner,
   buildCapabilityAttestation,
@@ -36,7 +37,7 @@ const LIST_URL = 'http://localhost:3000/v1/status-list/helix-status-list-1';
 const RESOURCE = 'did:web:service.example:orders';
 const resolve = async (did: string): Promise<JwsDidDocument> => (await resolveDID(did)) as unknown as JwsDidDocument;
 
-function makeApp(withCredentials = true) {
+function makeApp(withCredentials = true, hook?: { authorize: (request: unknown, action: CredentialRouteAction) => void; actions: CredentialRouteAction[] }) {
   const app = Fastify();
   const didService = new MockDIDService({ id: 'did:hedera:testnet:user-1', verificationMethod: [{ id: 'did:hedera:testnet:user-1#key-1', type: 'Ed25519VerificationKey2020', publicKeyHex: 'a'.repeat(64) }] });
   const keyRepository = new DidKeyRepository();
@@ -61,7 +62,13 @@ function makeApp(withCredentials = true) {
     audit,
   );
   const agentService = new AgentService(new AgentRepository(), didService, new MockVCService(), audit, keyRepository, keyCustody, credentialService);
-  app.register(agentRoutes, { prefix: '/v1', agentService, ...(withCredentials ? { credentialService } : {}), adminApiKey: ADMIN });
+  if (hook) {
+    // A build with accounts: the agent routes without the credential routes, which it mounts with its own gate.
+    app.register(agentRoutes, { prefix: '/v1', agentService, adminApiKey: ADMIN, credentialRoutes: false });
+    app.register(credentialRoutes, { prefix: '/v1', credentialService, authorize: (request, action) => { hook.actions.push(action); hook.authorize(request, action); } });
+  } else {
+    app.register(agentRoutes, { prefix: '/v1', agentService, ...(withCredentials ? { credentialService } : {}), adminApiKey: ADMIN });
+  }
   return app;
 }
 
@@ -222,5 +229,61 @@ describe('grants (delegation hops)', () => {
     const app = makeApp(false);
     const response = await app.inject({ method: 'GET', url: '/v1/agents/did:x/credentials', headers: admin });
     expect(response.statusCode).toBe(503);
+  });
+});
+
+describe('credential routes behind a host authorize hook (F-3 parity: an account-scoped build)', () => {
+  it('asks the hook with what each request would do, hop actions with their stored chain, and stops on a refusal before anything is issued', async () => {
+    const owners = new Set<string>();
+    const hook = {
+      actions: [] as CredentialRouteAction[],
+      authorize: (_request: unknown, action: CredentialRouteAction) => {
+        const did = 'agentDid' in action ? action.agentDid : action.action === 'issueRootHop' ? action.issuer : action.action === 'issueHop' ? action.delegator : action.chain[0]?.issuer;
+        if (did === undefined || !owners.has(did)) throw Object.assign(new Error('not yours'), { code: 'VC_NOT_FOUND', httpStatus: 404 });
+      },
+    };
+    const app = makeApp(true, hook);
+    // Onboard through the hooked app's own agent routes (still admin-free enrollment).
+    // The mock DID service gives every onboarded agent the same DID; "someone else's" is a DID the hook does not own.
+    const parent = await onboard(app as App, ['read:orders']);
+    const child = { agentDid: 'did:key:z6MkSomeoneElsesAgent' };
+    owners.add(ISSUER_DID);
+    owners.add(parent.agentDid);
+
+    const listed = await app.inject({ method: 'GET', url: `/v1/agents/${encodeURIComponent(parent.agentDid)}/credentials` });
+    expect(listed.statusCode, listed.body).toBe(200);
+    expect((await app.inject({ method: 'GET', url: `/v1/agents/${encodeURIComponent(child.agentDid)}/credentials` })).statusCode).toBe(404);
+    expect((await app.inject({ method: 'POST', url: `/v1/agents/${encodeURIComponent(parent.agentDid)}/attestations`, payload: { capability: 'read:catalog' } })).statusCode).toBe(201);
+    expect((await app.inject({ method: 'DELETE', url: `/v1/agents/${encodeURIComponent(parent.agentDid)}/attestations/read%3Acatalog` })).statusCode).toBe(200);
+
+    const root = await app.inject({ method: 'POST', url: '/v1/grants', payload: { issuer: ISSUER_DID, invoker: parent.agentDid, invocationTarget: RESOURCE, allowedAction: ['read:orders'] } });
+    expect(root.statusCode, root.body).toBe(201);
+    const rootId = root.json().hop.id as string;
+    const refusedRoot = await app.inject({ method: 'POST', url: '/v1/grants', payload: { issuer: child.agentDid, invoker: parent.agentDid, invocationTarget: RESOURCE, allowedAction: ['read:orders'] } });
+    expect(refusedRoot.statusCode).toBe(404);
+    // The parent's invoker (parent agent, a did_keys custodial key) re-delegates.
+    const hop = await app.inject({ method: 'POST', url: `/v1/grants/${encodeURIComponent(rootId)}/hops`, payload: { invoker: child.agentDid, allowedAction: ['read:orders'] } });
+    expect(hop.statusCode, hop.body).toBe(201);
+    expect((await app.inject({ method: 'GET', url: `/v1/grants/${encodeURIComponent(hop.json().hop.id)}/chain` })).statusCode).toBe(200);
+    expect((await app.inject({ method: 'POST', url: '/v1/grants/urn:zcap:missing/hops', payload: { invoker: child.agentDid, allowedAction: ['read:orders'] } })).statusCode).toBe(404);
+    expect((await app.inject({ method: 'GET', url: '/v1/grants/urn:zcap:missing/chain' })).statusCode).toBe(404);
+    expect((await app.inject({ method: 'DELETE', url: `/v1/grants/${encodeURIComponent(rootId)}` })).statusCode).toBe(200);
+
+    expect(hook.actions.map((action) => action.action)).toEqual([
+      'readCredentials', 'readCredentials', 'attest', 'revokeAttestation', 'issueRootHop', 'issueRootHop', 'issueHop', 'readChain', 'revokeHop',
+    ]);
+    const issueHop = hook.actions.find((action) => action.action === 'issueHop') as Extract<CredentialRouteAction, { action: 'issueHop' }>;
+    expect(issueHop).toMatchObject({ parentId: rootId, delegator: parent.agentDid, invoker: child.agentDid });
+    expect(issueHop.chain.map((entry) => entry.id)).toEqual([rootId]);
+    // The refused root issued nothing: one root, one hop.
+    expect((await app.inject({ method: 'GET', url: `/v1/agents/${encodeURIComponent(parent.agentDid)}/credentials` })).json().hops).toHaveLength(1);
+  });
+
+  it('the host gate needs no admin key, and the agent routes alone no longer serve the credential paths', async () => {
+    const app = makeApp(true, { actions: [], authorize: () => undefined });
+    expect((await app.inject({ method: 'GET', url: '/v1/agents/did:x/credentials' })).statusCode).toBe(200);
+    const bare = Fastify();
+    bare.register(agentRoutes, { prefix: '/v1', agentService: {} as never, adminApiKey: ADMIN, credentialRoutes: false });
+    expect((await bare.inject({ method: 'GET', url: '/v1/agents/did:x/credentials', headers: admin })).statusCode).toBe(404);
   });
 });
