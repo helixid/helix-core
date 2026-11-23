@@ -126,7 +126,6 @@ export {
 export type {
   IServiceProviderService,
   EnrollServiceInput,
-  IssueDelegationGrantInput,
 } from './services/service-provider/service-provider.service.js';
 
 export { default as didRoutes } from './routes/did/index.js';

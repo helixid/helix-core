@@ -7,26 +7,19 @@
 // Service Providers as custodial identities. A service is enrolled here the
 // way an agent is onboarded: the platform generates the key pair, creates
 // the DID, records the service in `services` and holds the private key in
-// did_keys. Nobody outside the platform ever holds a service key, so
-// issuing a consent grant on the service's behalf is a single API call
-// (POST /v1/service-delegation-grants) that builds, signs and stores the
-// credential in one go — the old prepare/finalize round trip existed only
-// so an SP could sign with a key it kept itself, which is no longer a thing.
+// did_keys. Consent is no longer a grant the service signs for its user:
+// since KYA-OS story L3-H the user's own did:key signs the root hop at
+// consent (services/consent/), so a service holds no key able to sign as a
+// user. What stays here is enrollment and the agent's attested scopes, which
+// bound what any consent to it may grant.
 
 import { randomBytes } from 'node:crypto';
 import {
   ErrorCode,
   HelixError,
   AgentActiveCredentialNotFoundError,
-  ConsentGrantScopeNotAllowedError,
-  ConsentNoGrantableScopesError,
   DelegateeNotAnAgentError,
-  ServiceKeyNotFoundError,
-  ServiceRevokedError,
-  issueGrant,
-  ACCEPT_TERMS_SCOPE,
   findScopeProblem,
-  normalizeScopes,
   parseScopes,
   CAPABILITY_ATTESTATION_TYPE,
   IDENTITY_CREDENTIAL_TYPE,
@@ -36,14 +29,12 @@ import {
   type AuditEventInput,
   type AuditTrail,
   type Digest,
-  type SignedVC,
-  type SigningKeyMaterial,
 } from '../../core/index.js';
 import type { CustodialKeys } from '../custody/custodial-keys.js';
 import type { DidKeyRepository } from '../../repositories/did-key.repository.js';
 import type { ServiceRecord, ServiceRepository } from '../../repositories/service.repository.js';
 import type { IDIDService } from '../did/IDIDService.js';
-import type { IVCService, ReconcileResult } from '../vc/IVCService.js';
+import type { IVCService } from '../vc/IVCService.js';
 import type { IKeyCustody } from '../key-custody/key-custody.js';
 
 export interface EnrollServiceInput {
@@ -61,39 +52,8 @@ export interface EnrollServiceInput {
   framework?: string;
 }
 
-export interface IssueDelegationGrantInput {
-  /** The service granting on the user's behalf — the grant's `issuer`. */
-  serviceDid: string;
-  /** The agent the user is delegating to — the grant's subject. */
-  agentDid: string;
-  /** The consenting user. Recorded as given, never resolved. */
-  userDid: string;
-  scopes: string[];
-  durability?: 'standing' | 'session';
-  /**
-   * Also revoke every other grant this service holds for the same user and
-   * agent, so the new one is the only consent that stands. Off by default:
-   * a consent with a different scope set is added beside the existing ones.
-   */
-  revokeExisting?: boolean;
-  /**
-   * Whether the consent also covers agents this agent delegates to. Omitted,
-   * the grant carries no flag and verifiers treat it as allowed.
-   */
-  allowDelegation?: boolean;
-}
-
-/** The grant, plus what storing it did to the grants active before it (see IVCService.ReconcileResult). */
-export interface IssueDelegationGrantResult extends ReconcileResult {
-  grantVC: SignedVC;
-}
-
 export interface IServiceProviderService {
   enroll(input: EnrollServiceInput, requestId: string): Promise<ServiceRecord>;
-  issueDelegationGrant(
-    input: IssueDelegationGrantInput,
-    requestId: string,
-  ): Promise<IssueDelegationGrantResult>;
   getAgentScopes(agentDid: string): Promise<AgentScopesResult>;
 }
 
@@ -104,7 +64,7 @@ export interface AgentScopesResult {
 }
 
 /** What this needs from the VC service; a Pick so either IVCService shape fits. */
-export type GrantVCStore = Pick<IVCService, 'claimStatusListEntry' | 'registerIssuedGrant' | 'listActiveBySubjectDid'>;
+export type GrantVCStore = Pick<IVCService, 'listActiveBySubjectDid'>;
 
 /** Same shape as the other ids (`enroll:`, `vc:helix:`) so rows are recognisable on sight. */
 export function generateServiceId(): string {
@@ -135,18 +95,6 @@ export class ServiceProviderService implements IServiceProviderService {
    */
   attachCustodialKeys(keys: CustodialKeys): void {
     this.custodialKeys = keys;
-  }
-
-  /** The service's signing key: its did_keys key, else its KeyStore key, else SERVICE_KEY_NOT_FOUND. */
-  private async serviceKey(serviceDid: string, requestId: string): Promise<<T>(use: (key: SigningKeyMaterial) => T | Promise<T>) => Promise<T>> {
-    const record = await this.didKeyRepository.findByDid(serviceDid);
-    if (record) {
-      if (record.subjectType !== 'service') throw new ServiceKeyNotFoundError(serviceDid);
-      return (use) => this.keyCustody.signWith(record, (privateKeyHex) => use({ did: serviceDid, privateKeyHex }));
-    }
-    const signer = await this.custodialKeys?.signerFor(serviceDid, 'service', { requestId, purpose: 'grant' });
-    if (signer) return async (use) => use({ did: serviceDid, signer });
-    throw new ServiceKeyNotFoundError(serviceDid);
   }
 
   /** Records one typed audit event; a failure to record never breaks the request. */
@@ -201,93 +149,6 @@ export class ServiceProviderService implements IServiceProviderService {
     });
 
     return record;
-  }
-
-  /**
-   * One consent grant per (user, agent, service, scope set): consenting
-   * again to the same scopes refreshes the grant, a different scope set
-   * stands beside the existing ones, `revokeExisting` clears those. That
-   * is the rule every stored credential follows, applied by
-   * registerIssuedGrant() -- see VCService.reconcileActive().
-   */
-  async issueDelegationGrant(
-    input: IssueDelegationGrantInput,
-    requestId: string,
-  ): Promise<IssueDelegationGrantResult> {
-    const durability = input.durability ?? 'standing';
-    if (!Array.isArray(input.scopes) || input.scopes.length === 0) {
-      throw new HelixError(ErrorCode.VALIDATION_ERROR, 'scopes must be a non-empty array', 400);
-    }
-    const scopeProblem = findScopeProblem(input.scopes);
-    if (scopeProblem) {
-      throw new HelixError(ErrorCode.VALIDATION_ERROR, `scopes: ${scopeProblem}`, 400);
-    }
-    if (durability !== 'standing' && durability !== 'session') {
-      throw new HelixError(ErrorCode.VALIDATION_ERROR, "durability must be 'standing' or 'session'", 400);
-    }
-    if (typeof input.userDid !== 'string' || !input.userDid.startsWith('did:')) {
-      throw new HelixError(ErrorCode.VALIDATION_ERROR, 'userDid must be a DID', 400);
-    }
-    if (typeof input.agentDid !== 'string' || !input.agentDid.startsWith('did:')) {
-      throw new HelixError(ErrorCode.VALIDATION_ERROR, 'agentDid must be a DID', 400);
-    }
-    if (input.allowDelegation !== undefined && typeof input.allowDelegation !== 'boolean') {
-      throw new HelixError(ErrorCode.VALIDATION_ERROR, 'allowDelegation must be a boolean', 400);
-    }
-    if (input.agentDid === input.serviceDid) {
-      throw new HelixError(ErrorCode.VALIDATION_ERROR, 'A service cannot grant to itself', 400);
-    }
-
-    // The signer: an enrolled, unrevoked service whose key this server holds.
-    const service = typeof input.serviceDid === 'string'
-      ? await this.serviceRepository.findByDid(input.serviceDid)
-      : null;
-    if (!service) {
-      throw new HelixError(ErrorCode.SERVICE_NOT_FOUND, `Service not found: ${input.serviceDid}`, 404);
-    }
-    if (service.revokedAt) {
-      throw new ServiceRevokedError(input.serviceDid);
-    }
-    const withKey = await this.serviceKey(input.serviceDid, requestId);
-
-    // The delegatee must be an onboarded agent with an active identity
-    // credential, and the grant may only carry scopes it holds an active
-    // capability attestation for: consent cannot hand an agent authority it
-    // is not attested for.
-    const { scopes: agentScopes } = await this.getAgentScopes(input.agentDid);
-    const scopes = normalizeScopes(input.scopes);
-    const held = new Set(agentScopes);
-    const notHeld = scopes.filter((scope) => scope !== ACCEPT_TERMS_SCOPE && !held.has(scope));
-    if (notHeld.length > 0) {
-      throw new ConsentGrantScopeNotAllowedError(notHeld);
-    }
-    if (scopes.every((scope) => scope === ACCEPT_TERMS_SCOPE)) {
-      throw new ConsentNoGrantableScopesError();
-    }
-
-    const entry = await this.vcService.claimStatusListEntry();
-    const { grantVC } = await withKey((key) =>
-      issueGrant(
-        {
-          agentDid: input.agentDid,
-          userDid: input.userDid,
-          scopes,
-          durability,
-          serviceDid: input.serviceDid,
-          ...(input.allowDelegation !== undefined ? { allowDelegation: input.allowDelegation } : {}),
-          statusList: entry.statusList as Parameters<typeof issueGrant>[0]['statusList'],
-          statusListCredentialUrl: entry.statusListCredentialUrl,
-          statusListIndex: entry.statusListIndex,
-        },
-        key,
-      ),
-    );
-
-    const reconciled = await this.vcService.registerIssuedGrant(grantVC, requestId, {
-      revokeExisting: input.revokeExisting,
-    });
-
-    return { grantVC, ...reconciled };
   }
 
   /**
