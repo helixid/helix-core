@@ -13,6 +13,7 @@ import {
   base64UrlDecodeStrict,
   base64UrlEncode,
   buildConformanceReport,
+  jsonDigest,
   publicKeyJwkBytes,
   signJws,
   verifyJws,
@@ -58,6 +59,23 @@ function publishOwnDomain(h: Harness, documents: { didDocument: unknown; card: u
   h.web.set(documents.didDocumentUrl, documents.didDocument);
   h.web.set(documents.cardUrl, documents.card);
 }
+
+describe('custody facts beside the audit digest (F-4 point 6)', () => {
+  it('hands the facts of each custody event to auditFacts, matching the digest the event carries', async () => {
+    const kept = new Map<string, Readonly<Record<string, unknown>>>();
+    const h = harness({ auditFacts: (digest, facts) => void kept.set(digest, facts) });
+    const result = await h.service.createAgent({ name: 'Facts Bot', scopes: [], keyCustody: 'helix', didHosting: 'helix' }, h.context({ org: 'acme' }));
+    await h.audit.trail.flush();
+    const digests = h.audit.trail.events
+      .filter((event) => event.action.category === 'custody')
+      .map((event) => (event.details as { configurationDigest?: string }).configurationDigest);
+    expect(digests.length).toBeGreaterThan(0);
+    for (const digest of digests) {
+      expect(kept.get(digest!)).toMatchObject({ did: result.did, subjectType: 'agent' });
+      expect(jsonDigest(kept.get(digest!))).toBe(digest);
+    }
+  });
+});
 
 describe('full custodial onboarding (point 3)', () => {
   it('creates the agent in one call: key in the KeyStore, did:web under the Helix domain, active, identity credential and one attestation per scope (F-1)', async () => {
