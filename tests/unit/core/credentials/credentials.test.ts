@@ -5,7 +5,6 @@ import {
   EnvSigner,
   attestedCapabilityEntry,
   buildCapabilityAttestation,
-  buildDIDDocument,
   buildDelegationHop,
   buildIdentityCredential,
   buildIdentityVerificationCredential,
@@ -31,6 +30,7 @@ import {
   type DIDDocument,
 } from '../../../../src/core/index.js';
 import type { DidResolver } from '../../../../src/core/credentials/index.js';
+import { testDidDocument } from '../../../utils/didDocuments.js';
 
 const NOW = Date.parse('2026-06-01T00:00:00Z');
 const LIST_URL = 'https://helix.example/v1/status-list/1';
@@ -38,7 +38,7 @@ const LIST_URL = 'https://helix.example/v1/status-list/1';
 function actor(seed: string): { did: string; signer: EnvSigner; document: DIDDocument } {
   const key = seed.repeat(64).slice(0, 64);
   const did = `did:key:${publicKeyToMultibase(derivePublicKey(key))}`;
-  return { did, signer: new EnvSigner({ did, envVar: 'K', env: { K: key } }), document: buildDIDDocument(did, derivePublicKey(key)) };
+  return { did, signer: new EnvSigner({ did, envVar: 'K', env: { K: key } }), document: testDidDocument(did, derivePublicKey(key)) };
 }
 const helix = actor('1');
 const owner = actor('2');

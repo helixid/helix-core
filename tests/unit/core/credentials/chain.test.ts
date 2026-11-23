@@ -6,7 +6,6 @@ import {
   MAX_DELEGATION_DEPTH,
   attenuationReasons,
   attestedCapabilities,
-  buildDIDDocument,
   buildDelegationHop,
   caveatNarrows,
   decimalLte,
@@ -21,6 +20,7 @@ import {
   type SignedDelegationHop,
 } from '../../../../src/core/index.js';
 import type { DidResolver } from '../../../../src/core/credentials/index.js';
+import { testDidDocument } from '../../../utils/didDocuments.js';
 
 function omit<T extends object, K extends keyof T>(value: T, key: K): Omit<T, K> {
   const copy = { ...value };
@@ -34,7 +34,7 @@ const RESOURCE = 'did:web:service.example:orders';
 function actor(seed: string): { did: string; signer: EnvSigner; document: DIDDocument } {
   const key = seed.repeat(64).slice(0, 64);
   const did = `did:key:${publicKeyToMultibase(derivePublicKey(key))}`;
-  return { did, signer: new EnvSigner({ did, envVar: 'K', env: { K: key } }), document: buildDIDDocument(did, derivePublicKey(key)) };
+  return { did, signer: new EnvSigner({ did, envVar: 'K', env: { K: key } }), document: testDidDocument(did, derivePublicKey(key)) };
 }
 const user = actor('a');
 const parent = actor('b');

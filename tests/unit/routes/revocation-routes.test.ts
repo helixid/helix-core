@@ -8,7 +8,6 @@ import {
   DEFAULT_STATUS_LIST_ID,
   EnvSigner,
   ErrorCode,
-  buildDIDDocument,
   derivePublicKey,
   publicKeyToMultibase,
   signDataIntegrity,
@@ -25,6 +24,7 @@ import { InProcessSignalBus, RedisSignalBus, RevocationSignalPublisher, type Red
 import revocationRoutes from '../../../src/routes/revocations/index.js';
 import eventRoutes from '../../../src/routes/events/index.js';
 import statusListRoutes from '../../../src/routes/status-list/index.js';
+import { testDidDocument } from '../../utils/didDocuments.js';
 
 const API = 'https://api.helix.test';
 const ADMIN = 'admin-key';
@@ -35,8 +35,8 @@ const ownerDid = `did:key:${publicKeyToMultibase(derivePublicKey(OWNER_KEY))}`;
 const helixSigner = new EnvSigner({ did: helixDid, envVar: 'K', env: { K: HELIX_KEY } });
 const ownerSigner = new EnvSigner({ did: ownerDid, envVar: 'K', env: { K: OWNER_KEY } });
 const documents: Record<string, DIDDocument> = {
-  [helixDid]: buildDIDDocument(helixDid, derivePublicKey(HELIX_KEY)),
-  [ownerDid]: buildDIDDocument(ownerDid, derivePublicKey(OWNER_KEY)),
+  [helixDid]: testDidDocument(helixDid, derivePublicKey(HELIX_KEY)),
+  [ownerDid]: testDidDocument(ownerDid, derivePublicKey(OWNER_KEY)),
 };
 const resolve = (async (did: string) => documents[did] ?? null) as unknown as DidResolver;
 

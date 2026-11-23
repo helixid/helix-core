@@ -7,7 +7,6 @@ import {
   DEFAULT_STATUS_LIST_ID,
   EnvSigner,
   ErrorCode,
-  buildDIDDocument,
   derivePublicKey,
   generateKeyPair,
   publicKeyToMultibase,
@@ -28,6 +27,7 @@ import { RevocationSignalPublisher, type RevocationEvent } from '../../../src/se
 import { InProcessCache } from '../../../src/cache/InProcessCache.js';
 import { TestAuditTrail } from '../../utils/TestAuditTrail.js';
 import { CustodyEvents, clientKey, events as custodyEvents, harness as custodyHarness } from './custody/harness.js';
+import { testDidDocument } from '../../utils/didDocuments.js';
 
 const API = 'https://api.helix.test';
 const AUDIENCE = `${API}/v1/revocations`;
@@ -41,8 +41,8 @@ const ownerSigner = new EnvSigner({ did: ownerDid, envVar: 'K', env: { K: OWNER_
 
 function world() {
   const documents: Record<string, DIDDocument> = {
-    [helixDid]: buildDIDDocument(helixDid, derivePublicKey(HELIX_KEY)),
-    [ownerDid]: buildDIDDocument(ownerDid, derivePublicKey(OWNER_KEY)),
+    [helixDid]: testDidDocument(helixDid, derivePublicKey(HELIX_KEY)),
+    [ownerDid]: testDidDocument(ownerDid, derivePublicKey(OWNER_KEY)),
   };
   const resolve = (async (did: string) => documents[did] ?? null) as unknown as DidResolver;
   const vcRepo = new VcRepository();
@@ -87,7 +87,7 @@ function world() {
     const { publicKey, encrypted } = custody.generateAndEncrypt();
     const did = `did:key:${publicKeyToMultibase(publicKey)}`;
     await keyRepo.create({ did, subjectType: 'agent', ...encrypted });
-    documents[did] = buildDIDDocument(did, publicKey);
+    documents[did] = testDidDocument(did, publicKey);
     return { did, signer: await credentials.signerFor(did) };
   };
   /** Reads a served list the way a verifier does: proof first, then bits (the SDK reader). */
@@ -148,7 +148,7 @@ describe('signed per-issuer status lists', () => {
       validFrom: '2026-06-01T00:00:00.000Z',
       validUntil: '2026-06-01T00:10:00.000Z',
       credentialSubject: { type: 'BitstringStatusList', statusPurpose: 'revocation' },
-      proof: { type: 'DataIntegrityProof', cryptosuite: 'eddsa-jcs-2022', verificationMethod: `${helixDid}#key-1`, proofPurpose: 'assertionMethod' },
+      proof: { type: 'DataIntegrityProof', cryptosuite: 'eddsa-jcs-2022', verificationMethod: `${helixDid}#${helixDid.slice('did:key:'.length)}`, proofPurpose: 'assertionMethod' },
     });
     expect(rootList.credentialSubject.encodedList.startsWith('u')).toBe(true);
     const childList = await w.served(statusListIdFor(child.issuer, helixDid));

@@ -166,7 +166,8 @@ export async function buildCredentialFixtures(): Promise<CredentialFixtures> {
   statusIndex = 0;
   const keys = Object.fromEntries(KEY_LABELS.map((label) => [label, fixtureKey(label)])) as Record<KeyLabel, FixtureKey>;
   const signers = Object.fromEntries(
-    KEY_LABELS.map((label) => [label, new EnvSigner({ did: keys[label].did, envVar: 'FIXTURE_KEY', env: { FIXTURE_KEY: keys[label].private_key_hex } })]),
+    // The fixture's documents publish `#key-1` for these did:keys; pin it so the checked-in fixtures stay as generated.
+    KEY_LABELS.map((label) => [label, new EnvSigner({ did: keys[label].did, kid: 'key-1', envVar: 'FIXTURE_KEY', env: { FIXTURE_KEY: keys[label].private_key_hex } })]),
   ) as Record<KeyLabel, EnvSigner>;
   const didDocuments = Object.fromEntries(KEY_LABELS.map((label) => [keys[label].did, keys[label].did_document]));
   const resolve = async (did: string): Promise<JwsDidDocument | undefined> => didDocuments[did] as unknown as JwsDidDocument | undefined;
