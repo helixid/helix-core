@@ -213,6 +213,41 @@ describe('the compromise path (C-E point 5)', () => {
   });
 });
 
+describe('rotation edges', () => {
+  it('a reissue that returns nothing keeps the credential; a background run skips a subject gone since it was listed', async () => {
+    const h = harness();
+    (h.service as unknown as { options: { credentials: { reissueIdentity?: unknown } } }).options.credentials.reissueIdentity = async () => null;
+    const agent = await h.service.createAgent({ name: 'Custodial', keyCustody: 'helix' }, h.context());
+    await h.service.rotateKey(agent.did, {}, h.context());
+    expect((await h.service.revokeKey(agent.did, 'key-1', h.context())).credentialVcId).toBe('vc:test:1');
+    const records = (h.service as unknown as { options: { records: { listRetiringDue: unknown } } }).options.records;
+    records.listRetiringDue = async () => ['did:web:helix.example:agents:gone'];
+    expect(await h.service.finalizeDueRotations()).toEqual([]);
+  });
+
+  it('a Helix-held key already gone from the store is not reported shredded; a record without its key row cannot rotate', async () => {
+    const h = harness();
+    const agent = await h.service.createAgent({ name: 'Custodial', keyCustody: 'helix' }, h.context());
+    await h.keyStore.shred({ did: agent.did, kid: agent.kid! });
+    const next = clientKey();
+    const changed = await h.service.changeCustody(agent.did, { keyCustody: 'self', publicKeyJwk: next.publicKeyJwk, proof: rotationProof(next, agent.did, `${agent.did}#key-2`, h.now.value.toISOString()) }, h.context());
+    expect(changed.previousKeyShredded).toBe(false);
+    await h.records.updateRecord(agent.did, { kid: `${agent.did}#key-9` });
+    await expect(h.service.rotateKey(agent.did, {}, h.context())).rejects.toThrow(/has no current key/);
+  });
+
+  it('three keys: each was current until the next one', async () => {
+    const h = harness();
+    const agent = await h.service.createAgent({ name: 'Custodial', keyCustody: 'helix' }, h.context());
+    await h.service.rotateKey(agent.did, { overlapSeconds: 0 }, h.context());
+    h.now.value = new Date(h.now.value.getTime() + 1000);
+    await h.service.rotateKey(agent.did, { overlapSeconds: 0 }, h.context());
+    const keys = await h.records.listKeys(agent.did);
+    expect(boundWindow(keys, `${agent.did}#key-1`)).toEqual({ from: keys[0]!.createdAt, until: keys[1]!.createdAt });
+    expect((await h.dids.findDidById(agent.did))!.didDocument).toMatchObject({ rotationSequence: 3 });
+  });
+});
+
 describe('lost-key recovery waits for story L3-H (C-E point 6)', () => {
   it('is refused with a 501 that names the responsible party', async () => {
     const h = harness();

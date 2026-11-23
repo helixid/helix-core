@@ -143,9 +143,52 @@ describe('CredentialService as the hop reissuer (story C-E)', () => {
     expect(await service.revokeHopsForKid({ did: agentDid, kid: 'a', requestId: 'cmp', bound })).toEqual([]);
   });
 
+  it('keeps validFrom on a reissued hop; expires nothing when no hop was bound; revokes a hop once when a cascade already took it', async () => {
+    const future = new Date(Date.now() + 1000).toISOString();
+    const dated = await service.issueRootHop({ issuer: helixDid, invoker: agentDid, invocationTarget: RESOURCE, allowedAction: ['orders:read'] }, 'r');
+    // The stored copy is what the reissuer reads: give it a validFrom as a hop may carry one.
+    const record = (await vcRepo.findByVcId(dated.id))!;
+    (record.vcJson as Record<string, unknown>)['validFrom'] = future;
+    await tick();
+    const bound = { from: new Date(0), until: new Date() };
+    await tick();
+    const result = await service.reissueHopsForKid({ did: agentDid, oldKid: 'a', newKid: 'b', requestId: 'rot', bound });
+    expect(((await vcRepo.findByVcId(result.reissuedHops![dated.id]!))!.vcJson as { validFrom?: string }).validFrom).toBe(future);
+    expect(await service.expireHopsForKid({ did: delegateDid, kid: 'a', requestId: 'fin', bound })).toEqual([]);
+    // The agent re-delegates to itself below its own hop: revoking the parent takes the child, which is then skipped.
+    const { hop: self } = await service.issueHop(result.reissuedHops![dated.id]!, { invoker: agentDid, allowedAction: ['orders:read'] }, 'r');
+    // A hop with a hop below it does not expire with the overlap, even with a reissued twin.
+    const later = { from: bound.until, until: new Date(Date.now() + 60_000) };
+    expect(await service.expireHopsForKid({ did: agentDid, kid: 'b', requestId: 'fin', bound: later })).toEqual([]);
+    const revoked = await service.revokeHopsForKid({ did: agentDid, kid: 'b', requestId: 'cmp', bound: later });
+    expect(revoked.sort()).toEqual([result.reissuedHops![dated.id]!, self.id].sort());
+  });
+
+  it('an old hop with a reissued twin but a hop below it runs to its own validUntil', async () => {
+    const { leaf, bound } = await hopsBeforeRotation();
+    await service.reissueHopsForKid({ did: agentDid, oldKid: 'a', newKid: 'b', requestId: 'rot', bound });
+    await service.issueHop(leaf.id, { invoker: delegateDid, allowedAction: ['orders:read'], caveats: leaf.credentialSubject.caveats ?? [] }, 'r');
+    expect(await service.expireHopsForKid({ did: agentDid, kid: 'a', requestId: 'fin', bound })).toEqual([]);
+  });
+
+  it('a hop with neither a proof time nor a row time is bound to no window, and is still revoked when no window is given', async () => {
+    const hop = await service.issueRootHop({ issuer: helixDid, invoker: agentDid, invocationTarget: RESOURCE, allowedAction: ['orders:read'] }, 'r');
+    const timeless = async () => {
+      const record = (await vcRepo.findByVcId(hop.id))!;
+      const json = { ...(record.vcJson as Record<string, unknown>) };
+      delete json['proof'];
+      return [{ ...record, vcJson: json, createdAt: undefined }, { ...record, vcJson: json, vcId: hop.id, createdAt: undefined }] as never;
+    };
+    const spy = vi.spyOn(vcRepo, 'findActiveBySubjectDid').mockImplementation(timeless);
+    expect(await service.expireHopsForKid({ did: agentDid, kid: 'a', requestId: 'fin', bound: { from: new Date(0), until: new Date() } })).toEqual([]);
+    expect(await service.revokeHopsForKid({ did: agentDid, kid: 'a', requestId: 'cmp' })).toEqual([hop.id]);
+    spy.mockRestore();
+  });
+
   it('a hop without a proof time is placed by its row time', async () => {
     const hop = await service.issueRootHop({ issuer: helixDid, invoker: agentDid, invocationTarget: RESOURCE, allowedAction: ['orders:read'] }, 'r');
-    const { proof: _proof, ...unsigned } = hop as unknown as Record<string, unknown>;
+    const unsigned: Record<string, unknown> = { ...(hop as unknown as Record<string, unknown>) };
+    delete unsigned['proof'];
     await vcRepo.createVc({ vcId: 'urn:zcap:legacy', subjectDid: agentDid, subjectType: 'agent', vcJson: { ...unsigned, id: 'urn:zcap:legacy' }, statusListIndex: 99, expiresAt: null, vcType: 'DelegationCredential', issuerDid: helixDid });
     const revoked = await service.revokeHopsForKid({ did: agentDid, kid: 'a', requestId: 'cmp', bound: { from: new Date(Date.now() - 60_000), until: new Date(Date.now() + 60_000) } });
     expect(revoked.sort()).toEqual([hop.id, 'urn:zcap:legacy'].sort());

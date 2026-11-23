@@ -78,6 +78,7 @@ describe('keyValidityProblem', () => {
     expect(proofTime(-1)).toBeUndefined();
     expect(proofTime('23 Nov 2026')).toBeUndefined();
     expect(proofTime(undefined)).toBeUndefined();
+    expect(proofTime('2026-13-45T00:00:00Z')).toBeUndefined();
   });
 });
 
@@ -132,7 +133,8 @@ describe('verifiers pick the key by kid and check the proof time (C-E point 3)',
 
   it('a proof without created is checked at now', async () => {
     const proof = await signDataIntegrity({ issuer: DID }, signer(OLD_SEED, 'key-1'), { created: '2026-11-23T09:00:00Z' });
-    const { created: _created, ...rest } = proof.proof as unknown as Record<string, unknown>;
+    const rest: Record<string, unknown> = { ...(proof.proof as unknown as Record<string, unknown>) };
+    delete rest['created'];
     // Removing `created` breaks the signature, so the validity check must refuse it first.
     expect(await verifyDataIntegrity({ ...proof, proof: rest }, resolverOf(rotated('2026-11-24T10:00:00Z')), { now: Date.parse('2026-11-25T00:00:00Z') })).toMatchObject({
       ok: false,
