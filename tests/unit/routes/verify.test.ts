@@ -6,7 +6,7 @@ import { gzipSync } from 'node:zlib';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { kyaos } from '@helixid/sdk-js';
 import { EnvSigner, buildDIDDocument, generateKeyPair, signDataIntegrity } from '../../../src/core/index.js';
-import verifyRoutes, { cardEndpointOf, memoryNonceStore, readableUrl, type VerifyRouteOptions } from '../../../src/routes/verify/index.js';
+import verifyRoutes, { cardEndpointOf, helixStatusListIssuers, memoryNonceStore, readableUrl, type VerifyRouteOptions } from '../../../src/routes/verify/index.js';
 
 const fixturesDir = new URL('../../../fixtures/verifier/', import.meta.url);
 const env = JSON.parse(readFileSync(new URL('environment.json', fixturesDir), 'utf8')) as {
@@ -189,6 +189,15 @@ describe('POST /v1/verify default status and card seams', () => {
 });
 
 describe('verify route helpers', () => {
+  it("binds the Helix issuer to its own identity status list, by exact URL", () => {
+    expect(helixStatusListIssuers('did:web:helix.example', 'https://helix.example/')).toEqual({
+      'did:web:helix.example': ['https://helix.example/v1/status-list/helix-status-list-1'],
+    });
+    expect(helixStatusListIssuers('did:web:127.0.0.1%3A3000', 'http://127.0.0.1:3000')).toEqual({
+      'did:web:127.0.0.1%3A3000': ['http://127.0.0.1:3000/v1/status-list/helix-status-list-1'],
+    });
+  });
+
   it('reads https, and http on loopback only in development', () => {
     expect(readableUrl('https://example.com/x', false)).toBe('https://example.com/x');
     expect(readableUrl('http://example.com/x', true)).toBeUndefined();

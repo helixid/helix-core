@@ -133,7 +133,7 @@ export type { DIDRouteAction, DIDRouteOptions } from './routes/did/index.js';
 export { default as didWebRoutes } from './routes/did-web/index.js';
 export { default as vcRoutes, type VcRouteOptions } from './routes/vc/index.js';
 export { default as statusListRoutes } from './routes/status-list/index.js';
-export { default as verifyRoutes } from './routes/verify/index.js';
+export { default as verifyRoutes, helixStatusListIssuers } from './routes/verify/index.js';
 export { default as revocationRoutes } from './routes/revocations/index.js';
 export { default as eventRoutes } from './routes/events/index.js';
 export type { VerifyRouteOptions } from './routes/verify/index.js';

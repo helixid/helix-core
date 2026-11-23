@@ -29,6 +29,7 @@
 
 import type { FastifyPluginAsync } from 'fastify';
 import { kyaos } from '@helixid/sdk-js';
+import { DEFAULT_STATUS_LIST_ID } from '../../core/status-list/index.js';
 
 const { verifier } = kyaos;
 
@@ -221,6 +222,18 @@ const verifyRoutes: FastifyPluginAsync<VerifyRouteOptions> = async (fastify, opt
 };
 
 /** The URL the `KyaOsEntityCard` service of a DID document names, or undefined. */
+/**
+ * The deployment's own keeper binding (SPEC.md §6.6 keeper rule 1; SPEC-ENTITY-CARD
+ * §10.3): the Helix issuer keeps the identity status list that every Helix-hosted
+ * card's `revocation` entry names. Bound to that exact URL, not the origin, so the
+ * per-issuer lists under the same origin (accounts', agents', users') stay with
+ * their own issuers. Without it the route refuses every Helix-hosted agent's card
+ * (`status_list_mismatch`), as the spec-strict keeper rule requires.
+ */
+export function helixStatusListIssuers(helixIssuerDid: string, apiBaseUrl: string): Record<string, string[]> {
+  return { [helixIssuerDid]: [`${apiBaseUrl.replace(/\/+$/, '')}/v1/status-list/${DEFAULT_STATUS_LIST_ID}`] };
+}
+
 export function cardEndpointOf(document: unknown): string | undefined {
   if (document === null || typeof document !== 'object') return undefined;
   const services = (document as { service?: unknown }).service;
