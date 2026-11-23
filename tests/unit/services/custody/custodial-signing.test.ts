@@ -5,8 +5,6 @@ import * as ed25519 from '@noble/ed25519';
 import { describe, expect, it } from 'vitest';
 import {
   CustodialSigningRefusedError,
-  DelegateeNotAnAgentError,
-  ServiceKeyNotFoundError,
   createEd25519Proof,
   base64UrlDecodeStrict,
   base64UrlEncode,
@@ -19,32 +17,16 @@ import {
   verifyDelegationChainProofs,
   EnvSigner,
   type Signer,
-  verifyEd25519Proof,
   type DIDDocument,
 } from '../../../../src/core/index.js';
 import { DidKeyRepository } from '../../../../src/repositories/did-key.repository.js';
 import { VcRepository } from '../../../../src/repositories/vc.repository.js';
 import { CredentialService } from '../../../../src/services/credentials/credential.service.js';
 import { AesGcmKeyCustody } from '../../../../src/services/key-custody/key-custody.js';
-import { ServiceProviderService } from '../../../../src/services/service-provider/service-provider.service.js';
-import { MockVCService } from '../../../mocks/MockVCService.js';
 import { TestAuditTrail } from '../../../utils/TestAuditTrail.js';
 import { clientKey, enrollmentSignature, CustodyEvents, events, harness, type Harness } from './harness.js';
 
 const MASTER = 'b'.repeat(64);
-
-/** Story F-1's credentials of an onboarded agent: its identity credential and one capability attestation per scope. */
-function agentCredentials(did: string, scopes: string[] = ['read:orders']): Record<string, unknown>[] {
-  return [
-    { id: `vc:helix:${did.slice(-8)}`, type: ['VerifiableCredential', 'AgentIdentityCredential'], issuer: 'did:web:helix.example', credentialSubject: { id: did, name: 'A' } },
-    ...scopes.map((capability) => ({
-      id: `att:helix:${did.slice(-8)}:${capability}`,
-      type: ['VerifiableCredential', 'CapabilityAttestationCredential'],
-      issuer: 'did:web:helix.example',
-      credentialSubject: { id: did, capability },
-    })),
-  ];
-}
 
 async function documentOf(h: Harness, did: string): Promise<DIDDocument> {
   return (await h.dids.findDidById(did))!.didDocument as DIDDocument;

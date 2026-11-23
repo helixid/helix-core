@@ -6,11 +6,7 @@ import { TestAuditTrail } from '../../utils/TestAuditTrail.js';
 import {
   AgentActiveCredentialNotFoundError,
   DelegateeNotAnAgentError,
-  ServiceKeyNotFoundError,
-  ServiceRevokedError,
-  verifyEd25519Proof,
   buildDIDDocument,
-  HelixError,
 } from '../../../src/core/index.js';
 import { DidKeyRepository } from '../../../src/repositories/did-key.repository.js';
 import { ServiceRepository } from '../../../src/repositories/service.repository.js';
@@ -118,6 +114,28 @@ describe('ServiceProviderService', () => {
   it('refuses to enroll a name that is already taken', async () => {
     await service.enroll(ENROLL, 'r');
     await expect(service.enroll(ENROLL, 'r')).rejects.toMatchObject({ code: 'SERVICE_ALREADY_EXISTS' });
+  });
+
+  it('counts an active agent created through the custody routes as onboarded, once its custodial keys are attached', async () => {
+    const custodial = 'did:web:api.example:agents:custody';
+    await expect(service.getAgentScopes(custodial)).rejects.toMatchObject({ code: 'DELEGATEE_NOT_AN_AGENT' });
+    service.attachCustodialKeys({ signerFor: vi.fn(async () => undefined), isActiveAgent: vi.fn(async (did: string) => did === custodial) });
+    expect((await service.getAgentScopes(custodial)).scopes).toEqual(['read:calendar', 'a', 'b', 'x']);
+  });
+
+  it('enrolls even when the audit trail fails, and reports it', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    vi.spyOn(audit, 'record').mockImplementationOnce(() => {
+      throw new Error('sink down');
+    });
+    await service.enroll({ name: 'shop-audit-sync', domain: 'shop.example', requiredScopes: ['a'] }, 'req');
+    vi.spyOn(audit, 'record').mockRejectedValueOnce('sink down later');
+    await service.enroll({ name: 'shop-audit-async', domain: 'shop.example', requiredScopes: ['a'] }, 'req');
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(error).toHaveBeenCalledWith('AUDIT_RECORD_FAILED', 'sink down');
+    expect(error).toHaveBeenCalledWith('AUDIT_RECORD_FAILED', 'sink down later');
+    await expect(service.enroll({ name: 'no-scopes', domain: 'shop.example' } as never, 'req')).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+    error.mockRestore();
   });
 
   describe('getAgentScopes', () => {

@@ -69,6 +69,16 @@ describe('consent request → page → click (L3-H points 1–3, 7)', () => {
     expect(vc).toMatchObject({ issuerDid: hop.issuer, userDid: hop.issuer, subjectDid: AGENT.did });
   });
 
+  it('carries the caveats the service set into the signed hop', async () => {
+    const world = consentWorld();
+    const grant = world.grant();
+    (grant['credentialSubject'] as Record<string, unknown>)['caveats'] = [{ type: 'MaxAmount', limit: '100', currency: 'EUR' }];
+    const { approved } = await world.consentTo({ grant });
+    expect(approved.hop.credentialSubject.caveats).toEqual([{ type: 'MaxAmount', limit: '100', currency: 'EUR' }]);
+    const renewed = await world.consent.renewHop(await world.renewalJws({ consentId: approved.consentId }), 'r');
+    expect(renewed.hop.credentialSubject.caveats).toEqual([{ type: 'MaxAmount', limit: '100', currency: 'EUR' }]);
+  });
+
   it('reuses the key within a cycle, and keeps services and users apart', async () => {
     const world = consentWorld();
     const first = await world.consentTo();
@@ -111,6 +121,16 @@ describe('consent request → page → click (L3-H points 1–3, 7)', () => {
     expect((await world.consent.result(late.id)).status).toBe('expired');
     expect((await refusal(world.consent.openPage(late.id))).code).toBe(ErrorCode.CONSENT_REQUEST_CLOSED);
     expect((await refusal(world.consent.result('nope'))).code).toBe(ErrorCode.CONSENT_REQUEST_NOT_FOUND);
+  });
+});
+
+describe('issueUserRootHop', () => {
+  it('refuses a root hop that would not stand as a chain (already expired)', async () => {
+    const world = consentWorld();
+    const key = await world.userKeys.keyFor(SERVICE.did, 'ref');
+    await expect(
+      world.credentials.issueUserRootHop(world.userKeys.signerOf(key), { invoker: AGENT.did, invocationTarget: SERVICE.did, allowedAction: ['a'], validUntil: new Date(Date.now() - 600_000).toISOString() }, 'r'),
+    ).rejects.toMatchObject({ code: ErrorCode.DELEGATION_CHAIN_INVALID });
   });
 });
 

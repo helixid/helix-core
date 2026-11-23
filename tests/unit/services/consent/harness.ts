@@ -65,8 +65,6 @@ export function consentWorld(options: WorldOptions = {}) {
   const keyTable = new WrappedKeyRepository();
   const keyStore = new DbKeyStore({ table: keyTable, keyEncryptionKey: 'ab'.repeat(32), clock: () => new Date(now) });
   const userKeys = new UserKeyService({ repo, keyStore, audit, clock });
-  // eslint-disable-next-line prefer-const -- assigned after the publisher that closes over it
-  let credentials: CredentialService;
   const publisher = new StatusListPublisher({
     repo: vcRepo,
     helixIssuerDid: HELIX.did,
@@ -80,7 +78,7 @@ export function consentWorld(options: WorldOptions = {}) {
     clock,
   });
   const statusLists = new StatusListService({ publisher, repo: vcRepo, audit });
-  credentials = new CredentialService(
+  const credentials = new CredentialService(
     vcRepo,
     statusLists,
     { resolveDID: vi.fn(async () => ({})), registerResolvedDID: vi.fn(async () => undefined) } as never,

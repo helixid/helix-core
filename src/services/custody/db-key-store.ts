@@ -101,13 +101,8 @@ export class DbKeyStore implements KeyStore {
   /** A did:key (story L3-H): the DID is derived from the fresh key, which is kept under `<did>#<multibase>`. */
   async generateDidKey(subjectType: KeyStoreSubjectType): Promise<KeyStoreKeyRef & { publicKeyJwk: PublicKeyJwk }> {
     const seed = this.#seed();
-    let did: string;
-    try {
-      did = didKeyFromPublicKey(ed25519.getPublicKey(seed));
-    } catch (error) {
-      seed.fill(0);
-      throw error;
-    }
+    // A 32-byte seed always has a public key (#seed checked the length); #store zeroes the seed.
+    const did = didKeyFromPublicKey(ed25519.getPublicKey(seed));
     const kid = `${did}#${did.slice('did:key:'.length)}`;
     const publicKeyJwk = await this.#store({ did, kid, subjectType }, seed);
     return { did, kid, publicKeyJwk };
