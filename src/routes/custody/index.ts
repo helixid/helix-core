@@ -33,8 +33,7 @@
  * Who may call is injected, as for the service-provider routes: the
  * self-hosted default is the admin key; the hosted build checks the account
  * owns the subject (`authorize`), supplies the account preference
- * (`defaultsOf`), the actor (`actorOf`) and the did:web org segment
- * (`orgOf`), and links new subjects to the account (`onCreated`). The two
+ * (`defaultsOf`) and the actor (`actorOf`), and links new subjects to the account (`onCreated`). The two
  * enrollment calls are authorised by the enrollment token itself, and
  * `activate` also accepts it, so `helix init` needs no admin key.
  *
@@ -73,8 +72,6 @@ export interface CustodyRouteOptions {
   defaultsOf?: ((request: FastifyRequest) => Promise<CustodyDefaults | undefined> | CustodyDefaults | undefined) | undefined;
   /** Who the audit events name. Default `admin`. */
   actorOf?: ((request: FastifyRequest) => string) | undefined;
-  /** The org segment of a Helix-hosted did:web. */
-  orgOf?: ((request: FastifyRequest) => Promise<string | undefined> | string | undefined) | undefined;
   /**
    * The DID of the account the caller acts for. An agent it creates names it
    * as owner (its identity credential's and card's `responsibleParty`), and a
@@ -142,7 +139,6 @@ const custodyRoutes: FastifyPluginAsync<CustodyRouteOptions> = async (fastify, o
       requestId: request.id,
       actor: actor ?? actorOf(request),
       defaults: await options.defaultsOf?.(request),
-      org: await options.orgOf?.(request),
       owner: await options.ownerDidOf?.(request),
     };
   }

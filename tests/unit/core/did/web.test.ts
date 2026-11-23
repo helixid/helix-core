@@ -12,7 +12,11 @@ import {
   didWebFromPath,
   isBareDidWeb,
   isLoopbackHost,
+  HELIX_DID_KINDS,
+  isRawDidWebHost,
   issueDidWeb,
+  ownDidWebProblem,
+  randomDidWebId,
   kyaOsCardServiceEntry,
   normalizeDid,
   parseDidWeb,
@@ -24,16 +28,46 @@ import {
 const JWK = publicKeyBytesToJwk(new Uint8Array(32).fill(7));
 
 describe('did:web issuance and parsing', () => {
-  it('issues did:web:<host>:<org>:<slug>, did:web:<host>:<org> and the bare host, percent-encoding each segment', () => {
-    expect(issueDidWeb({ host: 'helix.test', org: 'acme', slug: 'ledger-agent' })).toBe('did:web:helix.test:acme:ledger-agent');
-    expect(issueDidWeb({ host: 'Helix.Test', org: 'acme' })).toBe('did:web:helix.test:acme');
+  it('issues did:web:<domain>:<kind>:<hex> and the bare issuer DID, the raw host percent-encoded once', () => {
     expect(issueDidWeb({ host: 'helix.test' })).toBe('did:web:helix.test');
-    expect(issueDidWeb({ host: 'localhost:3000', org: 'acme', slug: 'a b' })).toBe('did:web:localhost%3A3000:acme:a%20b');
-    expect(didWebFor('helix.test', ['acme', 'alice:agent'])).toBe('did:web:helix.test:acme:alice%3Aagent');
-    expect(() => issueDidWeb({ host: 'helix.test', slug: 'orphan' })).toThrow(/org segment/);
+    expect(issueDidWeb({ host: 'Helix.Test', kind: 'agents', id: 'ab12cd34' })).toBe('did:web:helix.test:agents:ab12cd34');
+    expect(issueDidWeb({ host: 'localhost:3000', kind: 'accounts', id: '00ff00ff' })).toBe('did:web:localhost%3A3000:accounts:00ff00ff');
+    expect(issueDidWeb({ host: '127.0.0.1:3680' })).toBe('did:web:127.0.0.1%3A3680');
+    for (const kind of HELIX_DID_KINDS) {
+      expect(issueDidWeb({ host: 'helix.test', kind })).toMatch(new RegExp(`^did:web:helix\\.test:${kind}:[0-9a-f]{32}$`));
+    }
+    const one = issueDidWeb({ host: 'helix.test', kind: 'services' });
+    expect(issueDidWeb({ host: 'helix.test', kind: 'services' }), 'random, never derived').not.toBe(one);
+    expect(randomDidWebId()).toMatch(/^[0-9a-f]{32}$/);
+    expect(() => issueDidWeb({ host: 'helix.test', id: 'ab12cd34' })).toThrow(/kind segment/);
+    expect(() => issueDidWeb({ host: 'helix.test', kind: 'org' as never })).toThrow(/kind must be/);
+    expect(() => issueDidWeb({ host: 'helix.test', kind: 'agents', id: 'travel-bot' })).toThrow(/lowercase hex/);
+    expect(() => issueDidWeb({ host: 'helix.test', kind: 'accounts', id: 'ACCT' })).toThrow(/lowercase hex/);
+    expect(didWebFor('helix.test', ['acme', 'a b'])).toBe('did:web:helix.test:acme:a%20b');
+    expect(() => didWebFor('helix.test', ['accounts', 'acct:f61a7e0a9c25']), 'no raw colon inside a segment').toThrow(/segment/);
+    expect(() => didWebFor('localhost%3A3000'), 'DID_DOMAIN is raw, never pre-encoded').toThrow(/raw host/);
+    expect(() => didWebFor('https://helix.test')).toThrow(/host/);
     expect(() => didWebFor('helix.test/path')).toThrow(/host/);
+    expect(() => didWebFor('')).toThrow(/host/);
     expect(() => didWebFor('helix.test', [''])).toThrow(/segment/);
     expect(() => didWebFor('helix.test', ['..'])).toThrow(/segment/);
+    expect(isRawDidWebHost('api.helixid.dev')).toBe(true);
+    expect(isRawDidWebHost('[::1]:3000')).toBe(true);
+    expect(isRawDidWebHost('helix_api:3680')).toBe(true);
+    expect(isRawDidWebHost('localhost:3000:1')).toBe(false);
+    expect(isRawDidWebHost(42 as never)).toBe(false);
+  });
+
+  it('checks a DID on its owner\'s own domain: any path, but no unencoded port', () => {
+    expect(ownDidWebProblem('did:web:acme.example')).toBeUndefined();
+    expect(ownDidWebProblem('did:web:acme.example:bot')).toBeUndefined();
+    expect(ownDidWebProblem('did:web:acme.example:agents:bot')).toBeUndefined();
+    expect(ownDidWebProblem('did:web:localhost%3A3000:x')).toBeUndefined();
+    expect(ownDidWebProblem('did:web:acme.example:v2:2024')).toBeUndefined();
+    expect(ownDidWebProblem('did:web:localhost:3000:x')).toMatch(/unencoded port.*localhost%3A3000/);
+    expect(ownDidWebProblem('did:web:acme.example:8443')).toMatch(/unencoded port/);
+    expect(ownDidWebProblem('did:key:z6Mk')).toMatch(/not a did:web/);
+    expect(ownDidWebProblem(7)).toMatch(/string/);
   });
 
   it('parses what it issues and refuses what names no URL', () => {
@@ -64,6 +98,8 @@ describe('did:web issuance and parsing', () => {
     expect(didWebFromPath('helix.test', '/.well-known/did.json')).toEqual({ did: 'did:web:helix.test', document: 'did' });
     expect(didWebFromPath('helix.test', '/.well-known/kya-os-card.json')).toEqual({ did: 'did:web:helix.test', document: 'card' });
     expect(didWebFromPath('localhost:3000', '/acme/a%20b/did.json')).toEqual({ did: 'did:web:localhost%3A3000:acme:a%20b', document: 'did' });
+    expect(didWebFromPath('helix.test', '/accounts/acct%3Af61a7e0a9c25/did.json'), 'a colon inside a segment names no Helix DID').toBeUndefined();
+    expect(didWebFromPath('localhost%3A3000', '/agents/ab/did.json'), 'the host is raw').toBeUndefined();
     for (const path of ['/v1/agents', '/acme/did.jsonx', '/did.json', '//did.json', '/a/../did.json', '/.well-known/x/did.json', '/a/%E0%A4%A/did.json', '/a//card.json']) {
       expect(didWebFromPath('helix.test', path), path).toBeUndefined();
     }

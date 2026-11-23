@@ -62,16 +62,12 @@ function didWebToUrl(did: string): string {
   }
 
   const decoded = parts.slice(2).map(decodeURIComponent);
-  let [host, ...pathParts] = decoded;
+  // A port is percent-encoded in the host (`localhost%3A3000`); a raw
+  // `did:web:localhost:3000:x` is host `localhost`, path `3000/x`, as the
+  // did:web spec reads it.
+  const [host, ...pathParts] = decoded;
   if (!host) {
     throw new ValidationError(`Invalid did:web DID: ${did}`);
-  }
-
-  // Compatibility: accept legacy/local did:web forms like did:web:localhost:3000
-  // and did:web:127.0.0.1:3000 where port was not percent-encoded.
-  if (isLoopbackHost(host) && pathParts.length > 0 && /^\d+$/.test(pathParts[0] ?? '')) {
-    host = `${host}:${pathParts[0]}`;
-    pathParts = pathParts.slice(1);
   }
 
   let hostname: string;

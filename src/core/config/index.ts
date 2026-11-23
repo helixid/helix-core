@@ -12,6 +12,7 @@
 
 import { z } from 'zod';
 import { derivePublicKey, isSupportedEd25519PrivateKeyHex, publicKeyToMultibase } from '../crypto/keys.js';
+import { didWebFor, isRawDidWebHost } from '../did/web.js';
 
 const BooleanEnvSchema = z.preprocess((value) => {
   if (typeof value === 'boolean') return value;
@@ -207,6 +208,12 @@ export function loadConfig(input: Record<string, unknown>): Config {
   const config = result.data;
   const didMethod = resolveDidMethod(config);
 
+  if (config.DID_DOMAIN && !isRawDidWebHost(config.DID_DOMAIN)) {
+    throw new Error(
+      'Environment configuration is invalid:\n  DID_DOMAIN: the raw host, optionally with a port (api.example.com or localhost:3000), not percent-encoded and without a scheme or path',
+    );
+  }
+
   if (didMethod === 'web') {
     if (!config.DID_DOMAIN) {
       throw new Error(
@@ -214,7 +221,7 @@ export function loadConfig(input: Record<string, unknown>): Config {
       );
     }
     if (!config.HELIX_ISSUER_DID) {
-      config.HELIX_ISSUER_DID = `did:web:${config.DID_DOMAIN}`;
+      config.HELIX_ISSUER_DID = didWebFor(config.DID_DOMAIN);
     }
     if (!config.HELIX_ISSUER_DID.startsWith('did:web:')) {
       throw new Error(

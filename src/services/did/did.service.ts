@@ -10,7 +10,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-import { sha256 } from '@noble/hashes/sha2';
 import {
   deriveDID,
   buildDIDDocument,
@@ -21,6 +20,7 @@ import {
   ErrorCode,
   jsonDigest,
   publicDid,
+  issueDidWeb,
   type AuditEventInput,
   type AuditTrail,
   type Digest,
@@ -34,16 +34,6 @@ import type { ICache } from '../../cache/ICache.js';
 import { NoopCache } from '../../cache/NoopCache.js';
 import { extractEd25519PublicKeyHexFromDIDDocument } from './publicKey.js';
 import { evictDIDCache } from '../../core/did-resolver.js';
-
-/**
- * A short, stable, non-secret identifier derived from an agent's public key
- * — used as the did:web path segment (`:agents:<slug>`). Same construction
- * as deriveDID()'s did:hedera identifier, minus the Hedera-specific prefix.
- */
-function deriveAgentSlug(publicKeyHex: string): string {
-  const hash = sha256(Buffer.from(publicKeyHex, 'hex'));
-  return Buffer.from(hash.slice(0, 16)).toString('hex');
-}
 
 type DIDRecord = {
   id: string;
@@ -213,11 +203,15 @@ export class DIDService implements IDIDService {
       document = buildDIDDocument(did, publicKeyHex, serviceEndpoints);
       anchoring = { transactionId: `not-anchored:key:${did}` };
     } else if (this.didMethod === 'web') {
-      // Hosted at this same instance — see routes/did-web/index.ts, which
-      // serves agent/user DIDs under /agents/:slug/did.json and service DIDs
-      // under /services/:slug/did.json alongside the issuer's own document.
-      const segment = subjectType === 'service' ? 'services' : 'agents';
-      did = `did:web:${this.didDomain}:${segment}:${deriveAgentSlug(publicKeyHex)}`;
+      // Hosted at this same instance: did:web:<DID_DOMAIN>:agents:<hex> or
+      // :services:<hex>, <hex> random (one did:web shape, 2026-11-23), served
+      // at /agents/<hex>/did.json and /services/<hex>/did.json (with its
+      // card) by routes/entity-card. Users are did:key only (L3-H).
+      if (subjectType === 'user') {
+        this.auditDidCreationFailed(requestId, ErrorCode.VALIDATION_ERROR);
+        throw new HelixError(ErrorCode.VALIDATION_ERROR, 'A user DID is a did:key, never a did:web under the Helix domain', 400);
+      }
+      did = issueDidWeb({ host: this.didDomain, kind: subjectType === 'service' ? 'services' : 'agents' });
       document = buildDIDDocument(did, publicKeyHex, serviceEndpoints);
       anchoring = { transactionId: `not-anchored:web:${did}` };
     } else {
