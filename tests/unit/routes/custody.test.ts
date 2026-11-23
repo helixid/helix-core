@@ -322,3 +322,25 @@ describe('custody routes', () => {
     expect(withAccount.legacyEnroll).not.toHaveBeenCalled();
   });
 });
+
+describe('the account is the agent\'s owner (F-3 follow-up: responsibleParty === issuer(root))', () => {
+  it('names the caller\'s account DID as owner of every agent it creates, and refuses another ownerDid', async () => {
+    const a = await app({ ownerDidOf: () => 'did:web:helix.example:accounts:acc-1' });
+    const custodial = await post(a, '/v1/agents', { name: 'Owned', scopes: ['read:orders'], keyCustody: 'helix' });
+    expect(custodial.statusCode, custodial.body).toBe(201);
+    expect(a.h.issued.at(-1)!.input).toMatchObject({ agentDid: custodial.json().did, ownerDid: 'did:web:helix.example:accounts:acc-1' });
+    // The same DID in the body is fine; any other is refused before anything is created.
+    expect((await post(a, '/v1/agents', { name: 'Same', keyCustody: 'helix', ownerDid: 'did:web:helix.example:accounts:acc-1' })).statusCode).toBe(201);
+    const refused = await post(a, '/v1/agents', { name: 'Other', keyCustody: 'helix', ownerDid: 'did:web:someone-else.example' });
+    expect(refused.statusCode).toBe(400);
+    expect(refused.json().error.message).toContain("account's DID");
+    expect(a.h.issued).toHaveLength(2);
+  });
+
+  it('without accounts the body\'s ownerDid is kept, else the Helix issuer answers for the agent', async () => {
+    const a = await app();
+    await post(a, '/v1/agents', { name: 'Named', keyCustody: 'helix', ownerDid: 'did:web:owner.example' });
+    await post(a, '/v1/agents', { name: 'Unnamed', keyCustody: 'helix' });
+    expect(a.h.issued.map((entry) => entry.input['ownerDid'])).toEqual(['did:web:owner.example', 'did:web:helix.example']);
+  });
+});

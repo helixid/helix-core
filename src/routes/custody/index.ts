@@ -75,6 +75,13 @@ export interface CustodyRouteOptions {
   actorOf?: ((request: FastifyRequest) => string) | undefined;
   /** The org segment of a Helix-hosted did:web. */
   orgOf?: ((request: FastifyRequest) => Promise<string | undefined> | string | undefined) | undefined;
+  /**
+   * The DID of the account the caller acts for. An agent it creates names it
+   * as owner (its identity credential's and card's `responsibleParty`), and a
+   * different `ownerDid` in the body is refused. None in a build without
+   * accounts: the body's `ownerDid`, else the Helix issuer.
+   */
+  ownerDidOf?: ((request: FastifyRequest) => Promise<string | undefined> | string | undefined) | undefined;
   /** Called after a subject is created, e.g. to link it to the caller's account. */
   onCreated?: ((request: FastifyRequest, result: OnboardingResult) => Promise<void> | void) | undefined;
   /**
@@ -136,6 +143,7 @@ const custodyRoutes: FastifyPluginAsync<CustodyRouteOptions> = async (fastify, o
       actor: actor ?? actorOf(request),
       defaults: await options.defaultsOf?.(request),
       org: await options.orgOf?.(request),
+      owner: await options.ownerDidOf?.(request),
     };
   }
 
