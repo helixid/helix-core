@@ -110,6 +110,13 @@ describe('AgentService Unit Tests', () => {
         expect(repository.createEnrollmentToken.mock.calls[0][0]).toMatchObject({ expiresAt: null });
       });
 
+      it.each([undefined, '', '   ', 7])('rejects agentName=%s with VALIDATION_ERROR before anything is stored', async (agentName) => {
+        await expect(
+          agentService.generateEnrollmentToken({ agentName: agentName as unknown as string, requestedScopes: ['read'] }, 'req-1'),
+        ).rejects.toMatchObject({ code: 'VALIDATION_ERROR', httpStatus: 400 });
+        expect(repository.createEnrollmentToken).not.toHaveBeenCalled();
+      });
+
       it.each([0, -1, 1.5, Number.NaN])('rejects expiry=%s with INVALID_EXPIRY', async (expiry) => {
         await expect(
           agentService.generateEnrollmentToken({ agentName: 'test', requestedScopes: ['read'], expiry }, 'req-1'),

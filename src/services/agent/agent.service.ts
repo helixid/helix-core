@@ -145,6 +145,10 @@ export class AgentService implements IAgentService {
     },
     requestId: string,
   ): Promise<{ token: string; expiresAt?: string }> {
+    // A JSON body may leave it out; the token row needs it, so refuse here (400), not at the database (500).
+    if (typeof input.agentName !== 'string' || input.agentName.trim() === '') {
+      throw new HelixError(ErrorCode.VALIDATION_ERROR, 'agentName is required', 400);
+    }
     // '' can still arrive at runtime from a JSON body even though the type says number.
     const expiry = input.expiry === null || (input.expiry as unknown) === '' ? undefined : input.expiry;
     if (expiry !== undefined && !(Number.isInteger(expiry) && expiry > 0)) {
