@@ -86,7 +86,8 @@ export interface CustodyKeyRow {
   revokedAt: Date | null;
 }
 
-export type NewCustodyKey = Omit<CustodyKeyRow, 'createdAt'>;
+/** `createdAt` defaults to now; story C-E passes the service clock, so key windows and hop times share one clock. */
+export type NewCustodyKey = Omit<CustodyKeyRow, 'createdAt'> & { createdAt?: Date | undefined };
 export type CustodyKeyPatch = Partial<Pick<CustodyKeyRow, 'status' | 'retiresAt' | 'revokedAt'>>;
 
 export interface CustodyRecordFilter {

@@ -163,10 +163,21 @@ function stored<T>(record: VCRecord): StoredCredential<T> {
   };
 }
 
+/**
+ * When a hop was issued: its proof's `created`, stamped by the API that
+ * signed it, as the key windows are (story C-E); the row's time only for a
+ * hop without one. Database clocks are not mixed with the API's.
+ */
+function issuedAt(record: VCRecord): number | undefined {
+  const created = (stored<SignedDelegationHop>(record).credential.proof as { created?: unknown } | undefined)?.created;
+  const at = typeof created === 'string' ? Date.parse(created) : Number.NaN;
+  return Number.isNaN(at) ? record.createdAt?.getTime() : at;
+}
+
 /** Whether a hop record was issued while the key of `bound` was current (story C-E point 4). */
 function issuedIn(record: VCRecord, bound: BoundWindow | undefined): boolean {
   if (!bound) return true;
-  const at = record.createdAt?.getTime();
+  const at = issuedAt(record);
   if (at === undefined) return false;
   return at >= bound.from.getTime() && (bound.until === null || at < bound.until.getTime());
 }
@@ -566,7 +577,7 @@ export class CredentialService implements HopReissuer {
     const hops = await this.vcRepo.findActiveBySubjectDid(did, DELEGATION_CREDENTIAL_TYPE);
     return hops
       .filter((record) => issuedIn(record, bound) && invokerOf(stored<SignedDelegationHop>(record).credential) === did)
-      .sort((a, b) => (a.createdAt?.getTime() ?? 0) - (b.createdAt?.getTime() ?? 0));
+      .sort((a, b) => (issuedAt(a) ?? 0) - (issuedAt(b) ?? 0));
   }
 
   /**

@@ -895,7 +895,7 @@ export class CustodyService implements CustodialKeys {
 
     const now = this.clock();
     const retiresAt = new Date(now.getTime() + overlapSeconds * 1000);
-    await this.options.records.addKey({ did, kid: newKid, location: target, publicKeyJwk, status: 'active', sequence: next.sequence, retiresAt: null, revokedAt: null });
+    await this.options.records.addKey({ did, kid: newKid, location: target, publicKeyJwk, status: 'active', sequence: next.sequence, retiresAt: null, revokedAt: null, createdAt: now });
     await this.options.records.updateKey(did, previous.kid, { status: 'retiring', retiresAt });
     // Helix must hold no key for a self-custody subject: an old Helix-held
     // key leaving Helix is shredded now (F-3 point 6). Its public half stays
@@ -1208,7 +1208,7 @@ export class CustodyService implements CustodialKeys {
     context: CustodyContext,
     ownerEntityType?: EntityType,
   ): Promise<OnboardingResult> {
-    await this.options.records.addKey({ did, kid, location, publicKeyJwk, status: 'active', sequence: 1, retiresAt: null, revokedAt: null });
+    await this.options.records.addKey({ did, kid, location, publicKeyJwk, status: 'active', sequence: 1, retiresAt: null, revokedAt: null, createdAt: this.clock() });
     const record = (await this.options.records.findRecord(did))!;
     const publicKey = publicKeyJwkBytes(publicKeyJwk);
     const documents = await this.documentsFor(record, [{ kid, publicKeyJwk }], documentVersion(await this.options.records.listKeys(did)), ownerEntityType);

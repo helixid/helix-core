@@ -144,7 +144,7 @@ export class InMemoryCustodyStorageDriver implements CustodyStorageDriver {
   async addKey(row: NewCustodyKey): Promise<CustodyKeyRow> {
     const list = this.keys.get(row.did) ?? [];
     if (list.some((key) => key.kid === row.kid)) throw new Error(`custody key already exists: ${row.kid}`);
-    const key: CustodyKeyRow = { ...row, createdAt: new Date() };
+    const key: CustodyKeyRow = { ...row, createdAt: row.createdAt ?? new Date() };
     this.keys.set(row.did, [...list, key]);
     return { ...key };
   }
@@ -312,7 +312,8 @@ export class PrismaCustodyStorageDriver implements CustodyStorageDriver {
   }
 
   async addKey(row: NewCustodyKey): Promise<CustodyKeyRow> {
-    return keyFromPrisma(await this.db.custodyKey.create({ data: { ...row } }));
+    const { createdAt, ...rest } = row;
+    return keyFromPrisma(await this.db.custodyKey.create({ data: { ...rest, ...(createdAt ? { createdAt } : {}) } }));
   }
 
   async listKeys(did: string): Promise<CustodyKeyRow[]> {
@@ -607,7 +608,7 @@ export class SqliteCustodyStorageDriver implements CustodyStorageDriver {
       INSERT INTO custody_keys (did, kid, location, public_key_jwk, status, sequence, created_at, retires_at, revoked_at)
       VALUES (${sqliteLiteral(row.did)}, ${sqliteLiteral(row.kid)}, ${sqliteLiteral(row.location)},
         ${sqliteLiteral(JSON.stringify(row.publicKeyJwk))}, ${sqliteLiteral(row.status)}, ${sqliteLiteral(row.sequence)},
-        ${sqliteLiteral(new Date())}, ${sqliteLiteral(row.retiresAt)}, ${sqliteLiteral(row.revokedAt)})
+        ${sqliteLiteral(row.createdAt ?? new Date())}, ${sqliteLiteral(row.retiresAt)}, ${sqliteLiteral(row.revokedAt)})
     `);
     return (await this.listKeys(row.did)).find((key) => key.kid === row.kid)!;
   }

@@ -114,6 +114,9 @@ describe.each(backends)('custody repositories (%s)', (_name, make) => {
     await key('did:web:h:o:r2', 1, 'retiring', t(2));
     await key('did:web:h:o:r3', 1, 'retiring', t(9));
     await key('did:web:h:o:r3', 2, 'retired', t(0));
+    // A key created at a given instant (the service clock, story C-E) keeps it.
+    const stamped = await custody.addKey({ did: 'did:web:h:o:r2', kid: 'did:web:h:o:r2#key-2', location: 'self', publicKeyJwk: JWK, status: 'active', sequence: 2, retiresAt: null, revokedAt: null, createdAt: t(3) });
+    expect(stamped.createdAt).toEqual(t(3));
     expect(await custody.listRetiringDue(t(5), 10)).toEqual(['did:web:h:o:r1', 'did:web:h:o:r2']);
     expect(await custody.listRetiringDue(t(5), 1)).toEqual(['did:web:h:o:r1']);
     expect(await custody.listRetiringDue(t(0), 10)).toEqual([]);

@@ -143,6 +143,14 @@ describe('CredentialService as the hop reissuer (story C-E)', () => {
     expect(await service.revokeHopsForKid({ did: agentDid, kid: 'a', requestId: 'cmp', bound })).toEqual([]);
   });
 
+  it('a hop without a proof time is placed by its row time', async () => {
+    const hop = await service.issueRootHop({ issuer: helixDid, invoker: agentDid, invocationTarget: RESOURCE, allowedAction: ['orders:read'] }, 'r');
+    const { proof: _proof, ...unsigned } = hop as unknown as Record<string, unknown>;
+    await vcRepo.createVc({ vcId: 'urn:zcap:legacy', subjectDid: agentDid, subjectType: 'agent', vcJson: { ...unsigned, id: 'urn:zcap:legacy' }, statusListIndex: 99, expiresAt: null, vcType: 'DelegationCredential', issuerDid: helixDid });
+    const revoked = await service.revokeHopsForKid({ did: agentDid, kid: 'a', requestId: 'cmp', bound: { from: new Date(Date.now() - 60_000), until: new Date(Date.now() + 60_000) } });
+    expect(revoked.sort()).toEqual([hop.id, 'urn:zcap:legacy'].sort());
+  });
+
   it('reissues the identity credential after a compromise; anything else is not an identity', async () => {
     const identity = await service.issueIdentity({ agentDid, name: 'bot', ownerDid: helixDid }, 'i');
     const renewed = await service.reissueIdentity({ vcId: identity.id }, 'cmp');
