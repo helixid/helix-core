@@ -3,6 +3,8 @@
 // under a user's consent.
 import { describe, expect, it, vi } from 'vitest';
 import { actsOnUserConsent } from '../../../../src/services/consent/acts-on-user-consent.js';
+import { CredentialService } from '../../../../src/services/credentials/credential.service.js';
+import { HELIX } from './harness.js';
 import { AGENT, OTHER_AGENT, consentWorld } from './harness.js';
 
 describe('actsOnUserConsent', () => {
@@ -34,5 +36,23 @@ describe('actsOnUserConsent', () => {
     const { approved } = await world.consentTo();
     await world.consent.renewHop(await world.renewalJws({ consentId: approved.consentId }), 'r');
     expect(await world.credentials.rootIssuersOfHopsTo(AGENT.did)).toEqual([approved.hop.issuer]);
+  });
+
+  it('rootIssuersOfHopsTo skips what is no hop, a chain whose parent is gone, and gives up past ten hops', async () => {
+    type Row = { vcId: string; vcType: string | null; issuerDid: string | null; parentVcId: string | null };
+    const rows: Row[] = [
+      { vcId: 'identity', vcType: 'AgentIdentityCredential', issuerDid: 'did:web:helix', parentVcId: null },
+      { vcId: 'orphan', vcType: 'DelegationCredential', issuerDid: 'did:web:agent-x', parentVcId: 'gone' },
+      { vcId: 'deep-0', vcType: 'DelegationCredential', issuerDid: 'did:key:z6MkRootTooFar', parentVcId: null },
+      ...Array.from({ length: 11 }, (_, i) => ({ vcId: `deep-${i + 1}`, vcType: 'DelegationCredential', issuerDid: 'did:web:agent-y', parentVcId: `deep-${i}` })),
+      { vcId: 'root', vcType: 'DelegationCredential', issuerDid: 'did:key:z6MkUser', parentVcId: null },
+    ];
+    const byId = new Map(rows.map((row) => [row.vcId, row]));
+    const repo = {
+      findMany: vi.fn(async () => [byId.get('identity'), byId.get('orphan'), byId.get('deep-11'), byId.get('root')]),
+      findByVcId: vi.fn(async (id: string) => byId.get(id) ?? null),
+    };
+    const credentials = new CredentialService(repo as never, {} as never, {} as never, HELIX.signer, {} as never, {} as never, {} as never);
+    expect(await credentials.rootIssuersOfHopsTo('did:web:agent')).toEqual(['did:key:z6MkUser']);
   });
 });
