@@ -30,6 +30,12 @@
  * transaction (each bit on its issuer's list), each affected list is
  * republished, one audit event and one revocation signal are emitted per
  * credential (`StatusListService.revokeMany`).
+ *
+ * Story C-E point 5: a compromised key may be revoked by any ancestor issuer
+ * of the subject's delegations, with the same kind of request
+ * (`typ: "kya-os-key-revocation+jwt"`, `{iss, did, kid, iat, jti, aud}`):
+ * `verifyKeyRevocation` accepts the issuer of any active hop delegated to
+ * the subject, or of any hop above one; the subject itself never.
  */
 
 import { randomUUID } from 'node:crypto';
@@ -49,6 +55,8 @@ import type { VcRepository, VCRecord } from '../../repositories/vc.repository.js
 import type { StatusListService } from '../status-lists/status-list.service.js';
 
 export const REVOCATION_REQUEST_TYP = 'kya-os-revocation+jwt';
+/** Story C-E: a request to revoke a compromised key, signed by an ancestor issuer. */
+export const KEY_REVOCATION_REQUEST_TYP = 'kya-os-key-revocation+jwt';
 /** How far a request's `iat` may be from now. */
 export const REVOCATION_REQUEST_SKEW_SECONDS = 300;
 /** The deepest chain walked up for the revoker check, and down for the cascade. */
@@ -62,6 +70,17 @@ export interface RevocationRequestClaims {
   aud: string;
 }
 
+export interface KeyRevocationRequestClaims {
+  iss: string;
+  /** The subject whose key is revoked. */
+  did: string;
+  /** The key, as fragment or `<did>#<fragment>`. */
+  kid: string;
+  iat: number;
+  jti: string;
+  aud: string;
+}
+
 export interface RevocationOutcome {
   credentialId: string;
   revoker: string;
@@ -70,7 +89,7 @@ export interface RevocationOutcome {
 }
 
 export interface RevocationServiceOptions {
-  repo: Pick<VcRepository, 'findByVcId' | 'findActiveChildren'>;
+  repo: Pick<VcRepository, 'findByVcId' | 'findActiveChildren'> & Partial<Pick<VcRepository, 'findActiveBySubjectDid'>>;
   statusLists: Pick<StatusListService, 'revokeMany'>;
   /** Public DID resolution, for the revoker's key. */
   resolveDid: DidResolver;
@@ -117,6 +136,51 @@ export class RevocationService {
 
   /** The claims of a request whose signature verified under its revoker's key; throws for anything else. */
   async verifyRequest(jws: unknown): Promise<RevocationRequestClaims> {
+    return this.#verifySigned(jws, REVOCATION_REQUEST_TYP, (claims, invalid) => {
+      if (typeof claims['credentialId'] !== 'string' || claims['credentialId'].length === 0) invalid('credentialId is required');
+    }) as unknown as Promise<RevocationRequestClaims>;
+  }
+
+  /** Story C-E: a key-revocation request for `did`'s key `kid`, signed by `revokerSigner`. */
+  async signKeyRevocation(did: string, kid: string, revokerSigner: Signer): Promise<string> {
+    const claims: KeyRevocationRequestClaims = {
+      iss: revokerSigner.did,
+      did,
+      kid,
+      iat: Math.floor(this.#clock() / 1000),
+      jti: `urn:uuid:${randomUUID()}`,
+      aud: this.#options.audience,
+    };
+    return signJws(claims as unknown as Record<string, unknown>, revokerSigner, { header: { typ: KEY_REVOCATION_REQUEST_TYP } });
+  }
+
+  /**
+   * Story C-E point 5: judges a signed request to revoke `did`'s key `kid`.
+   * Resolves to the revoker DID when it issued an active hop delegated to
+   * `did`, or a hop above one; throws otherwise (the subject never may).
+   */
+  async verifyKeyRevocation(jws: unknown, did: string, kid: string): Promise<string> {
+    const claims = await this.#verifySigned(jws, KEY_REVOCATION_REQUEST_TYP, (fields, invalid) => {
+      if (fields['did'] !== did) invalid(`did must be ${did}`);
+      const fragment = (value: unknown): string => (typeof value === 'string' ? value.slice(value.indexOf('#') + 1) : '');
+      if (fragment(fields['kid']).length === 0 || fragment(fields['kid']) !== fragment(kid)) invalid(`kid must be ${kid}`);
+    });
+    const revoker = claims['iss'] as string;
+    if (revoker === did) throw new HelixError(ErrorCode.REVOCATION_FORBIDDEN, 'A subject may not revoke its own key through an issuer request; use its account', 403);
+    const hops = (await this.#options.repo.findActiveBySubjectDid?.(did, DELEGATION_CREDENTIAL_TYPE)) ?? [];
+    for (const hop of hops) {
+      const { allowed } = await this.revokersOf(hop);
+      if (allowed.has(revoker)) return revoker;
+    }
+    throw new HelixError(ErrorCode.REVOCATION_FORBIDDEN, `${revoker} issued no delegation to ${did}, directly or above one`, 403);
+  }
+
+  /** Verifies a revoker-signed request of type `typ`: header, common claims, `check` for the rest, then the signature. */
+  async #verifySigned(
+    jws: unknown,
+    expectedTyp: string,
+    check: (claims: Record<string, unknown>, invalid: (message: string) => never) => void,
+  ): Promise<Record<string, unknown>> {
     const invalid = (message: string): never => {
       throw new HelixError(ErrorCode.REVOCATION_REQUEST_INVALID, `revocation request refused: ${message}`, 400);
     };
@@ -127,7 +191,7 @@ export class RevocationService {
     } catch (error) {
       return invalid((error as Error).message);
     }
-    if (typ !== REVOCATION_REQUEST_TYP) invalid(`typ must be ${REVOCATION_REQUEST_TYP}`);
+    if (typ !== expectedTyp) invalid(`typ must be ${expectedTyp}`);
     let payload: unknown;
     try {
       payload = JSON.parse(Buffer.from(jws.split('.')[1]!, 'base64url').toString('utf8'));
@@ -136,7 +200,7 @@ export class RevocationService {
     }
     const claims = payload as Partial<RevocationRequestClaims>;
     if (payload === null || typeof payload !== 'object' || typeof claims.iss !== 'string' || !claims.iss.startsWith('did:')) invalid('iss must be the revoker DID');
-    if (typeof claims.credentialId !== 'string' || claims.credentialId.length === 0) invalid('credentialId is required');
+    check(payload as Record<string, unknown>, invalid);
     if (typeof claims.jti !== 'string' || claims.jti.length === 0) invalid('jti is required');
     if (claims.aud !== this.#options.audience) invalid(`aud must be ${this.#options.audience}`);
     const now = Math.floor(this.#clock() / 1000);
@@ -149,7 +213,7 @@ export class RevocationService {
       const reason = error instanceof InvalidJWSError ? `${error.reason}: ` : '';
       throw new HelixError(ErrorCode.REVOCATION_SIGNATURE_INVALID, `revocation request signature refused: ${reason}${(error as Error).message}`, 401);
     }
-    return claims as RevocationRequestClaims;
+    return claims as Record<string, unknown>;
   }
 
   /** The DIDs that may revoke `record`, and the DIDs that are its subject (who never may). */

@@ -30,7 +30,10 @@
  *                                        rotated with the current key's
  *                                        signature (`currentKeyProof`) instead
  *                                        of the caller's authorisation
- *   POST /{agents|services|owners}/:did/keys/revoke     a compromised key (C-E)
+ *   POST /{agents|services|owners}/:did/keys/revoke     a compromised key (C-E):
+ *                                        the caller's authorisation, or `request`,
+ *                                        a key-revocation request an ancestor
+ *                                        issuer of the subject's delegations signed
  *   POST /agents/:did/keys/recover       lost-key recovery: 501 until story L3-H
  *   GET  /custody/defaults               the caller's resolved default choice
  *   GET  /conformance/report             claim set and `custody: helix` exclusions
@@ -95,6 +98,12 @@ export interface CustodyRouteOptions {
    * account, so the hosted build finds the account from its own link.
    */
   onActivated?: ((request: FastifyRequest, result: OnboardingResult) => Promise<void> | void) | undefined;
+  /**
+   * Story C-E point 5: judges a key-revocation request an ancestor issuer
+   * signed (`RevocationService.verifyKeyRevocation`), resolving to the
+   * revoker DID. Without it, only the caller's own authorisation revokes a key.
+   */
+  keyRevocations?: { verifyKeyRevocation(jws: unknown, did: string, kid: string): Promise<string> } | undefined;
   /** The subjects the caller's conformance report covers; the hosted build keeps it to the account's own. Default: all. */
   reportSubjects?: ((request: FastifyRequest, subjects: ConformanceSubject[]) => Promise<ConformanceSubject[]> | ConformanceSubject[]) | undefined;
   /** What the conformance report says the implementation claims. Default: no claims. */
@@ -300,9 +309,15 @@ const custodyRoutes: FastifyPluginAsync<CustodyRouteOptions> = async (fastify, o
     fastify.post<{ Params: { did: string } }>(`/${path}/:did/keys/revoke`, async (request, reply) => {
       try {
         const did = request.params.did;
-        await authorize(request, { action: 'revokeKey', subjectType, did });
         const input = body(request);
-        return reply.code(200).send(await service.revokeKey(did, input['kid'], await context(request), subjectType));
+        let actor: string | undefined;
+        if (input['request'] !== undefined && options.keyRevocations) {
+          // An ancestor issuer of the subject's delegations signed the request: it is the actor.
+          actor = await options.keyRevocations.verifyKeyRevocation(input['request'], did, String(input['kid'] ?? ''));
+        } else {
+          await authorize(request, { action: 'revokeKey', subjectType, did });
+        }
+        return reply.code(200).send(await service.revokeKey(did, input['kid'], await context(request, actor), subjectType));
       } catch (error) {
         return send(reply, request, error);
       }

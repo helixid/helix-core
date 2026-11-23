@@ -196,6 +196,26 @@ describe('custody routes', () => {
     expect(missing.statusCode).toBe(404);
   });
 
+  it('an ancestor issuer revokes a key with its signed request, no admin key; the request is judged by the hook (story C-E)', async () => {
+    const verifyKeyRevocation = vi.fn(async (jws: unknown, did: string, kid: string) => {
+      if (jws !== 'signed-by-issuer') throw Object.assign(new Error('refused'), { code: 'REVOCATION_FORBIDDEN', httpStatus: 403 });
+      return `did:web:issuer.example:for:${did.length}:${kid}`;
+    });
+    const a = await app({ keyRevocations: { verifyKeyRevocation } });
+    const agent = (await post(a, '/v1/agents', { name: 'Custodial', keyCustody: 'helix' })).json() as { did: string; kid: string };
+    await post(a, `/v1/agents/${enc(agent.did)}/keys/rotate`, {});
+    const refused = await post(a, `/v1/agents/${enc(agent.did)}/keys/revoke`, { kid: 'key-1', request: 'forged' }, {});
+    expect(refused.statusCode).toBe(403);
+    const revoked = await post(a, `/v1/agents/${enc(agent.did)}/keys/revoke`, { kid: 'key-1', request: 'signed-by-issuer' }, {});
+    expect(revoked.statusCode, revoked.body).toBe(200);
+    expect(revoked.json()).toMatchObject({ revokedKid: agent.kid });
+    expect(verifyKeyRevocation).toHaveBeenLastCalledWith('signed-by-issuer', agent.did, 'key-1');
+    // Without a hook, a request is no authorisation: the admin key is still needed.
+    const plain = await app();
+    const other = (await post(plain, '/v1/agents', { name: 'Custodial', keyCustody: 'helix' })).json() as { did: string };
+    expect((await post(plain, `/v1/agents/${enc(other.did)}/keys/revoke`, { kid: 'key-1', request: 'signed-by-issuer' }, {})).statusCode).toBe(403);
+  });
+
   it('POST /v1/agents with an enrollmentToken goes unchanged to story F-1 token onboarding, without the custody authorization', async () => {
     const onboardWithCustody = vi.fn(async () => ({ agentDid: 'did:web:h:agents:t', vcId: 'vc:1', identity: { id: 'vc:1' }, attestations: [{ id: 'att:1' }] }));
     const { enrollmentOnboardingHandler } = await import('../../../src/routes/agent/index.js');
