@@ -105,6 +105,27 @@ describe('DIDService Branch Coverage', () => {
     });
   });
 
+  describe('createDID with DID_METHOD=web: did:web:<domain>:<kind>:<hex>', () => {
+    it('mints agents and services under their kind with a random hex id, the port encoded once', async () => {
+      const web = new DIDService(repository, hedera, audit, undefined, 300, 'web', 'localhost:3680');
+      repository.findDidByPublicKey.mockResolvedValue(null);
+      repository.createDid.mockImplementation(async (input: { id: string; didDocument: unknown }) => ({ ...input, createdAt: new Date() }));
+      const agent = await web.createDID('a'.repeat(64), 'agent', [], 'req-a');
+      const service = await web.createDID('b'.repeat(64), 'service', [], 'req-s');
+      expect(agent.did).toMatch(/^did:web:localhost%3A3680:agents:[0-9a-f]{32}$/);
+      expect(service.did).toMatch(/^did:web:localhost%3A3680:services:[0-9a-f]{32}$/);
+      expect(agent.did.split(':').pop(), 'never derived from the key').not.toBe(service.did.split(':').pop());
+      expect(hedera.anchorDocument).not.toHaveBeenCalled();
+    });
+
+    it('refuses a user did:web: users are did:key only', async () => {
+      const web = new DIDService(repository, hedera, audit, undefined, 300, 'web', 'helix.test');
+      repository.findDidByPublicKey.mockResolvedValue(null);
+      await expect(web.createDID('c'.repeat(64), 'user', [], 'req-u')).rejects.toMatchObject({ code: ErrorCode.VALIDATION_ERROR, httpStatus: 400 });
+      expect(repository.createDid).not.toHaveBeenCalled();
+    });
+  });
+
   describe('resolveDID branches', () => {
     it('throws if not found', async () => {
         repository.findDidById.mockResolvedValue(null);

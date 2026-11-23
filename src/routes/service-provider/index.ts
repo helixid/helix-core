@@ -44,7 +44,6 @@ export interface ServiceProviderRouteOptions {
     service: Pick<CustodyService, 'createService'>;
     defaultsOf?: ((request: FastifyRequest) => Promise<CustodyDefaults | undefined> | CustodyDefaults | undefined) | undefined;
     actorOf?: ((request: FastifyRequest) => string) | undefined;
-    orgOf?: ((request: FastifyRequest) => Promise<string | undefined> | string | undefined) | undefined;
   } | undefined;
 }
 
@@ -74,7 +73,6 @@ const serviceProviderRoutes: FastifyPluginAsync<ServiceProviderRouteOptions> = a
           requestId: request.id,
           actor: custody.actorOf?.(request) ?? 'admin',
           defaults,
-          org: await custody.orgOf?.(request),
         });
         return reply.code(201).send({ ...service, ...custodyResult });
       }

@@ -31,16 +31,16 @@ import {
  *   GET /{path}/card.json                 its card
  *   GET /.well-known/kya-os-card.json     the bare-host org's card (did:web:<host>)
  *
- * `{path}` is any depth: `<org>/<agent>` for an agent or service, `<org>` for
- * an org. The served document always anchors the card with the
+ * `{path}` is any depth. Helix builds `<kind>/<hex>` (`agents/<hex>`,
+ * `services/<hex>`, `accounts/<hex>`: `did:web:<host>:<kind>:<hex>`), and the
+ * lookup is by DID, so any path a stored DID has is served. The served document always anchors the card with the
  * `KyaOsEntityCard` service entry (SPEC-ENTITY-CARD §5.3), so a document
  * stored before this story resolves in two steps too. The card is built on
  * every read from what the source knows (`buildEntityCard`): never a
  * `conformanceLevel`, never a proof.
  *
  * Registered after the static routes: Fastify's wildcard has the lowest
- * priority, so `/.well-known/did.json`, `/agents/:slug/did.json` and every
- * `/v1/...` route stay with their own plugins; anything else that is not a
+ * priority, so the issuer's `/.well-known/did.json` and every `/v1/...` route stay with their own plugins; anything else that is not a
  * `did.json` or `card.json` path falls through to the usual 404.
  */
 
@@ -52,7 +52,7 @@ export interface EntityCardRecord {
 }
 
 export interface EntityCardSource {
-  /** The did:web host these documents are served for, with its port when it has one (`%3A`-encoded or not). */
+  /** The did:web host these documents are served for: the raw `DID_DOMAIN` (`host[:port]`, not percent-encoded). */
   host: string;
   find(did: string): Promise<EntityCardRecord | null>;
 }
@@ -65,14 +65,6 @@ export interface EntityCardRouteOptions {
    * `didDocument` URL are built on it.
    */
   publicOrigin?: string | undefined;
-}
-
-function decodedHost(host: string): string {
-  try {
-    return decodeURIComponent(host);
-  } catch {
-    return host;
-  }
 }
 
 /** The URLs the route serves `did` at. */
@@ -88,7 +80,7 @@ export function hostedUrls(did: string, publicOrigin: string | undefined): { did
 }
 
 const entityCardRoutes: FastifyPluginAsync<EntityCardRouteOptions> = async (fastify, options) => {
-  const host = decodedHost(options.source.host);
+  const host = options.source.host;
 
   async function lookup(did: string): Promise<EntityCardRecord> {
     const record = await options.source.find(did);

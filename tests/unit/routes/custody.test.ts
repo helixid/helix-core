@@ -258,7 +258,7 @@ describe('custody routes', () => {
     });
   });
 
-  it('uses the hosted build hooks: authorize, actor, account defaults, org and onCreated', async () => {
+  it('uses the hosted build hooks: authorize, actor, account defaults and onCreated', async () => {
     const created: string[] = [];
     const activated: string[] = [];
     const authorize = vi.fn(async (request: { headers: Record<string, unknown> }) => {
@@ -268,7 +268,6 @@ describe('custody routes', () => {
       authorize: authorize as never,
       actorOf: () => 'account:acc_1',
       defaultsOf: () => ({ defaultKeyCustody: 'helix', defaultDidHosting: 'helix' }),
-      orgOf: () => 'acme',
       onCreated: (_request, result) => void created.push(result.did),
       onActivated: (_request, result) => void activated.push(`${result.did} ${result.status}`),
       implementation: { name: 'Helix Enterprise', version: '1', claims: [{ profile: 'core', level: 'L1' }] },
@@ -277,7 +276,7 @@ describe('custody routes', () => {
     const headers = { authorization: 'Bearer acc' };
     const agent = await post(a, '/v1/agents', { name: 'Follows account' }, headers);
     expect(agent.statusCode, agent.body).toBe(201);
-    expect(agent.json()).toMatchObject({ keyCustody: 'helix', did: expect.stringMatching(/^did:web:helix\.example:acme:/) });
+    expect(agent.json()).toMatchObject({ keyCustody: 'helix', did: expect.stringMatching(/^did:web:helix\.example:agents:[0-9a-f]{32}$/) });
     expect(created).toEqual([agent.json().did]);
     expect(a.h.audit.events.find((entry) => entry.event.event === 'CUSTODY_CHOSEN')?.payload).toMatchObject({ actor: 'account:acc_1', source: { keyCustody: 'account' } });
     const defaults = await a.app.inject({ method: 'GET', url: '/v1/custody/defaults', headers });

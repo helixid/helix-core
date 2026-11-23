@@ -105,7 +105,7 @@ describe('entity-card routes', () => {
   });
 
   it('builds the service endpoint and didDocument URL on publicOrigin when the stack is not at https://<host>', async () => {
-    const local = await harness({ publicOrigin: 'http://127.0.0.1:3580/', host: '127.0.0.1%3A3580' });
+    const local = await harness({ publicOrigin: 'http://127.0.0.1:3580/', host: '127.0.0.1:3580' });
     try {
       const document = (await local.app.inject({ method: 'GET', url: '/acme/ledger-agent/did.json' })).json();
       expect(local.find).toHaveBeenCalledWith('did:web:127.0.0.1%3A3580:acme:ledger-agent');

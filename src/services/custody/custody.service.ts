@@ -58,7 +58,9 @@ import {
   didKeyFromPublicKey,
   didWebCardUrl,
   didWebDocumentUrl,
-  didWebFor,
+  issueDidWeb,
+  ownDidWebProblem,
+  type HelixDidKind,
   enrollmentProofMessage,
   evictDIDCache,
   findScopeProblem,
@@ -116,8 +118,6 @@ export const DEFAULT_ENROLLMENT_TTL_SECONDS = 24 * 60 * 60;
 export const DEFAULT_ROTATION_OVERLAP_SECONDS = 24 * 60 * 60;
 export const MAX_SIGN_PAYLOAD_BYTES = 64 * 1024;
 export const CUSTODY_DID_UPDATE_TYPE = 'custody_rotation';
-/** The org segment of a Helix-hosted did:web when the caller names none (`did:web:<host>:<org>:<slug>`, story C-A). */
-export const DEFAULT_CUSTODY_ORG = 'default';
 /** The bound the agent-create route's enrollment token documented for `maxDelegationDepth`. */
 export const MAX_DELEGATION_DEPTH_LIMIT = 5;
 
@@ -182,7 +182,7 @@ export interface CustodyServiceOptions {
   /** Keeps each custody event's committed facts beside it (story F-4 point 6); see `CustodyFactsSink`. */
   auditFacts?: CustodyFactsSink | undefined;
   hopReissuer?: HopReissuer | undefined;
-  /** The Helix did:web host (`DID_DOMAIN`), with its port when it has one. Needed for `helix` hosting. */
+  /** `DID_DOMAIN`: the raw Helix did:web host (`host[:port]`, not percent-encoded). Needed for `helix` hosting. */
   host: string;
   /**
    * What an agent's credentials put on its card (F-3 parity): its
@@ -246,8 +246,6 @@ export interface CustodyContext {
   actor: CustodyActor;
   /** The account preference, when the caller belongs to an account that has one. */
   defaults?: CustodyDefaults | undefined;
-  /** The org segment for a Helix-hosted did:web. */
-  org?: string | undefined;
 }
 
 interface ChoiceInput {
@@ -403,16 +401,6 @@ function domainServices(domains: readonly string[] | null): { id: string; type: 
   return (domains ?? []).map((serviceEndpoint, index) => ({ id: `#domain-${index + 1}`, type: 'LinkedDomains', serviceEndpoint }));
 }
 
-function slugify(name: string): string {
-  const base = name
-    .toLowerCase()
-    .normalize('NFKD')
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 32);
-  return `${base || 'subject'}-${randomBytes(4).toString('hex')}`;
-}
-
 function entityTypeOf(subjectType: CustodySubjectType, owner?: EntityType): EntityType {
   if (subjectType === 'agent') return 'agent';
   if (subjectType === 'service') return 'mcp';
@@ -477,7 +465,7 @@ export class CustodyService implements CustodialKeys {
     const requestedDomains = readRequestedDomains(input.requestedDomains);
     const maxDelegationDepth = readMaxDelegationDepth(input.maxDelegationDepth);
     const choice = resolveCustodyChoice({ keyCustody: input.keyCustody, didHosting: input.didHosting }, context.defaults);
-    const did = await this.subjectDid(choice.didHosting, input.did, name, context);
+    const did = await this.subjectDid(choice.didHosting, input.did, 'agents');
     const base: NewCustodyRecord = {
       did,
       subjectType: 'agent',
@@ -577,7 +565,7 @@ export class CustodyService implements CustodialKeys {
     }
     const choice = resolveCustodyChoice({ keyCustody: input.keyCustody, didHosting: input.didHosting }, context.defaults);
     const clientKey = this.clientKey(choice.keyCustody, input.publicKeyJwk);
-    const did = await this.subjectDid(choice.didHosting, input.did, name, context);
+    const did = await this.subjectDid(choice.didHosting, input.did, 'services');
     const kid = verificationMethodId(did, input.kid ?? 'key-1');
     const publicKeyJwk = clientKey ?? (await this.options.keyStore.generate({ did, kid, subjectType: 'service' }));
     await this.options.records.createRecord(this.newRecord(did, 'service', choice.keyCustody, choice.didHosting, name, kid));
@@ -603,7 +591,7 @@ export class CustodyService implements CustodialKeys {
     if (!name) throw new ValidationError('name is required');
     const choice = resolveCustodyChoice({ keyCustody: input.keyCustody, didHosting: input.didHosting }, context.defaults);
     const clientKey = this.clientKey(choice.keyCustody, input.publicKeyJwk);
-    const did = await this.subjectDid(choice.didHosting, input.did, name, context);
+    const did = await this.subjectDid(choice.didHosting, input.did, 'accounts');
     const kid = verificationMethodId(did, input.kid ?? 'key-1');
     const publicKeyJwk = clientKey ?? (await this.options.keyStore.generate({ did, kid, subjectType: 'owner' }));
     await this.options.records.createRecord(this.newRecord(did, 'owner', choice.keyCustody, choice.didHosting, name, kid));
@@ -952,24 +940,26 @@ export class CustodyService implements CustodialKeys {
     return this.options.host;
   }
 
-  /** `helix` hosting: a fresh `did:web:<host>:<org>:<slug>`; `own`: the owner's did:web, checked. */
-  private async subjectDid(didHosting: DidHostingMode, ownDid: unknown, name: string, context: CustodyContext): Promise<string> {
+  /**
+   * `helix` hosting: a fresh `did:web:<DID_DOMAIN>:<kind>:<hex>` (agents,
+   * services, and owners as `accounts`); `own`: the owner's did:web, any
+   * path, checked (`ownDidWebProblem`: no unencoded port) and unused.
+   */
+  private async subjectDid(didHosting: DidHostingMode, ownDid: unknown, kind: HelixDidKind): Promise<string> {
     if (didHosting === 'own') {
-      if (typeof ownDid !== 'string' || parseDidWeb(ownDid) === undefined) {
-        throw new ValidationError('didHosting own needs did: the did:web on your own domain');
-      }
-      const host = this.options.host ? decodeURIComponent(this.options.host).toLowerCase() : undefined;
-      if (host !== undefined && parseDidWeb(ownDid)!.host.toLowerCase() === host) {
+      const problem = ownDid === undefined ? 'didHosting own needs did: the did:web on your own domain' : ownDidWebProblem(ownDid);
+      if (problem !== undefined) throw new ValidationError(problem);
+      const own = ownDid as string;
+      if (this.options.host && parseDidWeb(own)!.host.toLowerCase() === this.options.host.toLowerCase()) {
         throw new ValidationError('That did:web is under the Helix domain; choose didHosting helix instead');
       }
-      await this.assertUnused(ownDid);
-      return ownDid;
+      await this.assertUnused(own);
+      return own;
     }
     if (ownDid !== undefined) throw new ValidationError('didHosting helix: Helix issues the did:web; send no did');
     const host = this.requireHost();
-    const org = context.org ?? DEFAULT_CUSTODY_ORG;
     for (let attempt = 0; attempt < 5; attempt += 1) {
-      const did = didWebFor(decodeURIComponent(host), [org, slugify(name)]);
+      const did = issueDidWeb({ host, kind });
       if (!(await this.options.records.findRecord(did)) && !(await this.options.didRepository.findDidById(did))) return did;
     }
     /* v8 ignore next */

@@ -64,7 +64,7 @@ describe('custody facts beside the audit digest (F-4 point 6)', () => {
   it('hands the facts of each custody event to auditFacts, matching the digest the event carries', async () => {
     const kept = new Map<string, Readonly<Record<string, unknown>>>();
     const h = harness({ auditFacts: (digest, facts) => void kept.set(digest, facts) });
-    const result = await h.service.createAgent({ name: 'Facts Bot', scopes: [], keyCustody: 'helix', didHosting: 'helix' }, h.context({ org: 'acme' }));
+    const result = await h.service.createAgent({ name: 'Facts Bot', scopes: [], keyCustody: 'helix', didHosting: 'helix' }, h.context());
     await h.audit.trail.flush();
     const digests = h.audit.trail.events
       .filter((event) => event.action.category === 'custody')
@@ -80,8 +80,8 @@ describe('custody facts beside the audit digest (F-4 point 6)', () => {
 describe('full custodial onboarding (point 3)', () => {
   it('creates the agent in one call: key in the KeyStore, did:web under the Helix domain, active, identity credential and one attestation per scope (F-1)', async () => {
     const h = harness();
-    const result = await h.service.createAgent({ name: 'Serverless Bot', scopes: ['read:orders'], keyCustody: 'helix', didHosting: 'helix' }, h.context({ org: 'acme' }));
-    expect(result.did).toMatch(/^did:web:helix\.example:acme:serverless-bot-[0-9a-f]{8}$/);
+    const result = await h.service.createAgent({ name: 'Serverless Bot', scopes: ['read:orders'], keyCustody: 'helix', didHosting: 'helix' }, h.context());
+    expect(result.did).toMatch(/^did:web:helix\.example:agents:[0-9a-f]{32}$/);
     expect(result).toMatchObject({ subjectType: 'agent', keyCustody: 'helix', didHosting: 'helix', label: 'custody: helix', conformant: false, status: 'active', kid: `${result.did}#key-1`, vcId: 'vc:test:1' });
     expect(result.enrollmentToken).toBeUndefined();
     expect(result.keys).toEqual([expect.objectContaining({ kid: `${result.did}#key-1`, location: 'helix', status: 'active' })]);
@@ -89,9 +89,9 @@ describe('full custodial onboarding (point 3)', () => {
     expect(held!.kid).toBe(`${result.did}#key-1`);
     const document = await documentOf(h, result.did);
     expect(keyIn(document, `${result.did}#key-1`)).toEqual(held!.publicKeyJwk);
-    expect(document.service).toEqual([{ id: '#kya-os-card', type: 'KyaOsEntityCard', serviceEndpoint: `https://${HOST}/acme/${result.did.split(':').pop()}/card.json` }]);
+    expect(document.service).toEqual([{ id: '#kya-os-card', type: 'KyaOsEntityCard', serviceEndpoint: `https://${HOST}/agents/${result.did.split(':').pop()}/card.json` }]);
     expect(result.documents!.card).toMatchObject({ id: result.did, entityType: 'agent', name: 'Serverless Bot', kid: `${result.did}#key-1` });
-    expect(result.documents!.didDocumentUrl).toBe(`https://${HOST}/acme/${result.did.split(':').pop()}/did.json`);
+    expect(result.documents!.didDocumentUrl).toBe(`https://${HOST}/agents/${result.did.split(':').pop()}/did.json`);
     // Story F-1's credentials: the identity credential (no custody claims: those stay in the custody record) and one attestation per scope.
     expect(h.issued[0]!.input).toEqual({ agentDid: result.did, name: 'Serverless Bot', ownerDid: 'did:web:helix.example' });
     expect(h.attested).toEqual([{ agentDid: result.did, capability: 'read:orders', vcId: 'att:test:1' }]);
@@ -370,8 +370,9 @@ describe('input checks', () => {
     await expect(h.service.createAgent({ name: 'x', expiry: 0 }, c)).rejects.toThrow(/expiry/);
     await expect(h.service.createAgent({ name: 'x', keyCustody: 'custodial' }, c)).rejects.toThrow(/keyCustody/);
     await expect(h.service.createAgent({ name: 'x', didHosting: 'own' }, c)).rejects.toThrow(/did:web on your own domain/);
-    await expect(h.service.createAgent({ name: 'x', didHosting: 'own', did: 'did:key:z6Mk' }, c)).rejects.toThrow(/did:web on your own domain/);
+    await expect(h.service.createAgent({ name: 'x', didHosting: 'own', did: 'did:key:z6Mk' }, c)).rejects.toThrow(/not a did:web DID/);
     await expect(h.service.createAgent({ name: 'x', didHosting: 'own', did: `did:web:${HOST}:mine` }, c)).rejects.toThrow(/under the Helix domain/);
+    await expect(h.service.createAgent({ name: 'x', didHosting: 'own', did: 'did:web:localhost:3000:mine' }, c), 'a raw port names another URL').rejects.toThrow(/unencoded port.*localhost%3A3000/);
     await expect(h.service.createAgent({ name: 'x', didHosting: 'helix', did: 'did:web:owner.example' }, c)).rejects.toThrow(/send no did/);
     const owned = await h.service.createAgent({ name: 'x', didHosting: 'own', did: 'did:web:owner.example:a', ownerDid: 'did:web:owner.example' }, c);
     await expect(h.service.createAgent({ name: 'y', didHosting: 'own', did: owned.did }, c)).rejects.toThrow(/already registered/);
@@ -390,6 +391,7 @@ describe('services and owners (points 1 and 7)', () => {
     const result = await h.service.createService({ name: 'orders', domain: 'orders.example', requiredScopes: ['read:orders'], keyCustody: 'helix', description: ' Orders ' }, h.context());
     expect(result).toMatchObject({ subjectType: 'service', keyCustody: 'helix', label: 'custody: helix', status: 'active' });
     expect(result.vcId).toBeUndefined();
+    expect(result.did, 'a Helix-hosted service is did:web:<domain>:services:<hex>').toMatch(/^did:web:helix\.example:services:[0-9a-f]{32}$/);
     expect(result.service).toMatchObject({ did: result.did, name: 'orders', domain: 'orders.example', requiredScopes: ['read:orders'], description: 'Orders', framework: null });
     expect(result.documents!.card.entityType).toBe('mcp');
     expect(await h.keyStore.list(result.did)).toHaveLength(1);
@@ -429,7 +431,9 @@ describe('services and owners (points 1 and 7)', () => {
     const helixOwner = await h.service.createOwner({ name: 'Acme (helix)', keyCustody: 'helix' }, h.context());
     expect(selfOwner.documents!.card.entityType).toBe('human');
     expect(helixOwner.documents!.card.entityType).toBe('verifier');
-    const attestation = (issuer: string) => ({ iss: issuer, sub: 'did:web:helix.example:acme:bot', capability: 'read:orders' });
+    expect(helixOwner.did, 'an owner Helix hosts is an account: did:web:<domain>:accounts:<hex>').toMatch(/^did:web:helix\.example:accounts:[0-9a-f]{32}$/);
+    expect(selfOwner.did).toMatch(/^did:web:helix\.example:accounts:[0-9a-f]{32}$/);
+    const attestation = (issuer: string) => ({ iss: issuer, sub: 'did:web:helix.example:agents:0b0b0b0b', capability: 'read:orders' });
 
     // Owner self: the owner's own signer (in the SDK) makes the proof; Helix refuses to.
     await expect(h.service.sign(selfOwner.did, { payload: 'AQ' }, h.context(), 'owner')).rejects.toThrow(CustodialSigningRefusedError);
