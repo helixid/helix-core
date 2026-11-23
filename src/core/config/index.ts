@@ -177,7 +177,6 @@ export const ConfigSchema = z.object({
   HOSTED_RATE_LIMIT_REGISTER_MAX: z.coerce.number().int().min(1).default(3),
   HOSTED_RATE_LIMIT_REFRESH_MAX: z.coerce.number().int().min(1).default(20),
   HOSTED_QUOTA_VC_ISSUANCE_PER_DAY: z.coerce.number().int().min(1).default(1000),
-  HOSTED_QUOTA_ENROLLMENT_TOKEN_PER_DAY: z.coerce.number().int().min(1).default(2000),
   TURNSTILE_SECRET_KEY: z.string().optional(),
 
   // E2E / Testing
