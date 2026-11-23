@@ -154,7 +154,7 @@ export { DbKeyStore, resolveKeyEncryptionKey, DB_KEY_STORE_ALGORITHM } from './s
 export type { DbKeyStoreOptions, WrappedKeyTable, KeyEncryptionKeyConfig } from './services/custody/db-key-store.js';
 export { CustodyAudit, payloadDigest } from './services/custody/custody-audit.js';
 export { CUSTODY_AUDIT_CATEGORY } from './services/custody/custody-audit.js';
-export type { CustodyActor, CustodialSigningRefusal } from './services/custody/custody-audit.js';
+export type { CustodyActor, CustodialSigningRefusal, CustodyFactsSink } from './services/custody/custody-audit.js';
 export { pendingHopReissuer, HOP_REISSUE_PENDING_NOTE } from './services/custody/hop-reissue.js';
 export type { HopReissuer, HopReissueInput, HopReissueResult } from './services/custody/hop-reissue.js';
 export { CustodyRepository, WrappedKeyRepository, CUSTODY_STATUSES } from './repositories/custody.repository.js';

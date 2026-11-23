@@ -29,6 +29,12 @@
  * asked) are committed through `configurationDigest`. A custodial signature
  * is recorded by the digest of what was signed, never the bytes themselves.
  * A failure to record never breaks the request.
+ *
+ * The committed facts stay out of the event (the vendored KYA-OS audit
+ * schema has no member for them), but a deployment can keep them beside it:
+ * an optional `CustodyFactsSink` receives each digest with the exact value
+ * it was computed over (story F-4 point 6). Anyone reading those facts back
+ * can check them against the signed event with `jsonDigest(facts)`.
  */
 
 import { createHash } from 'node:crypto';
@@ -51,6 +57,13 @@ export type CustodyActor = string;
 /** Why custodial signing was refused: the subject is self-custody, or the kid is not an active Helix-held key. */
 export type CustodialSigningRefusal = 'custody_self' | 'key_not_active';
 
+/**
+ * Receives each `configurationDigest` with the value it commits (who asked,
+ * the modes, the kids, ...), before the event is recorded. Errors, thrown or
+ * rejected, are reported and never break the request.
+ */
+export type CustodyFactsSink = (configurationDigest: Digest, facts: Readonly<Record<string, unknown>>) => void | Promise<void>;
+
 /** The action category every custody event carries. */
 export const CUSTODY_AUDIT_CATEGORY = 'custody';
 
@@ -70,7 +83,23 @@ function reportAuditFailure(error: unknown): void {
 }
 
 export class CustodyAudit {
-  constructor(private readonly trail: AuditTrail) {}
+  constructor(
+    private readonly trail: AuditTrail,
+    private readonly factsSink?: CustodyFactsSink | undefined,
+  ) {}
+
+  /** The digest committing `facts`, handed to the facts sink with them. */
+  private commit(facts: Record<string, unknown>): Digest {
+    const digest = jsonDigest(facts);
+    if (this.factsSink) {
+      try {
+        Promise.resolve(this.factsSink(digest, facts)).catch(reportAuditFailure);
+      } catch (error) {
+        reportAuditFailure(error);
+      }
+    }
+    return digest;
+  }
 
   private record(input: AuditEventInput): void {
     try {
@@ -88,7 +117,7 @@ export class CustodyAudit {
       outcome: 'succeeded',
       correlationId: requestId,
       resource: publicDid(did),
-      details: { family: 'key', phase: 'configuration_changed', configurationDigest: jsonDigest({ did, ...rest, ...facts }) },
+      details: { family: 'key', phase: 'configuration_changed', configurationDigest: this.commit({ did, ...rest, ...facts }) },
     });
   }
 
@@ -138,7 +167,7 @@ export class CustodyAudit {
         phase: 'rotated',
         previousSigner: { did, kid: oldKid, alg: 'EdDSA' },
         nextSigner: { did, kid: newKid, alg: 'EdDSA' },
-        configurationDigest: jsonDigest({ did, oldKid, newKid, ...facts }),
+        configurationDigest: this.commit({ did, oldKid, newKid, ...facts }),
       },
     });
   }

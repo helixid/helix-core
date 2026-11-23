@@ -107,7 +107,7 @@ import type { ServiceCreateData, ServiceRecord } from '../../repositories/servic
 import { hashToken, normalizeDomain } from '../agent/agent.service.js';
 import { generateServiceId } from '../service-provider/service-provider.service.js';
 import { hostedUrls } from '../../routes/entity-card/index.js';
-import { CustodyAudit, type CustodyActor } from './custody-audit.js';
+import { CustodyAudit, type CustodyActor, type CustodyFactsSink } from './custody-audit.js';
 import { pendingHopReissuer, type HopReissueResult, type HopReissuer } from './hop-reissue.js';
 import type { CustodialKeys, CustodialSigningUse } from './custodial-keys.js';
 
@@ -178,6 +178,8 @@ export interface CustodyServiceOptions {
   services?: CustodyServices | undefined;
   /** Story A-1's typed audit trail; custody events are recorded through `CustodyAudit`. */
   auditTrail: AuditTrail;
+  /** Keeps each custody event's committed facts beside it (story F-4 point 6); see `CustodyFactsSink`. */
+  auditFacts?: CustodyFactsSink | undefined;
   hopReissuer?: HopReissuer | undefined;
   /** The Helix did:web host (`DID_DOMAIN`), with its port when it has one. Needed for `helix` hosting. */
   host: string;
@@ -439,7 +441,7 @@ export class CustodyService implements CustodialKeys {
 
   constructor(private readonly options: CustodyServiceOptions) {
     this.recheckSettings = { ...DEFAULT_RECHECK_SETTINGS, ...definedOnly(options.recheck ?? {}) };
-    this.audit = new CustodyAudit(options.auditTrail);
+    this.audit = new CustodyAudit(options.auditTrail, options.auditFacts);
     this.hopReissuer = options.hopReissuer ?? pendingHopReissuer;
     this.clock = options.clock ?? ((): Date => new Date());
     this.outboundFetch = options.outboundFetch ?? getOutboundFetch;
