@@ -111,9 +111,11 @@ describe('fixtures/kya-os-helix/entity-card.json', () => {
     const url = fixture.entities.agent.card.revocation!.statusListCredential;
     for (const c of fixture.revocation_cases) {
       // Lists are signed by the org (story L3-C): read with its DID document, at a time inside their window.
+      // The org keeps the URL for its agent's card only because the configuration binds it (SPEC-ENTITY-CARD §10.3).
       const resolveDid = async (did: string) => (did === fixture.entities.org.did ? (fixture.entities.org.did_document as never) : null);
       const clock = () => Date.parse(fixture.status_list_now);
-      const deps = c.name === 'no_checker' ? {} : { statusListChecker: createStatusListChecker({ resolveDid, clock, fetch: serving({ [url]: c.name === 'revoked' ? lists.revoked : lists.clear }) }) };
+      const statusListIssuers = { [fixture.entities.org.did]: [url] };
+      const deps = c.name === 'no_checker' ? {} : { statusListChecker: createStatusListChecker({ resolveDid, clock, statusListIssuers, fetch: serving({ [url]: c.name === 'revoked' ? lists.revoked : lists.clear }) }) };
       const accountable = c.card.responsibleParty === undefined ? deps : { ...deps, accountabilityVerifier: async () => true };
       const result = await verifyEntityCard(c.card, accountable);
       expect({ ok: result.ok, conformanceLevel: result.conformanceLevel, revoked: result.revocation?.revoked ?? false, ...(result.revocation?.code ? { code: result.revocation.code } : {}) }, c.name).toEqual(c.expected);
