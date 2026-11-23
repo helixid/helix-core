@@ -1001,8 +1001,7 @@
   "status_lists": {
     "clear": {
       "@context": [
-        "https://www.w3.org/ns/credentials/v2",
-        "https://helixid.io/contexts/v1"
+        "https://www.w3.org/ns/credentials/v2"
       ],
       "id": "https://helix.test/v1/status-list/cards",
       "type": [
@@ -1011,17 +1010,25 @@
       ],
       "issuer": "did:web:helix.test:acme",
       "validFrom": "2026-11-21T00:00:00Z",
+      "validUntil": "2026-11-22T00:00:00Z",
       "credentialSubject": {
         "id": "https://helix.test/v1/status-list/cards#list",
         "type": "BitstringStatusList",
         "statusPurpose": "revocation",
-        "encodedList": "H4sIAAAAAAAAE2NggAAAad8iZQgAAAA"
+        "encodedList": "uH4sIAAAAAAAAE2NggAAAad8iZQgAAAA"
+      },
+      "proof": {
+        "type": "DataIntegrityProof",
+        "cryptosuite": "eddsa-jcs-2022",
+        "created": "2026-11-21T00:00:00Z",
+        "verificationMethod": "did:web:helix.test:acme#key-1",
+        "proofPurpose": "assertionMethod",
+        "proofValue": "zuYhL8csNTifEGMPg5rSe83zM5F4whbxc6yU9tN5HNtS7jFF3G71tDbspP8aXdiUyVqUtHKZQU4UDMu42ctUrjp4"
       }
     },
     "revoked": {
       "@context": [
-        "https://www.w3.org/ns/credentials/v2",
-        "https://helixid.io/contexts/v1"
+        "https://www.w3.org/ns/credentials/v2"
       ],
       "id": "https://helix.test/v1/status-list/cards",
       "type": [
@@ -1030,14 +1037,24 @@
       ],
       "issuer": "did:web:helix.test:acme",
       "validFrom": "2026-11-21T00:00:00Z",
+      "validUntil": "2026-11-22T00:00:00Z",
       "credentialSubject": {
         "id": "https://helix.test/v1/status-list/cards#list",
         "type": "BitstringStatusList",
         "statusPurpose": "revocation",
-        "encodedList": "H4sIAAAAAAAAE2NkgAAA99-IqQgAAAA"
+        "encodedList": "uH4sIAAAAAAAAE2NkgAAA99-IqQgAAAA"
+      },
+      "proof": {
+        "type": "DataIntegrityProof",
+        "cryptosuite": "eddsa-jcs-2022",
+        "created": "2026-11-21T00:00:00Z",
+        "verificationMethod": "did:web:helix.test:acme#key-1",
+        "proofPurpose": "assertionMethod",
+        "proofValue": "z5dJU4DoqJqfVvtimgRWfpTazrtzJcjnkJAU4ntPvF3oFrf8X96bDkp7GkCxvEUxJnYpnDXMkArbUvibTfY8bzFke"
       }
     }
   },
+  "status_list_now": "2026-11-21T12:00:00Z",
   "revocation_cases": [
     {
       "name": "no_checker",

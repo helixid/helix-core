@@ -12,18 +12,32 @@
 
 import { FastifyPluginAsync } from 'fastify';
 import { AdminAuthRequiredError } from '../../core/index.js';
-import { IVCService } from '../../services/vc/vc.service.js';
+import type { StatusListService } from '../../services/status-lists/status-list.service.js';
 
 export interface StatusListRouteOptions {
-  vcService: IVCService;
+  statusLists: StatusListService;
   adminApiKey?: string | undefined;
 }
 
 /**
- * Public Status List Endpoint (Boundary 2).
+ * Public status lists (KYA-OS story L3-C): one W3C Bitstring Status List
+ * v1.0 credential per issuer DID, signed by that issuer.
+ *
+ * - `GET /v1/status-list/:listId`: the signed list. `no-cache` with an ETag,
+ *   so a verifier that refetches on a revocation signal is never handed a
+ *   shared cache's copy from before the revocation; 503 while a self-custody
+ *   issuer has not signed the current bits (fail closed).
+ * - `GET /v1/status-list/:listId/unsigned`: the list as it stands, with a
+ *   fresh window, for a self-custody issuer to sign.
+ * - `PUT /v1/status-list/:listId`: the list its issuer signed; accepted only
+ *   with the stored bits and a proof by that issuer's assertion key.
+ * - `POST /v1/status-list` (admin): creates a list for a list id.
+ * - `POST /v1/status-list/entries` (admin): an entry on an issuer's own list,
+ *   for a credential that issuer signs itself (self-custody): the issuer
+ *   puts the entry in the credential, then signs the list when it changes.
  */
 const statusListRoutes: FastifyPluginAsync<StatusListRouteOptions> = async (fastify, options) => {
-  const { vcService, adminApiKey } = options;
+  const { statusLists, adminApiKey } = options;
 
   function requireAdmin(request: { headers: Record<string, string | string[] | undefined> }): void {
     const submitted = request.headers['x-admin-api-key'];
@@ -33,26 +47,43 @@ const statusListRoutes: FastifyPluginAsync<StatusListRouteOptions> = async (fast
     }
   }
 
-  // GET /v1/status-list/:listId - Serve the Status List Credential
   fastify.get('/:listId', async (request, reply) => {
     const { listId } = request.params as { listId: string };
-    const result = await vcService.getStatusList(listId);
-    
-    // Cache-friendly per STORY_2.md §152
+    const list = await statusLists.getSigned(listId);
+    const etag = `"${list.proof.proofValue.slice(1, 33)}"`;
+    if (request.headers['if-none-match'] === etag) return reply.code(304).header('ETag', etag).send();
     return reply
-      .header('Cache-Control', 'public, max-age=300')
-      .send(result);
+      .header('Cache-Control', 'no-cache')
+      .header('ETag', etag)
+      .header('Content-Type', 'application/vc+json; charset=utf-8')
+      .send(list);
   });
 
-  // POST /v1/status-list - Create or replace the default Status List Credential
+  fastify.get('/:listId/unsigned', async (request, reply) => {
+    const { listId } = request.params as { listId: string };
+    return reply.header('Cache-Control', 'no-store').send(await statusLists.publisher.unsignedList(listId));
+  });
+
+  fastify.put('/:listId', async (request, reply) => {
+    const { listId } = request.params as { listId: string };
+    return reply.code(200).send(await statusLists.publisher.submitSigned(listId, request.body));
+  });
+
+  fastify.post(
+    '/entries',
+    { schema: { body: { type: 'object', required: ['issuer'], properties: { issuer: { type: 'string', pattern: '^did:' } }, additionalProperties: false } } },
+    async (request, reply) => {
+      requireAdmin(request);
+      return reply.code(201).send(await statusLists.statusEntryFor((request.body as { issuer: string }).issuer));
+    },
+  );
+
   fastify.post('', async (request, reply) => {
     requireAdmin(request);
-    const body = (request.body as { listId?: string; length?: number } | undefined) ?? {};
-    const input: { listId?: string; length?: number } = {};
-    if (body.listId !== undefined) input.listId = body.listId;
-    if (body.length !== undefined) input.length = body.length;
-    const result = await vcService.createStatusList(input);
-    return reply.status(201).send(result);
+    const body = (request.body as { listId?: string } | undefined) ?? {};
+    const listId = body.listId ?? statusLists.publisher.listIdFor(statusLists.publisher.helixIssuerDid);
+    await statusLists.publisher.ensureList(listId);
+    return reply.code(201).send(await statusLists.getSigned(listId));
   });
 };
 

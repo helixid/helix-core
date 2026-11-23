@@ -15,7 +15,6 @@ import {
   ErrorCode,
   createStatusList,
   setBit,
-  buildStatusListCredential,
   base58btcEncode,
   derivePublicKey,
   hashCanonicalPayload,
@@ -163,11 +162,7 @@ export interface IVCService {
     vc: Record<string, unknown>;
     status: 'active' | 'revoked' | 'expired';
   } | null>;
-  getStatusList(listId: string): Promise<ReturnType<typeof buildStatusListCredential>>;
-  createStatusList(input?: {
-    listId?: string;
-    length?: number;
-  }): Promise<ReturnType<typeof buildStatusListCredential>>;
+  createStatusList(input?: { listId?: string; length?: number }): Promise<{ listId: string; encodedList: string }>;
   registerSignedVC(vc: SignedVC, options?: ReconcileOptions): Promise<ReconcileResult>;
 
   /** See IVCService.registerExternalVC() in ./IVCService.ts. */
@@ -609,7 +604,7 @@ export class VCService implements IVCService {
       const statusList = await this.createStatusList({ listId: this.DEFAULT_STATUS_LIST_ID });
       list = {
         listId: this.DEFAULT_STATUS_LIST_ID,
-        encodedList: statusList.credentialSubject.encodedList,
+        encodedList: statusList.encodedList,
         nextIndex: 0,
       };
     }
@@ -881,7 +876,7 @@ export class VCService implements IVCService {
       const created = await this.createStatusList({ listId: this.DEFAULT_STATUS_LIST_ID });
       list = {
         listId: this.DEFAULT_STATUS_LIST_ID,
-        encodedList: created.credentialSubject.encodedList,
+        encodedList: created.encodedList,
         nextIndex: 0,
       };
     }
@@ -948,29 +943,16 @@ export class VCService implements IVCService {
     }
   }
 
-  async getStatusList(listId: string): Promise<ReturnType<typeof buildStatusListCredential>> {
-    const cached = await this.statusListCache.get(listId);
-    if (cached) {
-      return buildStatusListCredential(listId, cached, this.issuerDid, this.apiBaseUrl);
-    }
-
-    const list = await this.vcRepo.findStatusListById(listId);
-    if (!list) {
-      throw new HelixError(ErrorCode.STATUS_LIST_NOT_FOUND, 'Status list not found', 404);
-    }
-    await this.statusListCache.set(listId, list.encodedList, this.statusListCacheTtlSeconds);
-
-    return buildStatusListCredential(listId, list.encodedList, this.issuerDid, this.apiBaseUrl);
-  }
-
-  async createStatusList(
-    input: { listId?: string; length?: number } = {},
-  ): Promise<ReturnType<typeof buildStatusListCredential>> {
+  /**
+   * Creates (or resets) a status list row. Serving and signing lists is the
+   * StatusListService's (story L3-C): one signed list per issuer DID.
+   */
+  async createStatusList(input: { listId?: string; length?: number } = {}): Promise<{ listId: string; encodedList: string }> {
     const listId = input.listId ?? this.DEFAULT_STATUS_LIST_ID;
     const encodedList = createStatusList(input.length);
     await this.vcRepo.createStatusList(listId, encodedList);
-    await this.statusListCache.set(listId, encodedList, this.statusListCacheTtlSeconds);
-    return buildStatusListCredential(listId, encodedList, this.issuerDid, this.apiBaseUrl);
+    await this.statusListCache.delete(listId);
+    return { listId, encodedList };
   }
 
   private async signCredential(credential: HelixVC): Promise<SignedVC> {

@@ -24,6 +24,8 @@ import { MockHederaClient } from '../../src/hedera/mock/MockHederaClient.js';
 import { errorHandler } from '../../src/middleware/errorHandler.js';
 import vcRoutes from '../../src/routes/vc/index.js';
 import statusListRoutes from '../../src/routes/status-list/index.js';
+import { StatusListPublisher, StatusListService } from '../../src/services/status-lists/status-list.service.js';
+import { EnvSigner } from '../../src/core/index.js';
 import { createTestPrisma } from '../utils/prisma.js';
 
 describe('VC API Integration', () => {
@@ -51,12 +53,23 @@ describe('VC API Integration', () => {
       'http://localhost:3000'
     );
 
+    // Story L3-C: the issuer's list, signed by the issuer, served by the StatusListService.
+    const issuerSigner = new EnvSigner({ did: issuerDid, envVar: 'K', env: { K: signingKey } });
+    const publisher = new StatusListPublisher({
+      repo: vcRepo,
+      helixIssuerDid: issuerDid,
+      apiBaseUrl: 'http://localhost:3000',
+      signerFor: async (did) => (did === issuerDid ? issuerSigner : undefined),
+      resolveDid: async () => null,
+    });
+    const statusLists = new StatusListService({ publisher, repo: vcRepo, audit: auditLogger });
+
     app = Fastify({ logger: false });
     app.setErrorHandler(errorHandler);
-    await app.register(vcRoutes, { prefix: '/v1/vcs', vcService, adminApiKey: 'test-admin-key-0001' });
+    await app.register(vcRoutes, { prefix: '/v1/vcs', vcService, statusLists, adminApiKey: 'test-admin-key-0001' });
     await app.register(statusListRoutes, {
       prefix: '/v1/status-list',
-      vcService,
+      statusLists,
       adminApiKey: 'test-admin-key-0001',
     });
     await app.ready();
@@ -230,7 +243,7 @@ describe('VC API Integration', () => {
   });
 
   describe('GET /v1/status-list/:listId', () => {
-    it('serves the status list credential with caching headers', async () => {
+    it('serves the issuer-signed status list credential, revalidated on every read', async () => {
       await issueUserVC();
 
       const response = await app.inject({
@@ -239,14 +252,16 @@ describe('VC API Integration', () => {
       });
 
       expect(response.statusCode).toBe(200);
-      expect(response.headers['cache-control']).toBe('public, max-age=300');
+      expect(response.headers['cache-control']).toBe('no-cache');
       const body = JSON.parse(response.body);
       expect(body.type).toContain('BitstringStatusListCredential');
+      expect(body).toMatchObject({ issuer: issuerDid, proof: { type: 'DataIntegrityProof', cryptosuite: 'eddsa-jcs-2022' } });
+      expect(typeof body.validUntil).toBe('string');
     });
   });
 
   describe('POST /v1/status-list', () => {
-    it('creates or replaces the default status list credential', async () => {
+    it('creates the default status list when missing, and never resets one (a reset would revive revoked credentials)', async () => {
       const firstIssue = await app.inject({
         method: 'POST',
         url: '/v1/vcs',
@@ -272,7 +287,7 @@ describe('VC API Integration', () => {
         headers: { 'x-admin-api-key': 'test-admin-key-0001' },
         payload: { subjectDid: didId, subjectType: 'user', userId: 'test-user-2' },
       });
-      expect(JSON.parse(secondIssue.body).statusListIndex).toBe(0);
+      expect(JSON.parse(secondIssue.body).statusListIndex).toBe(1);
     });
 
     it('requires admin authorization', async () => {

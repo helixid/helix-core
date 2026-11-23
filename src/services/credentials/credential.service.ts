@@ -116,10 +116,15 @@ export interface IssueHopInput {
   validUntil?: string;
 }
 
-/** What this service needs from the VC service: an entry on the platform list, and revocation. */
+/**
+ * What this service needs for status: an entry on the issuing DID's own list
+ * (story L3-C: one signed list per issuer), and revocation; `revokeMany`
+ * revokes a cascade in one transaction when the store offers it.
+ */
 export interface CredentialStatusStore {
-  claimStatusListEntry(): Promise<{ statusListCredentialUrl: string; statusListIndex: number }>;
+  claimStatusListEntry(issuerDid?: string): Promise<{ statusListCredentialUrl: string; statusListIndex: number }>;
   revokeVC(vcId: string, requestId: string): Promise<{ vcId: string; revoked: true; revokedAt: string }>;
+  revokeMany?(vcIds: readonly string[], context: { requestId: string }): Promise<unknown>;
 }
 
 export type CredentialVcRepository = Pick<
@@ -204,9 +209,9 @@ export class CredentialService {
     return this.helixSigner.did;
   }
 
-  /** A fresh entry on the platform status list, as the credential carries it. */
-  private async statusEntry(): Promise<BitstringStatusEntry> {
-    const entry = await this.statusStore.claimStatusListEntry();
+  /** A fresh entry on the issuing DID's own status list, as the credential carries it. */
+  private async statusEntry(issuerDid: string): Promise<BitstringStatusEntry> {
+    const entry = await this.statusStore.claimStatusListEntry(issuerDid);
     return {
       id: `${entry.statusListCredentialUrl}#${entry.statusListIndex}`,
       type: 'BitstringStatusListEntry',
@@ -277,7 +282,7 @@ export class CredentialService {
   }
 
   async issueIdentity(input: IssueIdentityInput, requestId: string): Promise<SignedIdentityCredential> {
-    const statusEntry = await this.statusEntry();
+    const statusEntry = await this.statusEntry(this.helixSigner.did);
     const identity = await buildIdentityCredential(
       {
         agentDid: input.agentDid,
@@ -333,7 +338,7 @@ export class CredentialService {
     const signer = input.signer ?? this.helixSigner;
     const issued: SignedCapabilityAttestation[] = [];
     for (const capability of input.capabilities) {
-      const statusEntry = await this.statusEntry();
+      const statusEntry = await this.statusEntry(signer.did);
       const attestation = await buildCapabilityAttestation(
         {
           subjectDid: input.agentDid,
@@ -388,7 +393,7 @@ export class CredentialService {
   /** The root of a chain: `parentCapability` is the resource itself. Any issuer Helix can sign for may issue it. */
   async issueRootHop(input: IssueRootHopInput, requestId: string): Promise<SignedDelegationHop> {
     const signer = await this.signerFor(input.issuer);
-    const statusEntry = await this.statusEntry();
+    const statusEntry = await this.statusEntry(signer.did);
     const hop = await buildDelegationHop(
       rootHopInput({
         invoker: input.invoker,
@@ -439,7 +444,7 @@ export class CredentialService {
     const parent = parentChain[parentChain.length - 1]!;
     const delegate = parent.credentialSubject.invoker ?? parent.credentialSubject.controller!;
     const signer = await this.signerFor(delegate);
-    const statusEntry = await this.statusEntry();
+    const statusEntry = await this.statusEntry(signer.did);
     const hop = await buildDelegationHop(
       {
         invoker: input.invoker,
@@ -467,17 +472,22 @@ export class CredentialService {
     if (!record || record.vcType !== DELEGATION_CREDENTIAL_TYPE) {
       throw new HelixError(ErrorCode.VC_NOT_FOUND, `No delegation hop ${hopId}`, 404);
     }
-    const revoked: string[] = [];
+    // The hop first, then every active descendant, parents before children.
+    const order: string[] = [];
     const walk = async (id: string): Promise<void> => {
-      for (const child of await this.vcRepo.findActiveChildren(id)) await walk(child.vcId);
       const current = await this.vcRepo.findByVcId(id);
-      if (current && !current.revokedAt) {
-        await this.statusStore.revokeVC(id, requestId);
-        revoked.push(id);
-      }
+      if (current && !current.revokedAt) order.push(id);
+      for (const child of await this.vcRepo.findActiveChildren(id)) await walk(child.vcId);
     };
     await walk(hopId);
-    return revoked;
+    if (order.length === 0) return [];
+    if (this.statusStore.revokeMany !== undefined) {
+      // One transaction for the whole cascade (story L3-C point 5).
+      await this.statusStore.revokeMany(order, { requestId });
+      return order;
+    }
+    for (const id of order) await this.statusStore.revokeVC(id, requestId);
+    return order;
   }
 
   /** Everything Helix keeps for one agent, in issuance order; the active identity not yet renewed, else the latest. */

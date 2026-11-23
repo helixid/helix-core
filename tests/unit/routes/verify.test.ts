@@ -5,7 +5,7 @@ import Fastify, { type FastifyInstance } from 'fastify';
 import { gzipSync } from 'node:zlib';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { kyaos } from '@helixid/sdk-js';
-import { EnvSigner, buildDIDDocument, generateKeyPair } from '../../../src/core/index.js';
+import { EnvSigner, buildDIDDocument, generateKeyPair, signDataIntegrity } from '../../../src/core/index.js';
 import verifyRoutes, { cardEndpointOf, memoryNonceStore, readableUrl, type VerifyRouteOptions } from '../../../src/routes/verify/index.js';
 
 const fixturesDir = new URL('../../../fixtures/verifier/', import.meta.url);
@@ -137,19 +137,28 @@ describe('POST /v1/verify', () => {
 describe('POST /v1/verify default status and card seams', () => {
   afterEach(() => vi.unstubAllGlobals());
 
-  /** The fixture lists as their issuers publish them, served by a stubbed global fetch. */
+  /** The fixture lists as their issuers publish them (signed Bitstring Status List v1.0, story L3-C), served by a stubbed global fetch. */
   const servedLists = (missing: string[] = []) => {
     const asked: string[] = [];
     vi.stubGlobal('fetch', async (url: string) => {
       asked.push(url);
       const list = missing.includes(url) ? undefined : env.status_lists[url];
-      const body = list && {
-        id: list.id,
-        issuer: list.issuer,
-        validFrom: list.valid_from,
-        validUntil: list.valid_until,
-        credentialSubject: { statusPurpose: list.status_purpose, encodedList: list.encoded_list },
-      };
+      const key = list && Object.values(env.keys).find((entry) => entry.did === list.issuer);
+      const body =
+        list &&
+        key &&
+        (await signDataIntegrity(
+          {
+            '@context': ['https://www.w3.org/ns/credentials/v2'],
+            id: list.id,
+            type: ['VerifiableCredential', 'BitstringStatusListCredential'],
+            issuer: list.issuer,
+            validFrom: list.valid_from,
+            validUntil: list.valid_until,
+            credentialSubject: { id: `${url}#list`, type: 'BitstringStatusList', statusPurpose: list.status_purpose, encodedList: list.encoded_list },
+          },
+          new EnvSigner({ did: key.did, envVar: 'L', env: { L: key.private_key_hex } }),
+        ));
       return { ok: body !== undefined, status: body ? 200 : 404, json: async () => body };
     });
     return asked;
@@ -160,8 +169,11 @@ describe('POST /v1/verify default status and card seams', () => {
     const server = await start({ clock: () => NOW, resolveDid: fixtureSeams.resolveDid });
     const chain = valid.find((c) => c.name === 'two_hop_chain')!.input.chain;
     const res = await server.inject({ method: 'POST', url: '/v1/verify', payload: { proof: await proofFor(), chain, request, expectedAudience: SERVICE } });
-    expect(res.json()).toMatchObject({ ok: true, proofDid: AGENT, chainSummary: { depth: 2 } });
+    expect(res.json()).toMatchObject({ ok: true, proofDid: AGENT, chainSummary: { depth: 2, fresh: true } });
     expect(asked.length).toBeGreaterThan(0);
+    // The same chain again is served from the status cache: allowed, not fresh (story L3-C).
+    const again = await server.inject({ method: 'POST', url: '/v1/verify', payload: { proof: await proofFor(), chain, request, expectedAudience: SERVICE } });
+    expect(again.json()).toMatchObject({ ok: true, fresh: false, chainSummary: { fresh: false } });
     for (const url of asked) expect(url).toMatch(/^https:\/\/[a-z]+\.example\/status\//);
   });
 
