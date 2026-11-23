@@ -70,6 +70,16 @@ describe('VCService.reconcileActive', () => {
     return (await service.listActiveBySubjectDid(agentDid, GRANT)).map((vc) => vc['id'] as string);
   }
 
+  it('latestBySubjectDid: the newest credential of a type, revoked included; null for none', async () => {
+    const first = await issue(['read:a']);
+    const second = await issue(['read:z']);
+    await service.revokeVC(second.vcId, 'r');
+    expect((await service.latestBySubjectDid(agentDid, GRANT))?.['id']).toBe(second.vcId);
+    expect(await service.latestBySubjectDid(agentDid, 'AgentIdentityCredential')).toBeNull();
+    expect(await service.latestBySubjectDid('did:web:nobody', GRANT)).toBeNull();
+    expect(first.vcId).not.toBe(second.vcId);
+  });
+
   it('re-issuing the same scopes refreshes: old revoked on the status list and chained to the new', async () => {
     const first = await issue(['read:b', 'read:a']);
     const second = await issue(['read:a', 'read:b']);

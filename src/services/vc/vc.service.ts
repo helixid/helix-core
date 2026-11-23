@@ -301,6 +301,18 @@ export class VCService implements IVCService {
     );
   }
 
+  /**
+   * The newest credential of `vcType` for the subject, whatever its status
+   * (revoked and expired included), or null: what an agent's card shows as
+   * its `revocation` once its identity is revoked.
+   */
+  async latestBySubjectDid(subjectDid: string, vcType: string): Promise<Record<string, unknown> | null> {
+    const records = (await this.vcRepo.findMany({ subjectDid })).filter((record) => record.vcType === vcType);
+    const newest = records.reduce<VCRecord | undefined>((latest, record) => (latest === undefined || (record.createdAt?.getTime() ?? 0) >= (latest.createdAt?.getTime() ?? 0) ? record : latest), undefined);
+    if (!newest) return null;
+    return (typeof newest.vcJson === 'string' ? JSON.parse(newest.vcJson) : newest.vcJson) as Record<string, unknown>;
+  }
+
   async findActiveByVcIdForSubject(
     vcId: string,
     subjectDid: string,

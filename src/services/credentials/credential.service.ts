@@ -397,6 +397,25 @@ export class CredentialService {
     return verdict.credential;
   }
 
+  /**
+   * Revokes one credential through the status store (story L3-C: its bit on
+   * the issuer's list, and the revocation signal). Revoking an agent's
+   * identity credential revokes the agent (Cleanup, Harish's pick A): every
+   * active capability attestation of that agent is revoked with it, so no
+   * verifier keeps granting its scopes. The agent's card keeps the revoked
+   * identity's status entry as its `revocation`. Hops are separate grants and
+   * are revoked on their own (`revokeHop`).
+   */
+  async revokeVC(vcId: string, requestId: string): Promise<{ vcId: string; revoked: true; revokedAt: string }> {
+    const record = await this.vcRepo.findByVcId(vcId);
+    const result = await this.statusStore.revokeVC(vcId, requestId);
+    if (record?.vcType === IDENTITY_CREDENTIAL_TYPE) {
+      const attestations = await this.vcRepo.findActiveBySubjectDid(record.subjectDid, CAPABILITY_ATTESTATION_TYPE);
+      for (const attestation of attestations) await this.statusStore.revokeVC(attestation.vcId, requestId);
+    }
+    return result;
+  }
+
   /** Revokes every active attestation of `capability` for the agent through the status list; identity is untouched. */
   async revokeAttestation(agentDid: string, capability: string, requestId: string): Promise<string[]> {
     const active = await this.vcRepo.findActiveBySubjectDid(agentDid, CAPABILITY_ATTESTATION_TYPE);

@@ -232,6 +232,30 @@ describe('CredentialService', () => {
     });
   });
 
+  describe('revokeVC (Cleanup, Harish pick A)', () => {
+    it("revoking an agent's identity revokes its active attestations too; any other credential alone", async () => {
+      const identity = await service.issueIdentity({ agentDid: childDid, name: 'x', ownerDid }, 'req');
+      const [read, write] = await service.issueAttestations({ agentDid: childDid, capabilities: ['read:orders', 'write:orders'] }, 'req');
+      await service.revokeAttestation(childDid, 'write:orders', 'req');
+      statusStore.revokeVC.mockClear();
+      const result = await service.revokeVC(identity.id, 'req-revoke');
+      expect(result).toMatchObject({ vcId: identity.id, revoked: true });
+      expect(statusStore.revokeVC.mock.calls).toEqual([
+        [identity.id, 'req-revoke'],
+        [read!.id, 'req-revoke'],
+      ]);
+      const copies = await service.listAgentCredentials(childDid);
+      expect(copies.attestations.every((a) => a.status === 'revoked')).toBe(true);
+
+      // Any other credential is revoked alone.
+      const [other] = await service.issueAttestations({ agentDid: childDid, capabilities: ['read:orders'] }, 'req');
+      statusStore.revokeVC.mockClear();
+      await service.revokeVC(other!.id, 'req-2');
+      expect(statusStore.revokeVC.mock.calls).toEqual([[other!.id, 'req-2']]);
+      expect(write).toBeDefined();
+    });
+  });
+
   describe('hops', () => {
     it('issues a root hop signed by a custodial key or by Helix, refusing an unknown issuer and an invalid root', async () => {
       const root = await service.issueRootHop({ issuer: parentDid, invoker: childDid, invocationTarget: RESOURCE, allowedAction: ['read:orders'], caveats: [{ type: 'MaxAmount', limit: '10', currency: 'USD' }] }, 'req');

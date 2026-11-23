@@ -126,6 +126,24 @@ describe('credentialCardDetails (KYA-OS F-3 parity: C-B point 2, C-A point 3)', 
     expect(store.listActiveBySubjectDid).not.toHaveBeenCalled();
   });
 
+  it("keeps a revoked identity's status entry as the card's revocation, so verifiers see the agent revoked", async () => {
+    const revoked = identity(AGENT, 'id:9');
+    const store = { ...storeOf({}), latestBySubjectDid: vi.fn(async () => revoked) };
+    expect(await credentialCardDetails(store)(AGENT, 'agent')).toEqual({
+      responsibleParty: 'did:web:helix.test',
+      revocation: { statusListCredential: 'https://helix.test/v1/status-list/1', statusListIndex: '7' },
+    });
+    expect(store.latestBySubjectDid).toHaveBeenCalledWith(AGENT, 'AgentIdentityCredential');
+    // An active identity wins; another subject's or no identity at all gives no entry.
+    const active = { ...storeOf({ AgentIdentityCredential: [identity(AGENT, 'id:1')] }), latestBySubjectDid: vi.fn(async () => revoked) };
+    await credentialCardDetails(active)(AGENT, 'agent');
+    expect(active.latestBySubjectDid).not.toHaveBeenCalled();
+    const foreign = { ...storeOf({}), latestBySubjectDid: vi.fn(async () => identity('did:web:other', 'id:x')) };
+    expect(await credentialCardDetails(foreign)(AGENT, 'agent')).toBeUndefined();
+    const none = { ...storeOf({}), latestBySubjectDid: vi.fn(async () => null) };
+    expect(await credentialCardDetails(none)(AGENT, 'agent')).toBeUndefined();
+  });
+
   it('fills the hosted card where details say nothing; details still win member by member', async () => {
     const didRepository = { findDidById: async (did: string) => dids[did] ?? null };
     const store = storeOf({ CapabilityAttestationCredential: attestations.slice(0, 1), AgentIdentityCredential: [identity(AGENT, 'id:1')] });
