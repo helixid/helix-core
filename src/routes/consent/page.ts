@@ -35,7 +35,7 @@ export const CONSENT_PAGE_CSP =
 const STYLE = `
   body { font-family: system-ui, -apple-system, Segoe UI, sans-serif; margin: 0; background: #f6f7f9; color: #1a1d21; }
   main { max-width: 560px; margin: 32px auto; padding: 0 16px; }
-  .card { background: #fff; border: 1px solid #e3e6ea; border-radius: 12px; padding: 24px; }
+  .card { background: #fff; border: 1px solid #e3e6ea; border-radius: 12px; padding: 24px; overflow-wrap: anywhere; }
   header { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
   header img { width: 40px; height: 40px; border-radius: 8px; }
   h1 { font-size: 20px; margin: 0; }

@@ -166,4 +166,12 @@ describe('consent routes', () => {
     expect(escapeHtml(`'`)).toBe('&#39;');
     expect(SERVICE.did).toContain('did:web');
   });
+
+  it('wraps a long agent DID inside the card on a narrow screen', async () => {
+    const world = consentWorld();
+    const created = await world.consent.createRequest(await world.requestJws({}), 'r');
+    const html = renderConsentPage(await world.consent.openPage(created.id), '/consent/x');
+    expect(html).toContain(escapeHtml(AGENT.did));
+    expect(html).toMatch(/\.card \{[^}]*overflow-wrap: anywhere;/);
+  });
 });
