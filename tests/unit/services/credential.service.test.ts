@@ -309,6 +309,53 @@ describe('CredentialService', () => {
       expect(hop.issuer).toBe(parentDid);
     });
 
+    it('refuses a root or child hop to a known agent whose identity is revoked or expired, or whose DID is deactivated, before signing', async () => {
+      const root = await service.issueRootHop({ issuer: helixDid, invoker: parentDid, invocationTarget: RESOURCE, allowedAction: ['read:orders'] }, 'req');
+      const identity = await service.issueIdentity({ agentDid: childDid, name: 'x', ownerDid }, 'req');
+      // A known agent with an active identity is delegated to as before.
+      await service.issueHop(root.id, { invoker: childDid, allowedAction: ['read:orders'] }, 'req');
+      await service.revokeVC(identity.id, 'req');
+      const signerFor = vi.spyOn(service, 'signerFor');
+      statusStore.claimStatusListEntry.mockClear();
+      const revoked = { code: ErrorCode.AGENT_ACTIVE_CREDENTIAL_NOT_FOUND, httpStatus: 404, message: expect.stringContaining(childDid) };
+      await expect(service.issueHop(root.id, { invoker: childDid, allowedAction: ['read:orders'] }, 'req')).rejects.toMatchObject(revoked);
+      await expect(service.issueRootHop({ issuer: helixDid, invoker: childDid, invocationTarget: RESOURCE, allowedAction: ['read:orders'] }, 'req')).rejects.toMatchObject(revoked);
+      expect(signerFor).not.toHaveBeenCalled();
+      expect(statusStore.claimStatusListEntry).not.toHaveBeenCalled();
+
+      // An identity that expired without renewal counts as revoked; a renewed one is active again.
+      const expiringDid = await custodialAgent();
+      const expiring = await service.issueIdentity({ agentDid: expiringDid, name: 'y', ownerDid, validUntil: new Date(Date.now() + 60_000) }, 'req');
+      await service.issueHop(root.id, { invoker: expiringDid, allowedAction: ['read:orders'] }, 'req');
+      const expiredRecord = (await vcRepo.findByVcId(expiring.id))!;
+      expiredRecord.expiresAt = new Date(Date.now() - 1000);
+      await expect(service.issueHop(root.id, { invoker: expiringDid, allowedAction: ['read:orders'] }, 'req')).rejects.toMatchObject({ code: ErrorCode.AGENT_ACTIVE_CREDENTIAL_NOT_FOUND });
+      await service.issueIdentity({ agentDid: expiringDid, name: 'y', ownerDid }, 'req');
+      await service.issueHop(root.id, { invoker: expiringDid, allowedAction: ['read:orders'] }, 'req');
+
+      // A deactivated DID is refused with the DID error, whatever its credentials.
+      const deactivatedDid = await custodialAgent();
+      didService.resolveDID.mockImplementation(async (did: string) => {
+        if (did === deactivatedDid) throw new HelixError(ErrorCode.DID_DEACTIVATED, 'DID is deactivated', 410);
+        return {};
+      });
+      signerFor.mockClear();
+      const deactivated = { code: ErrorCode.DID_DEACTIVATED, httpStatus: 410, message: expect.stringContaining(deactivatedDid) };
+      await expect(service.issueHop(root.id, { invoker: deactivatedDid, allowedAction: ['read:orders'] }, 'req')).rejects.toMatchObject(deactivated);
+      await expect(service.issueRootHop({ issuer: helixDid, invoker: deactivatedDid, invocationTarget: RESOURCE, allowedAction: ['read:orders'] }, 'req')).rejects.toMatchObject(deactivated);
+      expect(signerFor).not.toHaveBeenCalled();
+    });
+
+    it('does not refuse an invoker this server has no record of, and relays other resolution failures', async () => {
+      const root = await service.issueRootHop({ issuer: helixDid, invoker: parentDid, invocationTarget: RESOURCE, allowedAction: ['read:orders'] }, 'req');
+      // Unknown DID (not registered, no identity credential here): left to the route authorizer.
+      didService.resolveDID.mockRejectedValueOnce(new HelixError(ErrorCode.DID_NOT_FOUND, 'nope', 404));
+      const { hop } = await service.issueHop(root.id, { invoker: childDid, allowedAction: ['read:orders'] }, 'req');
+      expect(hop.credentialSubject.invoker).toBe(childDid);
+      didService.resolveDID.mockRejectedValueOnce(new Error('database down'));
+      await expect(service.issueHop(root.id, { invoker: childDid, allowedAction: ['read:orders'] }, 'req')).rejects.toThrow('database down');
+    });
+
     it('revokes a hop and cascades to every hop below it; a missing or non-hop id is refused', async () => {
       const grandchildDid = await custodialAgent();
       const root = await service.issueRootHop({ issuer: helixDid, invoker: parentDid, invocationTarget: RESOURCE, allowedAction: ['read:orders'] }, 'req');
