@@ -417,6 +417,22 @@ describe('withdrawal (point 5, added points)', () => {
     expect(withdrawn.revoked).toEqual([]);
   });
 
+  it('the host withdraws a consent by id (no service request): hops revoked under the user key, renewals stop; listed by agent until then', async () => {
+    const world = consentWorld();
+    const { approved } = await world.consentTo();
+    const elsewhere = await world.consentTo({ grant: world.grant({ agent: OTHER_AGENT.did }) });
+    expect((await world.consent.openConsentsForAgent(AGENT.did)).map((consent) => consent.id)).toEqual([approved.consentId]);
+    const withdrawn = await world.consent.withdrawConsentById(approved.consentId, 'r');
+    expect(withdrawn?.withdrawn).toEqual([approved.consentId]);
+    expect(withdrawn?.revoked).toEqual([approved.hop.id]);
+    expect(await world.bitOf(approved.hop)).toEqual({ issuer: approved.hop.issuer, bit: true });
+    expect(await world.consent.openConsentsForAgent(AGENT.did)).toEqual([]);
+    expect((await world.consent.openConsentsForAgent(OTHER_AGENT.did)).map((consent) => consent.id)).toEqual([elsewhere.approved.consentId]);
+    expect(await world.consent.withdrawConsentById(approved.consentId, 'r')).toBeNull();
+    expect((await refusal(world.consent.renewHop(await world.renewalJws({ consentId: approved.consentId }), 'r'))).code).toBe(ErrorCode.CONSENT_WITHDRAWN);
+    expect((await refusal(world.consent.withdrawConsentById('nope', 'r'))).code).toBe(ErrorCode.CONSENT_NOT_FOUND);
+  });
+
   it('cannot revoke once the key is gone', async () => {
     const world = consentWorld();
     const { approved } = await world.consentTo();

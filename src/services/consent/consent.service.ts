@@ -557,6 +557,28 @@ export class ConsentService {
       throw new HelixError(ErrorCode.CONSENT_REQUEST_INVALID, 'Only the service the consent was given at may withdraw it', 403);
     }
     if (consent.withdrawnAt !== null) throw new HelixError(ErrorCode.CONSENT_WITHDRAWN, 'This consent is already withdrawn', 409);
+    return this.#withdraw(consent, requestId);
+  }
+
+  /** The consents naming `agentDid` that are not withdrawn. */
+  async openConsentsForAgent(agentDid: string): Promise<UserConsentRow[]> {
+    return (await this.#options.repo.listConsents({ agentDid })).filter((consent) => consent.withdrawnAt === null);
+  }
+
+  /**
+   * A withdrawal the host decided, with no request from the service: e.g. an
+   * agent made private again loses what other accounts' services consented
+   * to (L3-H follow-up). Same effect as the service's withdrawal: the hops
+   * are revoked under the user's key and renewals stop. Null when it is
+   * already withdrawn.
+   */
+  async withdrawConsentById(consentId: string, requestId: string): Promise<WithdrawnConsent | null> {
+    const consent = await this.#consent(consentId);
+    if (consent.withdrawnAt !== null) return null;
+    return this.#withdraw(consent, requestId);
+  }
+
+  async #withdraw(consent: UserConsentRow, requestId: string): Promise<WithdrawnConsent> {
     // Every consent this user gave this agent at this service in the cycle: the hops cannot tell them apart.
     const siblings = (await this.#options.repo.listConsents({ userDid: consent.userDid, agentDid: consent.agentDid })).filter(
       (other) => other.invocationTarget === consent.invocationTarget && other.withdrawnAt === null,
