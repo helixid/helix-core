@@ -6,7 +6,7 @@ import { gzipSync } from 'node:zlib';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { kyaos } from '@helixid/sdk-js';
 import { EnvSigner, buildDIDDocument, generateKeyPair, signDataIntegrity } from '../../../src/core/index.js';
-import verifyRoutes, { cardEndpointOf, memoryNonceStore, readableUrl, type VerifyRouteOptions } from '../../../src/routes/verify/index.js';
+import verifyRoutes, { cardEndpointOf, helixStatusListIssuers, memoryNonceStore, readableUrl, type VerifyRouteOptions } from '../../../src/routes/verify/index.js';
 
 const fixturesDir = new URL('../../../fixtures/verifier/', import.meta.url);
 const env = JSON.parse(readFileSync(new URL('environment.json', fixturesDir), 'utf8')) as {
@@ -178,6 +178,25 @@ describe('POST /v1/verify default status and card seams', () => {
     for (const url of asked) expect(url).toMatch(/^https:\/\/[a-z]+\.example\/status\//);
   });
 
+  it('reads every list fresh with liveStatus: a repeat inside the cache window stays fresh (L3), as an L3 tool needs', async () => {
+    const asked = servedLists();
+    const server = await start({ clock: () => NOW, resolveDid: fixtureSeams.resolveDid });
+    const chain = valid.find((c) => c.name === 'two_hop_chain')!.input.chain;
+    const payload = async () => ({ proof: await proofFor(), chain, request, expectedAudience: SERVICE, liveStatus: true });
+    expect((await server.inject({ method: 'POST', url: '/v1/verify', payload: await payload() })).json()).toMatchObject({ ok: true, chainSummary: { fresh: true } });
+    const firstReads = asked.length;
+    const again = await server.inject({ method: 'POST', url: '/v1/verify', payload: await payload() });
+    expect(again.json()).toMatchObject({ ok: true, chainSummary: { fresh: true } });
+    expect(again.json().fresh).not.toBe(false);
+    expect(asked.length).toBe(firstReads * 2);
+  });
+
+  it('refuses a liveStatus that is not a boolean', async () => {
+    const server = await start({ clock: () => NOW, resolveDid: fixtureSeams.resolveDid });
+    const res = await server.inject({ method: 'POST', url: '/v1/verify', payload: { proof: await proofFor(), request, expectedAudience: SERVICE, liveStatus: 'yes' } });
+    expect(res.statusCode).toBe(400);
+  });
+
   it('refuses the chain when a status list answers an error', async () => {
     const chain = valid.find((c) => c.name === 'two_hop_chain')!.input.chain as { credentialStatus: { statusListCredential: string } }[];
     servedLists([chain[0]!.credentialStatus.statusListCredential]);
@@ -189,6 +208,15 @@ describe('POST /v1/verify default status and card seams', () => {
 });
 
 describe('verify route helpers', () => {
+  it("binds the Helix issuer to its own identity status list, by exact URL", () => {
+    expect(helixStatusListIssuers('did:web:helix.example', 'https://helix.example/')).toEqual({
+      'did:web:helix.example': ['https://helix.example/v1/status-list/helix-status-list-1'],
+    });
+    expect(helixStatusListIssuers('did:web:127.0.0.1%3A3000', 'http://127.0.0.1:3000')).toEqual({
+      'did:web:127.0.0.1%3A3000': ['http://127.0.0.1:3000/v1/status-list/helix-status-list-1'],
+    });
+  });
+
   it('reads https, and http on loopback only in development', () => {
     expect(readableUrl('https://example.com/x', false)).toBe('https://example.com/x');
     expect(readableUrl('http://example.com/x', true)).toBeUndefined();

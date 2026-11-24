@@ -20,7 +20,9 @@
  * middleware.
  *
  * Body: `{ proof, chain?, request, card?, expectedAudience, resource?,
- * resourceOwner?, trustedRootIssuers?, catalog?, action?, tokenCnfJkt? }`.
+ * resourceOwner?, trustedRootIssuers?, catalog?, action?, tokenCnfJkt?,
+ * maxChainLength?, liveStatus? }`. A verdict from cached status lists is at
+ * most L2; `liveStatus: true` reads them fresh, as an L3 decision needs.
  * `expectedAudience` is the caller's own DID: the service the proof was
  * minted for. Answer: 200 with the verifier's result (`ok`, `level`,
  * `effectiveScopes`, `reasons`, `chainSummary`, ...) whether or not the proof
@@ -29,6 +31,7 @@
 
 import type { FastifyPluginAsync } from 'fastify';
 import { kyaos } from '@helixid/sdk-js';
+import { DEFAULT_STATUS_LIST_ID } from '../../core/status-list/index.js';
 
 const { verifier } = kyaos;
 
@@ -78,6 +81,7 @@ interface VerifyBody {
   action?: string;
   tokenCnfJkt?: string;
   maxChainLength?: number;
+  liveStatus?: boolean;
 }
 
 /** A replay store in memory: one key per `(agent, nonce)`, swept of expired entries on each insert. */
@@ -188,6 +192,9 @@ const verifyRoutes: FastifyPluginAsync<VerifyRouteOptions> = async (fastify, opt
             action: { type: 'string' },
             tokenCnfJkt: { type: 'string' },
             maxChainLength: { type: 'integer', minimum: 1 },
+            // Read every status list fresh, past the status cache (story L3-C): what an L3 decision
+            // needs, as the middleware does for a tool whose minimum level is L3 (Harish's P1).
+            liveStatus: { type: 'boolean' },
           },
           additionalProperties: false,
         },
@@ -213,6 +220,7 @@ const verifyRoutes: FastifyPluginAsync<VerifyRouteOptions> = async (fastify, opt
           ...(body.catalog === undefined ? {} : { catalog: body.catalog }),
           ...(body.action === undefined ? {} : { action: body.action }),
           ...(body.tokenCnfJkt === undefined ? {} : { tokenCnfJkt: body.tokenCnfJkt }),
+          ...(body.liveStatus === true ? { liveStatus: true } : {}),
         },
       );
       return reply.code(200).send(result);
@@ -221,6 +229,18 @@ const verifyRoutes: FastifyPluginAsync<VerifyRouteOptions> = async (fastify, opt
 };
 
 /** The URL the `KyaOsEntityCard` service of a DID document names, or undefined. */
+/**
+ * The deployment's own keeper binding (SPEC.md §6.6 keeper rule 1; SPEC-ENTITY-CARD
+ * §10.3): the Helix issuer keeps the identity status list that every Helix-hosted
+ * card's `revocation` entry names. Bound to that exact URL, not the origin, so the
+ * per-issuer lists under the same origin (accounts', agents', users') stay with
+ * their own issuers. Without it the route refuses every Helix-hosted agent's card
+ * (`status_list_mismatch`), as the spec-strict keeper rule requires.
+ */
+export function helixStatusListIssuers(helixIssuerDid: string, apiBaseUrl: string): Record<string, string[]> {
+  return { [helixIssuerDid]: [`${apiBaseUrl.replace(/\/+$/, '')}/v1/status-list/${DEFAULT_STATUS_LIST_ID}`] };
+}
+
 export function cardEndpointOf(document: unknown): string | undefined {
   if (document === null || typeof document !== 'object') return undefined;
   const services = (document as { service?: unknown }).service;
