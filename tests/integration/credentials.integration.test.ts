@@ -1,11 +1,13 @@
 // Copyright 2026 DgVerse LLP
 // KYA-OS story F-1: the credential-split routes end to end over in-memory storage.
 import Fastify from 'fastify';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import agentRoutes from '../../src/routes/agent/index.js';
 import credentialRoutes, { type CredentialRouteAction } from '../../src/routes/credentials/index.js';
 import {
   EnvSigner,
+  ErrorCode,
+  HelixError,
   buildCapabilityAttestation,
   derivePublicKey,
   evaluateDelegationChain,
@@ -39,6 +41,9 @@ const RESOURCE = 'did:web:service.example:orders';
 // What the server resolves with: a did:key under both its W3C method id and Helix's `#key-1`.
 const resolve = publicDidResolver(resolveDID) as unknown as (did: string) => Promise<JwsDidDocument>;
 
+/** The services behind each app, for tests that change state the routes don't expose. */
+const servicesOf = new WeakMap<object, { credentialService: CredentialService; didService: MockDIDService }>();
+
 function makeApp(withCredentials = true, hook?: { authorize: (request: unknown, action: CredentialRouteAction) => void; actions: CredentialRouteAction[] }) {
   const app = Fastify();
   const didService = new MockDIDService({ id: 'did:hedera:testnet:user-1', verificationMethod: [{ id: 'did:hedera:testnet:user-1#key-1', type: 'Ed25519VerificationKey2020', publicKeyHex: 'a'.repeat(64) }] });
@@ -71,6 +76,7 @@ function makeApp(withCredentials = true, hook?: { authorize: (request: unknown, 
   } else {
     app.register(agentRoutes, { prefix: '/v1', agentService, ...(withCredentials ? { credentialService } : {}), adminApiKey: ADMIN });
   }
+  servicesOf.set(app, { credentialService, didService });
   return app;
 }
 
@@ -210,6 +216,31 @@ describe('grants (delegation hops)', () => {
     // Parents before children: the hop asked for first, then its cascade (story L3-C).
     expect(revoke.json().revokedVcIds).toEqual([rootHop.id, hop.json().hop.id]);
     expect((await app.inject({ method: 'DELETE', url: '/v1/grants/urn:zcap:missing', headers: admin })).statusCode).toBe(404);
+  });
+
+  it('refuses a root or child hop to a revoked or deactivated agent with a 4xx before anything is signed', async () => {
+    const app = makeApp();
+    const { credentialService, didService } = servicesOf.get(app)!;
+    const parent = await onboard(app, ['read:orders']);
+    const root = (await app.inject({ method: 'POST', url: '/v1/grants', headers: admin, payload: { issuer: ISSUER_DID, invoker: parent.agentDid, invocationTarget: RESOURCE, allowedAction: ['read:orders'] } })).json().hop;
+    const child = await onboard(app, ['read:orders']);
+    // The DID service mock gives every agent the same DID, so revoking the agent means revoking each identity held for it.
+    for (let current = (await credentialService.listAgentCredentials(child.agentDid)).identity; current?.status === 'active'; current = (await credentialService.listAgentCredentials(child.agentDid)).identity) {
+      await credentialService.revokeVC(current.vcId, 'req');
+    }
+    const signerFor = vi.spyOn(credentialService, 'signerFor');
+    const hop = await app.inject({ method: 'POST', url: `/v1/grants/${encodeURIComponent(root.id)}/hops`, headers: admin, payload: { invoker: child.agentDid, allowedAction: ['read:orders'] } });
+    expect(hop.statusCode).toBe(404);
+    expect(hop.json().error).toMatchObject({ code: ErrorCode.AGENT_ACTIVE_CREDENTIAL_NOT_FOUND, message: expect.stringContaining(child.agentDid) });
+    const rootToRevoked = await app.inject({ method: 'POST', url: '/v1/grants', headers: admin, payload: { issuer: ISSUER_DID, invoker: child.agentDid, invocationTarget: RESOURCE, allowedAction: ['read:orders'] } });
+    expect(rootToRevoked.statusCode).toBe(404);
+    expect(rootToRevoked.json().error.code).toBe(ErrorCode.AGENT_ACTIVE_CREDENTIAL_NOT_FOUND);
+
+    vi.spyOn(didService, 'resolveDID').mockRejectedValue(new HelixError(ErrorCode.DID_DEACTIVATED, 'DID is deactivated', 410));
+    const toDeactivated = await app.inject({ method: 'POST', url: '/v1/grants', headers: admin, payload: { issuer: ISSUER_DID, invoker: 'did:key:z6MkDeactivated', invocationTarget: RESOURCE, allowedAction: ['read:orders'] } });
+    expect(toDeactivated.statusCode).toBe(410);
+    expect(toDeactivated.json().error.code).toBe(ErrorCode.DID_DEACTIVATED);
+    expect(signerFor).not.toHaveBeenCalled();
   });
 
   it('validates the root body and gates every route on the admin key', async () => {

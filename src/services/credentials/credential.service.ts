@@ -20,8 +20,10 @@
  */
 
 import {
+  AgentActiveCredentialNotFoundError,
   CAPABILITY_ATTESTATION_TYPE,
   DELEGATION_CREDENTIAL_TYPE,
+  DIDDeactivatedError,
   ErrorCode,
   HelixError,
   IDENTITY_CREDENTIAL_TYPE,
@@ -469,8 +471,31 @@ export class CredentialService implements HopReissuer {
     return revoked;
   }
 
+  /**
+   * Refuses a hop to an agent this server knows but has revoked, before
+   * anything is signed: its DID is deactivated (410 `DID_DEACTIVATED`), or it
+   * holds identity credentials here and none is active, i.e. all are revoked
+   * or expired (404 `AGENT_ACTIVE_CREDENTIAL_NOT_FOUND`, as consent answers).
+   * An invoker this server has no record of is not refused here: the
+   * deployment's route authorizer decides about unknown DIDs.
+   */
+  private async assertInvokerNotRevoked(invoker: string, requestId: string): Promise<void> {
+    try {
+      await this.didService.resolveDID(invoker, requestId);
+    } catch (error: unknown) {
+      if (error instanceof HelixError && error.code === ErrorCode.DID_DEACTIVATED) throw new DIDDeactivatedError(invoker);
+      if (!(error instanceof HelixError) || error.code !== ErrorCode.DID_NOT_FOUND) throw error;
+    }
+    const records = await this.vcRepo.findMany({ subjectDid: invoker });
+    if (!records.some((record) => record.vcType === IDENTITY_CREDENTIAL_TYPE)) return;
+    if ((await this.vcRepo.findActiveBySubjectDid(invoker, IDENTITY_CREDENTIAL_TYPE)).length === 0) {
+      throw new AgentActiveCredentialNotFoundError(invoker);
+    }
+  }
+
   /** The root of a chain: `parentCapability` is the resource itself. Any issuer Helix can sign for may issue it. */
   async issueRootHop(input: IssueRootHopInput, requestId: string): Promise<SignedDelegationHop> {
+    await this.assertInvokerNotRevoked(input.invoker, requestId);
     const signer = await this.signerFor(input.issuer, requestId);
     const statusEntry = await this.statusEntry(signer.did);
     const hop = await buildDelegationHop(
@@ -560,7 +585,8 @@ export class CredentialService implements HopReissuer {
   /**
    * A child hop under the stored hop `parentId`, signed by the parent's
    * invoker (continuity: you may only re-delegate what was delegated to your
-   * key), refused before signing when it would not attenuate the chain.
+   * key), refused before signing when the new invoker is a revoked agent or
+   * when it would not attenuate the chain.
    */
   async issueHop(parentId: string, input: IssueHopInput, requestId: string): Promise<{ hop: SignedDelegationHop; chain: SignedDelegationHop[] }> {
     const parentRecord = await this.vcRepo.findByVcId(parentId);
@@ -573,6 +599,7 @@ export class CredentialService implements HopReissuer {
     const parentChain = await this.chainOf(parentId);
     const parent = parentChain[parentChain.length - 1]!;
     const delegate = parent.credentialSubject.invoker ?? parent.credentialSubject.controller!;
+    await this.assertInvokerNotRevoked(input.invoker, requestId);
     const signer = await this.signerFor(delegate, requestId);
     const statusEntry = await this.statusEntry(signer.did);
     const hop = await buildDelegationHop(
