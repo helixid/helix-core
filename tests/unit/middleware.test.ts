@@ -74,6 +74,36 @@ describe('middleware', () => {
     });
   });
 
+  it("keeps the 4xx status of Fastify's own request errors (an empty JSON body is the caller's error)", () => {
+    const request = makeRequest({ 'x-request-id': 'req-header' });
+    const reply = makeReply();
+    const error = Object.assign(new Error("Body cannot be empty when content-type is set to 'application/json'"), {
+      code: 'FST_ERR_CTP_EMPTY_JSON_BODY',
+      statusCode: 400,
+    });
+
+    errorHandler(error as FastifyError, request as never, reply as never);
+
+    expect(reply.status).toHaveBeenCalledWith(400);
+    expect(reply.send).toHaveBeenCalledWith({
+      error: { code: 'VALIDATION_ERROR', message: error.message, requestId: 'req-header' },
+    });
+  });
+
+  it.each([
+    ['a 5xx Fastify error', { code: 'FST_ERR_SOMETHING', statusCode: 500 }],
+    ['a 4xx status without a Fastify code', { code: 'ECONNRESET', statusCode: 400 }],
+    ['a Fastify code without a status', { code: 'FST_ERR_CTP_INVALID_TYPE' }],
+  ])('still answers %s as an internal error', (_label, fields) => {
+    const request = makeRequest();
+    const reply = makeReply();
+
+    errorHandler(Object.assign(new Error('secret detail'), fields) as FastifyError, request as never, reply as never);
+
+    expect(reply.status).toHaveBeenCalledWith(500);
+    expect(reply.send).toHaveBeenCalledWith({ error: { code: 'INTERNAL_ERROR', message: 'An unexpected error occurred.', requestId: 'req-fallback' } });
+  });
+
   it('formats generic errors as internal errors without leaking details', () => {
     const request = makeRequest();
     const reply = makeReply();

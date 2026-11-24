@@ -48,7 +48,7 @@ import vcRoutes from './routes/vc/index.js';
 import statusListRoutes from './routes/status-list/index.js';
 import revocationRoutes from './routes/revocations/index.js';
 import eventRoutes from './routes/events/index.js';
-import verifyRoutes from './routes/verify/index.js';
+import verifyRoutes, { helixStatusListIssuers } from './routes/verify/index.js';
 import agentRoutes, { enrollmentOnboardingHandler } from './routes/agent/index.js';
 import entityCardRoutes from './routes/entity-card/index.js';
 import { credentialCardDetails, createEntityCardSource } from './services/entity-card/entity-card.source.js';
@@ -393,7 +393,11 @@ await app.register(revocationRoutes, {
 });
 await app.register(eventRoutes, { prefix: '/v1/events', signals: revocationSignals, adminApiKey: config.HELIX_ADMIN_API_KEY });
 // KYA-OS story F-2: the local verifier over HTTP; /v1/vp/verify is retired. It reads no database.
-await app.register(verifyRoutes, { prefix: '/v1/verify', allowLoopbackHttp: config.NODE_ENV !== 'production' });
+await app.register(verifyRoutes, {
+  prefix: '/v1/verify',
+  allowLoopbackHttp: config.NODE_ENV !== 'production',
+  statusListIssuers: helixStatusListIssuers(config.HELIX_ISSUER_DID, config.API_BASE_URL),
+});
 await app.register(sessionRoutes, {
   prefix: '/v1/sessions',
   publicKeyHex: jwtSessionKeyPair.publicKey,

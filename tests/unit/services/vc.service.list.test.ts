@@ -132,6 +132,20 @@ describe('VCService.listVCs', () => {
     });
   });
 
+  it("takes an identity credential's name (story F-1) as the agent name, and no other credential's", async () => {
+    repository.findMany.mockResolvedValue([
+      record({ vcId: 'vc:identity', vcType: 'AgentIdentityCredential', vcJson: { credentialSubject: { id: 'did:web:x:agents:1', name: 'orders-agent' } } }),
+      record({ vcId: 'vc:attestation', vcType: 'CapabilityAttestationCredential', vcJson: { credentialSubject: { id: 'did:web:x:agents:1', name: 'read:orders' } } }),
+      record({ vcId: 'vc:identity-unnamed', vcType: 'AgentIdentityCredential', vcJson: { credentialSubject: { id: 'did:web:x:agents:2', name: '' } } }),
+    ]);
+
+    const [identity, attestation, unnamed] = await service.listVCs({});
+
+    expect(identity).toMatchObject({ vcId: 'vc:identity', vcType: 'AgentIdentityCredential', agentName: 'orders-agent' });
+    expect(attestation).not.toHaveProperty('agentName');
+    expect(unnamed).not.toHaveProperty('agentName');
+  });
+
   it('returns empty scopes and omits agentName when absent', async () => {
     repository.findMany.mockResolvedValue([
       record({ vcJson: { credentialSubject: {} }, privilegeScopes: null }),
