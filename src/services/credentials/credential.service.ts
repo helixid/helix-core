@@ -27,6 +27,7 @@ import {
   ErrorCode,
   HelixError,
   IDENTITY_CREDENTIAL_TYPE,
+  MaxDelegationDepthExceededError,
   buildCapabilityAttestation,
   buildDelegationHop,
   buildIdentityCredential,
@@ -493,9 +494,35 @@ export class CredentialService implements HopReissuer {
     }
   }
 
+  /**
+   * Hop-Guard, `maxDelegationDepth` (rule C): every agent Helix holds a
+   * custody record for allows at most its recorded depth N of hops below its
+   * own position. The root issuer sits at position -1 and the invoker of hop j
+   * at position j; the new hop goes at position k = `invokers.length` and is
+   * refused when k - p > N for any of them, so an agent with N = 0 cannot
+   * delegate at all. An agent with no custody record here is not limited.
+   * Only hops Helix signs pass here: a self-custody agent's own hops never
+   * reach Helix.
+   */
+  private async assertDelegationDepth(rootIssuer: string, invokers: readonly string[]): Promise<void> {
+    const keys = this.custodialKeys;
+    if (keys?.maxDelegationDepthOf === undefined) return;
+    const k = invokers.length;
+    const parties: Array<[string, number]> = [[rootIssuer, -1], ...invokers.map((did, position): [string, number] => [did, position])];
+    for (const [did, position] of parties) {
+      const limit = await keys.maxDelegationDepthOf(did);
+      if (limit !== undefined && k - position > limit) {
+        throw new MaxDelegationDepthExceededError(
+          `maxDelegationDepth: ${did} allows ${limit} delegation hop(s) below it; this hop would be ${k - position} below it`,
+        );
+      }
+    }
+  }
+
   /** The root of a chain: `parentCapability` is the resource itself. Any issuer Helix can sign for may issue it. */
   async issueRootHop(input: IssueRootHopInput, requestId: string): Promise<SignedDelegationHop> {
     await this.assertInvokerNotRevoked(input.invoker, requestId);
+    await this.assertDelegationDepth(input.issuer, []);
     const signer = await this.signerFor(input.issuer, requestId);
     const statusEntry = await this.statusEntry(signer.did);
     const hop = await buildDelegationHop(
@@ -585,8 +612,9 @@ export class CredentialService implements HopReissuer {
   /**
    * A child hop under the stored hop `parentId`, signed by the parent's
    * invoker (continuity: you may only re-delegate what was delegated to your
-   * key), refused before signing when the new invoker is a revoked agent or
-   * when it would not attenuate the chain.
+   * key), refused before signing when the new invoker is a revoked agent,
+   * when it would exceed an agent's `maxDelegationDepth` above it, or when it
+   * would not attenuate the chain.
    */
   async issueHop(parentId: string, input: IssueHopInput, requestId: string): Promise<{ hop: SignedDelegationHop; chain: SignedDelegationHop[] }> {
     const parentRecord = await this.vcRepo.findByVcId(parentId);
@@ -600,6 +628,7 @@ export class CredentialService implements HopReissuer {
     const parent = parentChain[parentChain.length - 1]!;
     const delegate = parent.credentialSubject.invoker ?? parent.credentialSubject.controller!;
     await this.assertInvokerNotRevoked(input.invoker, requestId);
+    await this.assertDelegationDepth(parentChain[0]!.issuer, parentChain.map((hop) => invokerOf(hop) ?? ''));
     const signer = await this.signerFor(delegate, requestId);
     const statusEntry = await this.statusEntry(signer.did);
     const hop = await buildDelegationHop(

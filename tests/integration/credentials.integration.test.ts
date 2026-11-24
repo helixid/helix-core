@@ -243,6 +243,19 @@ describe('grants (delegation hops)', () => {
     expect(signerFor).not.toHaveBeenCalled();
   });
 
+  it('refuses a hop below an agent whose maxDelegationDepth it would exceed with 400 MAX_DELEGATION_DEPTH_EXCEEDED', async () => {
+    const app = makeApp();
+    const { credentialService } = servicesOf.get(app)!;
+    const parent = await onboard(app, ['read:orders']);
+    const child = await onboard(app, ['read:orders']);
+    credentialService.attachCustodialKeys({ signerFor: async () => undefined, isActiveAgent: async () => true, maxDelegationDepthOf: async (did) => (did === parent.agentDid ? 0 : undefined) });
+    const root = await app.inject({ method: 'POST', url: '/v1/grants', headers: admin, payload: { issuer: ISSUER_DID, invoker: parent.agentDid, invocationTarget: RESOURCE, allowedAction: ['read:orders'] } });
+    expect(root.statusCode).toBe(201);
+    const hop = await app.inject({ method: 'POST', url: `/v1/grants/${encodeURIComponent(root.json().hop.id)}/hops`, headers: admin, payload: { invoker: child.agentDid, allowedAction: ['read:orders'] } });
+    expect(hop.statusCode).toBe(400);
+    expect(hop.json().error).toMatchObject({ code: 'MAX_DELEGATION_DEPTH_EXCEEDED', message: expect.stringContaining('allows 0 delegation hop(s) below it') });
+  });
+
   it('validates the root body and gates every route on the admin key', async () => {
     const app = makeApp();
     expect((await app.inject({ method: 'POST', url: '/v1/grants', headers: admin, payload: { invoker: 'did:key:z6Mk1', invocationTarget: RESOURCE, allowedAction: [] } })).json().error.message).toContain('issuer is required');
