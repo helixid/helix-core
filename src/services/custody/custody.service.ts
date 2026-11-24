@@ -1087,6 +1087,12 @@ export class CustodyService implements CustodialKeys {
     return record?.subjectType === 'agent' && record.status === 'active';
   }
 
+  /** Hop-Guard: the agent's recorded `maxDelegationDepth`, or undefined when `did` is no agent of the custody routes. */
+  async maxDelegationDepthOf(did: string): Promise<number | undefined> {
+    const record = await this.options.records.findRecord(did);
+    return record?.subjectType === 'agent' ? record.maxDelegationDepth : undefined;
+  }
+
   /** Card details for story C-A's entity-card source: the name Helix recorded for the subject. */
   async cardDetails(did: string): Promise<{ name: string } | undefined> {
     const record = await this.options.records.findRecord(did);

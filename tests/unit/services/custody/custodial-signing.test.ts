@@ -2,7 +2,7 @@
 // KYA-OS story F-3: services created through the custody routes sign consent grants through the KeyStore (stories
 // rule 8); custodial agents sign KYA-OS delegation hops through the generic /sign route; agents log the enrollment event.
 import * as ed25519 from '@noble/ed25519';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   CustodialSigningRefusedError,
   createEd25519Proof,
@@ -117,7 +117,7 @@ describe('delegation hops Helix issues for custodial agents and services (F-3 pa
   it('a custodial service roots authority over itself and a custodial agent re-delegates it, each signed with its KeyStore key and audited', async () => {
     const h = harness();
     const svc = await h.service.createService({ name: 'orders', domain: 'orders.example', requiredScopes: ['read:orders'], keyCustody: 'helix' }, h.context());
-    const delegator = await h.service.createAgent({ name: 'Delegator', scopes: ['read:orders'], keyCustody: 'helix' }, h.context());
+    const delegator = await h.service.createAgent({ name: 'Delegator', scopes: ['read:orders'], keyCustody: 'helix', maxDelegationDepth: 1 }, h.context());
     const delegatee = await h.service.createAgent({ name: 'Delegatee', keyCustody: 'helix' }, h.context());
     const credentials = await credentialsFor(h);
     const root = await credentials.issueRootHop({ issuer: svc.did, invoker: delegator.did, invocationTarget: svc.did, allowedAction: ['read:orders'] }, 'req-root');
@@ -154,6 +154,64 @@ describe('delegation hops Helix issues for custodial agents and services (F-3 pa
     await expect((await credentialsFor(h, false)).signerFor(custodial.did)).rejects.toMatchObject({ code: 'AGENT_KEY_NOT_FOUND' });
     expect((await credentials.signerFor(custodial.did)).did).toBe(custodial.did);
   });
+
+  describe('maxDelegationDepth (Hop-Guard, rule C): each agent allows at most its depth of hops below it', () => {
+    async function setup(depths: Array<number | undefined>) {
+      const h = harness();
+      const svc = await h.service.createService({ name: 'orders', domain: 'orders.example', requiredScopes: ['read:orders'], keyCustody: 'helix' }, h.context());
+      const agents: string[] = [];
+      for (const [index, depth] of depths.entries()) {
+        agents.push((await h.service.createAgent({ name: `Agent ${index}`, scopes: ['read:orders'], keyCustody: 'helix', ...(depth === undefined ? {} : { maxDelegationDepth: depth }) }, h.context())).did);
+      }
+      const credentials = await credentialsFor(h);
+      const root = await credentials.issueRootHop({ issuer: svc.did, invoker: agents[0]!, invocationTarget: svc.did, allowedAction: ['read:orders'] }, 'req');
+      /** One child hop under `parentId`; the new hop's id. */
+      const delegate = async (parentId: string, invoker: string) => (await credentials.issueHop(parentId, { invoker, allowedAction: ['read:orders'] }, 'req')).hop.id;
+      return { h, svc, agents, credentials, root, delegate };
+    }
+    const exceeded = (message: string) => ({ code: 'MAX_DELEGATION_DEPTH_EXCEEDED', httpStatus: 400, message: expect.stringContaining(message) });
+
+    it('an agent with depth 2 then 1 passes authority on twice; the third hop is refused by the first agent, before signing', async () => {
+      const { agents, credentials, root, delegate } = await setup([2, 1, 0, 0]);
+      const first = await delegate(root.id, agents[1]!);
+      const second = await delegate(first, agents[2]!);
+      const signerFor = vi.spyOn(credentials, 'signerFor');
+      await expect(delegate(second, agents[3]!)).rejects.toMatchObject(exceeded(`${agents[0]} allows 2 delegation hop(s) below it`));
+      expect(signerFor).not.toHaveBeenCalled();
+    });
+
+    it('the default depth 0 means the agent cannot delegate, whatever the agents above it allow', async () => {
+      const { agents, root, delegate } = await setup([5, undefined, 0]);
+      const first = await delegate(root.id, agents[1]!);
+      await expect(delegate(first, agents[2]!)).rejects.toMatchObject(exceeded(`${agents[1]} allows 0 delegation hop(s) below it`));
+      await expect(delegate(root.id, agents[2]!)).resolves.toBeDefined();
+    });
+
+    it('an agent upstream bounds its whole subtree, however much a later agent allows', async () => {
+      const { agents, root, delegate } = await setup([1, 5, 0]);
+      const first = await delegate(root.id, agents[1]!);
+      await expect(delegate(first, agents[2]!)).rejects.toMatchObject(exceeded(`${agents[0]} allows 1 delegation hop(s) below it; this hop would be 2 below it`));
+    });
+
+    it('a root hop issued by an agent counts as one hop below it', async () => {
+      const { svc, agents, credentials, delegate } = await setup([0, 1, 1]);
+      await expect(credentials.issueRootHop({ issuer: agents[0]!, invoker: agents[1]!, invocationTarget: svc.did, allowedAction: ['read:orders'] }, 'req')).rejects.toMatchObject(exceeded(`${agents[0]} allows 0`));
+      const root = await credentials.issueRootHop({ issuer: agents[1]!, invoker: agents[2]!, invocationTarget: svc.did, allowedAction: ['read:orders'] }, 'req');
+      await expect(delegate(root.id, agents[0]!)).rejects.toMatchObject(exceeded(`${agents[1]} allows 1 delegation hop(s) below it; this hop would be 2 below it`));
+    });
+
+    it('an agent with no custody record here is not limited, nor is anyone when the custody keys give no depth', async () => {
+      const { agents, credentials, root, delegate } = await setup([2, 1]);
+      const first = await delegate(root.id, agents[1]!);
+      vi.spyOn(credentials, 'signerFor');
+      // A foreign or did_keys invoker has no record: it adds no limit of its own.
+      const foreign = 'did:web:elsewhere.example:agents:x';
+      await expect(credentials.issueHop(first, { invoker: foreign, allowedAction: ['read:orders'] }, 'req')).resolves.toBeDefined();
+      const keys = { signerFor: async () => undefined, isActiveAgent: async () => true };
+      credentials.attachCustodialKeys(keys);
+      await expect(credentials.issueRootHop({ issuer: 'did:web:helix.example', invoker: agents[0]!, invocationTarget: root.credentialSubject.invocationTarget, allowedAction: ['read:orders'] }, 'req')).resolves.toBeDefined();
+    });
+  });
 });
 
 describe('the enrollment event', () => {
@@ -171,4 +229,5 @@ describe('the enrollment event', () => {
       expect.objectContaining({ agentDid: created.did, credentialId: 'vc:test:2' }),
     ]);
   });
+
 });

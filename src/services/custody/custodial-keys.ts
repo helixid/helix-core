@@ -51,4 +51,10 @@ export interface CustodialKeys {
   signerFor(did: string, subjectType: CustodialSigningSubject, use: CustodialSigningUse): Promise<Signer | undefined>;
   /** Whether `did` is an active agent created through the custody routes, whoever holds its key. */
   isActiveAgent(did: string): Promise<boolean>;
+  /**
+   * Hop-Guard: the `maxDelegationDepth` recorded for an agent created through
+   * the custody routes (0 = it cannot delegate), or undefined when Helix holds
+   * no custody record of an agent with that DID (then no limit applies).
+   */
+  maxDelegationDepthOf?(did: string): Promise<number | undefined>;
 }
