@@ -156,6 +156,8 @@ describe('CustodyService.recheckPending', () => {
       },
     });
     const created = await pendingAgent(h, 'flaky');
+    // An agent whose credentials were not issued at enrollment (issuer down then, or enrolled before they were).
+    await h.records.updateRecord(created.did, { credentialVcId: null });
     publish(failing, created);
     later(failing, 2 * MINUTE);
     const scheduled = (await h.records.findRecord(created.did))!.nextRecheckAt;
