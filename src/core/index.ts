@@ -12,19 +12,20 @@ export * from './schemas/index.js';
 export * from './errors/index.js';
 export * from './audit/index.js';
 export * from './status-list/index.js';
+export * from './credentials/index.js';
 export { resolveDID, clearDIDCache, evictDIDCache } from './did-resolver.js';
-export { createEd25519Proof, verifyEd25519Proof } from './proof.js';
-export type { LinkedDataProof } from './proof.js';
-export { VPBuilder } from './vp-builder.js';
-export { verifyVP, fetchStatusList } from './vp-verifier.js';
-export { buildDelegationVC } from './delegation.js';
-export { issueGrant, ACCEPT_TERMS_SCOPE } from './grant.js';
+export * from './did/document.js';
+export * from './did/resolve.js';
+export * from './did/web.js';
+export * from './did/rotation.js';
+export * from './net/safe-fetch.js';
+export * from './net/outbound.js';
+export * from './card/index.js';
+export * from './custody/index.js';
+export * from './conformance/index.js';
+// proofKeyOf / verificationMethodOfKey: proofs signed with a KeyStore key (story F-3); the VP builder and verifier went with story F-2, service-signed consent grants with story L3-H.
+export { createEd25519Proof, verifyEd25519Proof, proofKeyOf, verificationMethodOfKey } from './proof.js';
+export type { LinkedDataProof, SigningKeyMaterial } from './proof.js';
 export { normalizeScopes, scopeKey, vcLookupColumns } from './vc-lookup.js';
 export type { VcLookupColumns } from './vc-lookup.js';
-export type {
-  IssueGrantOptions,
-  IssuerKeyMaterial,
-} from './grant.js';
-export type { VPBuilderOptions, VPBuilderSignOverrides } from './vp-builder.js';
-export type { StatusListResolver, VerifyVPOptions, VerifyVPResult } from './vp-verifier.js';
-export type { DelegateOptions, DelegationLink } from './delegation.js';
+export type { DelegationLink } from './delegation.js';

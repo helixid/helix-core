@@ -1,0 +1,267 @@
+{
+  "generated_from": "helix-core",
+  "generator": "scripts/generate-kya-os-helix-fixtures.ts",
+  "note": "RFC 8785 canonical form and KYA-OS sha256:<hex> hash of sample JSON values, from src/core/crypto/jcs.ts. helix-sdk-py and e2e-playwright assert byte-for-byte equality against this file; regenerate with `pnpm generate:kya-os-helix` whenever jcs.ts changes, never hand-edit.",
+  "vectors": [
+    {
+      "name": "empty_object",
+      "input": {},
+      "canonical": "{}",
+      "hash": "sha256:44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+    },
+    {
+      "name": "empty_array",
+      "input": [],
+      "canonical": "[]",
+      "hash": "sha256:4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    {
+      "name": "scalars",
+      "input": [
+        null,
+        true,
+        false,
+        0,
+        -1,
+        42,
+        "text",
+        ""
+      ],
+      "canonical": "[null,true,false,0,-1,42,\"text\",\"\"]",
+      "hash": "sha256:235498b6ed11a19972878ab5007f0e084339eb7d87d92a9e8013ba9a8aa79636"
+    },
+    {
+      "name": "flat_object_unordered_keys",
+      "input": {
+        "9": 7,
+        "10": 6,
+        "zeta": 1,
+        "alpha": 2,
+        "mid": 3,
+        "Alpha": 4,
+        "_under": 5
+      },
+      "canonical": "{\"10\":6,\"9\":7,\"Alpha\":4,\"_under\":5,\"alpha\":2,\"mid\":3,\"zeta\":1}",
+      "hash": "sha256:4f738c75c40db04aa2400366eaa1bbcf536b3dbd2c60f1cfafda088c788b2aef"
+    },
+    {
+      "name": "nested_key_order",
+      "input": {
+        "outer": {
+          "z": {
+            "y": [
+              {
+                "b": 2,
+                "a": 1
+              },
+              {
+                "d": 4,
+                "c": 3
+              }
+            ],
+            "x": null
+          },
+          "a": {
+            "deep": true,
+            "arr": [
+              3,
+              1,
+              2
+            ]
+          }
+        },
+        "top": "value",
+        "": "empty key"
+      },
+      "canonical": "{\"\":\"empty key\",\"outer\":{\"a\":{\"arr\":[3,1,2],\"deep\":true},\"z\":{\"x\":null,\"y\":[{\"a\":1,\"b\":2},{\"c\":3,\"d\":4}]}},\"top\":\"value\"}",
+      "hash": "sha256:8b6120819b6c23882aaad503a7eb066262628dd09f32bff37e6a2c434401b00c"
+    },
+    {
+      "name": "utf16_key_order_rfc8785_3_2_3",
+      "input": {
+        "1": "One",
+        "€": "Euro Sign",
+        "\r": "Carriage Return",
+        "דּ": "Hebrew Letter Dalet With Dagesh",
+        "😀": "Emoji: Grinning Face",
+        "": "Control",
+        "ö": "Latin Small Letter O With Diaeresis"
+      },
+      "canonical": "{\"\\r\":\"Carriage Return\",\"1\":\"One\",\"\":\"Control\",\"ö\":\"Latin Small Letter O With Diaeresis\",\"€\":\"Euro Sign\",\"😀\":\"Emoji: Grinning Face\",\"דּ\":\"Hebrew Letter Dalet With Dagesh\"}",
+      "hash": "sha256:5e321556d22018a9656991a9e94f77ec175fa193e52a2429d312f8419ec8b08c"
+    },
+    {
+      "name": "unicode_escapes",
+      "input": {
+        "controls": "\u0000\u0001\u001f",
+        "named": "\b\f\n\r\t",
+        "quote_backslash_solidus": "\"\\/",
+        "del_and_line_separators": "  ",
+        "bmp": "héllo wörld 你好 דּ",
+        "non_bmp": "🔑✨𝄞",
+        "combining": "é å"
+      },
+      "canonical": "{\"bmp\":\"héllo wörld 你好 דּ\",\"combining\":\"é å\",\"controls\":\"\\u0000\\u0001\\u001f\",\"del_and_line_separators\":\"  \",\"named\":\"\\b\\f\\n\\r\\t\",\"non_bmp\":\"🔑✨𝄞\",\"quote_backslash_solidus\":\"\\\"\\\\/\"}",
+      "hash": "sha256:3be4917042068c50908bf7ac8e251aa4f3101bdf25dcb1877eb8e90812071c64"
+    },
+    {
+      "name": "rfc8785_appendix_sample",
+      "input": {
+        "numbers": [
+          333333333.3333333,
+          4.5,
+          0.002,
+          1e-27
+        ],
+        "string": "€$\u000f\nA'B\"\\\\\"/",
+        "literals": [
+          null,
+          true,
+          false
+        ]
+      },
+      "canonical": "{\"literals\":[null,true,false],\"numbers\":[333333333.3333333,4.5,0.002,1e-27],\"string\":\"€$\\u000f\\nA'B\\\"\\\\\\\\\\\"/\"}",
+      "hash": "sha256:670b2058ab2793b25083f61d252e6e830859c658656569de160897232b6b69cc"
+    },
+    {
+      "name": "floats",
+      "input": [
+        0,
+        0.1,
+        0.30000000000000004,
+        1e-7,
+        0.00001,
+        0.000001,
+        5e-324,
+        2.220446049250313e-16,
+        -2.5,
+        123.456,
+        49.99,
+        0.875,
+        1000000000000000,
+        1234567890123456.8,
+        100,
+        9007199254740991,
+        -9007199254740991
+      ],
+      "canonical": "[0,0.1,0.30000000000000004,1e-7,0.00001,0.000001,5e-324,2.220446049250313e-16,-2.5,123.456,49.99,0.875,1000000000000000,1234567890123456.8,100,9007199254740991,-9007199254740991]",
+      "hash": "sha256:0d33465115a9473425400bb16ae7d45676e45e2b09f4841d8d1e991cbf0278eb"
+    },
+    {
+      "name": "mcp_tool_call_covered_request",
+      "input": {
+        "method": "tools/call",
+        "params": {
+          "name": "lookup_order",
+          "arguments": {
+            "orderId": "ord-42",
+            "includeItems": true,
+            "limit": 25,
+            "price": 19.99
+          }
+        }
+      },
+      "canonical": "{\"method\":\"tools/call\",\"params\":{\"arguments\":{\"includeItems\":true,\"limit\":25,\"orderId\":\"ord-42\",\"price\":19.99},\"name\":\"lookup_order\"}}",
+      "hash": "sha256:d6842f538a16f99fa7d312f41d6b7fe7554d55f8ce8a70408a433dc8f4f3e168"
+    },
+    {
+      "name": "mcp_tool_call_response_body",
+      "input": [
+        {
+          "type": "text",
+          "text": "Order ord-42: 2 items, total 39.98"
+        },
+        {
+          "type": "resource",
+          "resource": {
+            "uri": "helix://orders/ord-42",
+            "mimeType": "application/json",
+            "text": "{\"id\":\"ord-42\"}"
+          }
+        }
+      ],
+      "canonical": "[{\"text\":\"Order ord-42: 2 items, total 39.98\",\"type\":\"text\"},{\"resource\":{\"mimeType\":\"application/json\",\"text\":\"{\\\"id\\\":\\\"ord-42\\\"}\",\"uri\":\"helix://orders/ord-42\"},\"type\":\"resource\"}]",
+      "hash": "sha256:31a125a1874145ee342ae57577fb96615443dc25fa7f41a1da6f802ea01aff9f"
+    },
+    {
+      "name": "l2_proof_meta",
+      "input": {
+        "responseHash": "sha256:4bcfa5d788673d0a2a796d22b0ad28bbb482ec087770cd870d6a8ce2e90ec142",
+        "requestHash": "sha256:c8f3d59959c9247211de8c76b94ef17f0c279f09362350ced67f69ecdb89d6c7",
+        "sessionId": "kyaos_01HZX",
+        "audience": "did:web:service.example.com",
+        "nonce": "b6VZmm9hXn-otOETBkvlvQ",
+        "ts": 1750000000,
+        "kid": "did:key:z6MkqQrYYzmMhjiBtLF8b6HofyGM9s2GffDF3BSsGEpBpczT#z6MkqQrYYzmMhjiBtLF8b6HofyGM9s2GffDF3BSsGEpBpczT",
+        "did": "did:key:z6MkqQrYYzmMhjiBtLF8b6HofyGM9s2GffDF3BSsGEpBpczT"
+      },
+      "canonical": "{\"audience\":\"did:web:service.example.com\",\"did\":\"did:key:z6MkqQrYYzmMhjiBtLF8b6HofyGM9s2GffDF3BSsGEpBpczT\",\"kid\":\"did:key:z6MkqQrYYzmMhjiBtLF8b6HofyGM9s2GffDF3BSsGEpBpczT#z6MkqQrYYzmMhjiBtLF8b6HofyGM9s2GffDF3BSsGEpBpczT\",\"nonce\":\"b6VZmm9hXn-otOETBkvlvQ\",\"requestHash\":\"sha256:c8f3d59959c9247211de8c76b94ef17f0c279f09362350ced67f69ecdb89d6c7\",\"responseHash\":\"sha256:4bcfa5d788673d0a2a796d22b0ad28bbb482ec087770cd870d6a8ce2e90ec142\",\"sessionId\":\"kyaos_01HZX\",\"ts\":1750000000}",
+      "hash": "sha256:765ee096f113d06beaccc689c30f7c47666d621883ff7a8713e46e84859aa394"
+    },
+    {
+      "name": "delegation_credential_unsigned",
+      "input": {
+        "@context": [
+          "https://www.w3.org/ns/credentials/v2",
+          "https://w3id.org/zcap/v1"
+        ],
+        "type": [
+          "VerifiableCredential",
+          "DelegationCredential"
+        ],
+        "id": "urn:uuid:5b3c7e0a-1f2d-4c8e-9a6b-0d1e2f3a4b5c",
+        "issuer": "did:web:helix.example.com:agents:parent",
+        "validFrom": "2026-01-01T00:00:00Z",
+        "validUntil": "2026-01-02T00:00:00Z",
+        "credentialSubject": {
+          "id": "did:web:helix.example.com:agents:child",
+          "invoker": "did:web:helix.example.com:agents:child",
+          "parentCapability": "urn:uuid:root-consent",
+          "invocationTarget": "https://service.example.com/mcp",
+          "allowedAction": [
+            "read:orders",
+            "read:catalog"
+          ],
+          "caveats": [
+            {
+              "type": "MaxCalls",
+              "max": 100
+            }
+          ]
+        },
+        "credentialStatus": {
+          "type": "BitstringStatusListEntry",
+          "statusPurpose": "revocation",
+          "statusListIndex": "94567",
+          "statusListCredential": "https://helix.example.com/status/3"
+        }
+      },
+      "canonical": "{\"@context\":[\"https://www.w3.org/ns/credentials/v2\",\"https://w3id.org/zcap/v1\"],\"credentialStatus\":{\"statusListCredential\":\"https://helix.example.com/status/3\",\"statusListIndex\":\"94567\",\"statusPurpose\":\"revocation\",\"type\":\"BitstringStatusListEntry\"},\"credentialSubject\":{\"allowedAction\":[\"read:orders\",\"read:catalog\"],\"caveats\":[{\"max\":100,\"type\":\"MaxCalls\"}],\"id\":\"did:web:helix.example.com:agents:child\",\"invocationTarget\":\"https://service.example.com/mcp\",\"invoker\":\"did:web:helix.example.com:agents:child\",\"parentCapability\":\"urn:uuid:root-consent\"},\"id\":\"urn:uuid:5b3c7e0a-1f2d-4c8e-9a6b-0d1e2f3a4b5c\",\"issuer\":\"did:web:helix.example.com:agents:parent\",\"type\":[\"VerifiableCredential\",\"DelegationCredential\"],\"validFrom\":\"2026-01-01T00:00:00Z\",\"validUntil\":\"2026-01-02T00:00:00Z\"}",
+      "hash": "sha256:8a10f05f9f27c876e7c374420239a5348890151ad54297728a958cdee42b4156"
+    },
+    {
+      "name": "status_list_credential_unsigned",
+      "input": {
+        "@context": [
+          "https://www.w3.org/2018/credentials/v1",
+          "https://w3id.org/vc/status-list/2021/v1"
+        ],
+        "id": "https://helix.example.com/status/3",
+        "type": [
+          "VerifiableCredential",
+          "StatusList2021Credential"
+        ],
+        "issuer": "did:web:helix.example.com",
+        "issuanceDate": "2026-01-01T00:00:00Z",
+        "credentialSubject": {
+          "id": "https://helix.example.com/status/3#list",
+          "type": "StatusList2021",
+          "statusPurpose": "revocation",
+          "encodedList": "H4sIAAAAAAAAA-3BMQEAAADCoPVPbQwfoAAAAAAAAAAAAAAAAAAAAIC3AYbSVKsAQAAA"
+        }
+      },
+      "canonical": "{\"@context\":[\"https://www.w3.org/2018/credentials/v1\",\"https://w3id.org/vc/status-list/2021/v1\"],\"credentialSubject\":{\"encodedList\":\"H4sIAAAAAAAAA-3BMQEAAADCoPVPbQwfoAAAAAAAAAAAAAAAAAAAAIC3AYbSVKsAQAAA\",\"id\":\"https://helix.example.com/status/3#list\",\"statusPurpose\":\"revocation\",\"type\":\"StatusList2021\"},\"id\":\"https://helix.example.com/status/3\",\"issuanceDate\":\"2026-01-01T00:00:00Z\",\"issuer\":\"did:web:helix.example.com\",\"type\":[\"VerifiableCredential\",\"StatusList2021Credential\"]}",
+      "hash": "sha256:a4dbdab6020d394ad245b16b9299c7bd15079e5991b8487fe8f09990febde728"
+    }
+  ]
+}

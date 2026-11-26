@@ -6,7 +6,8 @@ import { createDidStorageDriver, type DidStorageDriver } from './drivers/did.dri
 export interface DIDRecord {
   id: string;
   subjectType: string;
-  controller: string;
+  /** The document's top-level controller; absent when the document has none. */
+  controller?: string | null | undefined;
   publicKey: string;
   publicKeyMultibase: string | null;
   hederaTopicId: string | null;
@@ -21,7 +22,7 @@ export interface DIDRecord {
 export interface CreateDIDRecordParams {
   id: string;
   subjectType: string;
-  controller: string;
+  controller?: string | undefined;
   publicKey: string;
   publicKeyMultibase?: string | undefined;
   hederaTransactionId: string;

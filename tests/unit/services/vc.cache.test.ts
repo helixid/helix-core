@@ -2,14 +2,15 @@
 // Licensed under the Apache License, Version 2.0
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { createStatusList, ErrorCode, generateKeyPair } from '../../../src/core/index.js';
+import { TestAuditTrail } from '../../utils/TestAuditTrail.js';
+import { createStatusList, generateKeyPair } from '../../../src/core/index.js';
 import { VCService } from '../../../src/services/vc/vc.service.js';
 import { InProcessCache } from '../../../src/cache/InProcessCache.js';
 
 describe('VCService status-list cache behavior', () => {
   let repository: any;
   let didService: any;
-  let auditLogger: any;
+  let auditLogger: TestAuditTrail;
   let statusListCache: InProcessCache<string>;
   let service: VCService;
   let signingKey: string;
@@ -29,7 +30,7 @@ describe('VCService status-list cache behavior', () => {
       findActiveChildren: vi.fn().mockResolvedValue([]),
     };
     didService = { resolveDID: vi.fn() };
-    auditLogger = { log: vi.fn() };
+    auditLogger = new TestAuditTrail();
     statusListCache = new InProcessCache<string>();
     service = new VCService(
       repository,
@@ -41,25 +42,6 @@ describe('VCService status-list cache behavior', () => {
       statusListCache,
       60,
     );
-  });
-
-  it('caches public status list credentials after the first DB read', async () => {
-    const encodedList = createStatusList();
-    repository.findStatusListById.mockResolvedValue({ listId: 'helix-status-list-1', encodedList, nextIndex: 0 });
-
-    const first = await service.getStatusList('helix-status-list-1');
-    const second = await service.getStatusList('helix-status-list-1');
-
-    expect(first.credentialSubject.encodedList).toBe(encodedList);
-    expect(second.credentialSubject.encodedList).toBe(encodedList);
-    expect(repository.findStatusListById).toHaveBeenCalledTimes(1);
-  });
-
-  it('throws STATUS_LIST_NOT_FOUND and does not cache missing lists', async () => {
-    repository.findStatusListById.mockResolvedValue(null);
-
-    await expect(service.getStatusList('missing')).rejects.toMatchObject({ code: ErrorCode.STATUS_LIST_NOT_FOUND });
-    await expect(statusListCache.get('missing')).resolves.toBeNull();
   });
 
   it('invalidates status-list cache after VC revocation', async () => {

@@ -1,6 +1,7 @@
 import { buildDIDDocument, type DIDDocument } from './crypto/did.js';
 import { base58btcDecode } from './crypto/vp.js';
 import { loadDidHederaResolver } from './did-hedera-loader.js';
+import { getOutboundFetch } from './net/outbound.js';
 import {
   DIDMethodNotAvailableError,
   UnsupportedDIDMethodError,
@@ -61,16 +62,12 @@ function didWebToUrl(did: string): string {
   }
 
   const decoded = parts.slice(2).map(decodeURIComponent);
-  let [host, ...pathParts] = decoded;
+  // A port is percent-encoded in the host (`localhost%3A3000`); a raw
+  // `did:web:localhost:3000:x` is host `localhost`, path `3000/x`, as the
+  // did:web spec reads it.
+  const [host, ...pathParts] = decoded;
   if (!host) {
     throw new ValidationError(`Invalid did:web DID: ${did}`);
-  }
-
-  // Compatibility: accept legacy/local did:web forms like did:web:localhost:3000
-  // and did:web:127.0.0.1:3000 where port was not percent-encoded.
-  if (isLoopbackHost(host) && pathParts.length > 0 && /^\d+$/.test(pathParts[0] ?? '')) {
-    host = `${host}:${pathParts[0]}`;
-    pathParts = pathParts.slice(1);
   }
 
   let hostname: string;
@@ -101,11 +98,23 @@ function resolveDidKey(did: string): DIDDocument {
     throw new ValidationError(`Only Ed25519 did:key documents are supported: ${did}`);
   }
   const publicKeyHex = Buffer.from(decoded.slice(2)).toString('hex');
-  return buildDIDDocument(did, publicKeyHex);
+  // One key, two names: Helix's `#key-1` and the W3C did:key method id
+  // `<did>#<fingerprint>`, which a did:key signer names by default
+  // (defaultKidFragment) and KYA-OS verifiers resolve. List both, as the
+  // server's public resolver does, so a proof under either verifies.
+  const document = buildDIDDocument(did, publicKeyHex);
+  const standardId = `${did}#${fingerprint}`;
+  return {
+    ...document,
+    verificationMethod: [...document.verificationMethod, { ...document.verificationMethod[0]!, id: standardId }],
+    assertionMethod: [...document.assertionMethod, standardId],
+    authentication: [...document.authentication, standardId],
+  };
 }
 
 async function resolveDidWeb(did: string): Promise<DIDDocument> {
-  const response = await fetch(didWebToUrl(did), {
+  // KYA-OS story C-A: every DID document is read through SafeFetch (net/outbound.ts).
+  const response = await getOutboundFetch()(didWebToUrl(did), {
     headers: { accept: 'application/did+json, application/json' },
   });
   if (!response.ok) {

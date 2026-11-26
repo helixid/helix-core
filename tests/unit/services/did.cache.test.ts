@@ -2,6 +2,7 @@
 // Licensed under the Apache License, Version 2.0
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { TestAuditTrail } from '../../utils/TestAuditTrail.js';
 import { DIDService } from '../../../src/services/did/did.service.js';
 import { InProcessCache } from '../../../src/cache/InProcessCache.js';
 import { ErrorCode, type DIDDocument } from '../../../src/core/index.js';
@@ -9,7 +10,7 @@ import { ErrorCode, type DIDDocument } from '../../../src/core/index.js';
 describe('DIDService cache behavior', () => {
   let repository: any;
   let hedera: any;
-  let audit: any;
+  let audit: TestAuditTrail;
   let cache: InProcessCache<DIDDocument>;
   let service: DIDService;
 
@@ -27,7 +28,7 @@ describe('DIDService cache behavior', () => {
       prepareDIDCreation: vi.fn(),
       submitDIDCreation: vi.fn(),
     };
-    audit = { log: vi.fn() };
+    audit = new TestAuditTrail();
     cache = new InProcessCache<DIDDocument>();
     service = new DIDService(repository, hedera, audit, cache, 60);
   });

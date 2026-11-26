@@ -26,6 +26,9 @@ importers:
       '@fastify/swagger-ui':
         specifier: ^5.2.6
         version: 5.2.6
+      '@helixid/sdk-js':
+        specifier: ^1.0.0
+        version: 1.0.0
       '@noble/curves':
         specifier: ^1.9.7
         version: 1.9.7
@@ -72,9 +75,6 @@ importers:
       '@helixid/did-hedera':
         specifier: ^0.1.2
         version: 0.1.2(bn.js@5.2.5)(react-native@0.87.1(@babel/core@7.29.7)(@types/react@19.3.0)(react@19.2.8))
-      '@helixid/sdk-js':
-        specifier: ^0.2.0
-        version: 0.2.0
       '@types/better-sqlite3':
         specifier: ^7.6.13
         version: 7.6.13
@@ -632,6 +632,9 @@ packages:
 
   '@helixid/sdk-js@0.2.0':
     resolution: {integrity: sha512-vrcx/6rjOqDhuQsLp/LGXaxEHffKevDZJiRmOSLoUwDcPH4RwgSDKQeTNJoZ+Nhkcjbc4ZlAz7Kxh5vky+OJmw==}
+
+  '@helixid/sdk-js@1.0.0':
+    resolution: {integrity: sha512-ZmdGVFmaHEpF2Z6J2yWAD9WYuzLroa8OFFicjdL5TwLeZTNEUyIxnTpfNXt74/ikvLKTVLz09NbZELBvMaQGOA==}
 
   '@hiero-did-sdk/cache@0.1.8':
     resolution: {integrity: sha512-HGC4ckyzK6ollXzwliEcyy9398srz2eSmBbYBFQawc/D3wCqK1Dd2jHhhQoutsUp8s/7+EhpB4urZ3CSOHFjBA==}
@@ -4107,7 +4110,7 @@ snapshots:
   '@grpc/proto-loader@0.7.15':
     dependencies:
       lodash.camelcase: 4.3.0
-      long: 5.3.1
+      long: 5.3.2
       protobufjs: 8.0.2
       yargs: 17.7.3
 
@@ -4191,6 +4194,12 @@ snapshots:
       - supports-color
 
   '@helixid/sdk-js@0.2.0':
+    dependencies:
+      '@noble/ed25519': 2.3.0
+      '@noble/hashes': 1.8.0
+      zod: 3.25.76
+
+  '@helixid/sdk-js@1.0.0':
     dependencies:
       '@noble/ed25519': 2.3.0
       '@noble/hashes': 1.8.0

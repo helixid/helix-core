@@ -15,8 +15,6 @@ import {
   ErrorCode,
   createStatusList,
   setBit,
-  buildStatusListCredential,
-  findScopeProblem,
   base58btcEncode,
   derivePublicKey,
   hashCanonicalPayload,
@@ -27,27 +25,33 @@ import {
   type SignedVC,
   VPMultipleActiveVCError,
   vcLookupColumns,
+  delegationRef,
+  delegationReference,
+  publicDid,
+  type AuditEventInput,
+  type AuditTrail,
+  type PartyRef,
 } from '../../core/index.js';
 import * as crypto from 'node:crypto';
 import { VcRepository, type VCRecord } from '../../repositories/vc.repository.js';
 import type { IDIDService } from '../did/did.service.js';
-import type { IAuditLogger } from '../../core/index.js';
 import type { ICache } from '../../cache/ICache.js';
 import { NoopCache } from '../../cache/NoopCache.js';
 import { extractEd25519PublicKeyHexFromDIDDocument } from '../did/publicKey.js';
 
 type CredentialSubject = {
   agentName?: string;
+  /** Story F-1: the identity credential names its agent here (`agentName` is the pre-F-1 member). */
+  name?: string;
   userId?: string;
-  delegatedFrom?: string;
-  delegationDepth?: number;
-  maxDelegationDepth?: number;
   parentVcId?: string;
 };
 
-type StoredCredentialJson = {
-  credentialSubject?: CredentialSubject;
-};
+/** The agent's name for a summary: the identity credential's `name` (F-1), else a legacy `agentName`. */
+function agentNameOf(subject: CredentialSubject, vcType: string | null | undefined): string | undefined {
+  if (vcType === 'AgentIdentityCredential' && typeof subject.name === 'string' && subject.name !== '') return subject.name;
+  return subject.agentName;
+}
 
 function asRecord(value: unknown): Record<string, unknown> {
   return typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : {};
@@ -62,19 +66,18 @@ function getCredentialSubject(value: unknown): CredentialSubject {
   return asRecord(record.credentialSubject) as CredentialSubject;
 }
 
+/**
+ * A user credential (HelixUserCredential). Agents are not issued credentials
+ * here: onboarding gives them an AgentIdentityCredential and one
+ * CapabilityAttestationCredential per scope (story F-1, CredentialService).
+ */
 export interface IssueVCParams extends ReconcileOptions {
   subjectDid: string;
-  subjectType: 'agent' | 'user';
-  privilegeScopes?: string[] | undefined;
-  agentName?: string | undefined;
-  userId?: string | undefined;
+  subjectType: 'user';
+  userId: string;
   expiresInSeconds?: number | undefined;
   /** Explicit expiry. `null` issues a VC with no validUntil. Takes precedence over expiresInSeconds. */
   expiresAt?: Date | null | undefined;
-  delegatedFrom?: string | undefined;
-  delegationDepth?: number | undefined;
-  maxDelegationDepth?: number | undefined;
-  parentVcId?: string | undefined;
 }
 
 export interface IssueVCResult extends Partial<ReconcileResult> {
@@ -122,7 +125,7 @@ export interface ListVCFilters {
 export interface VCSummary {
   vcId: string;
   subjectDid: string;
-  /** The credential's own type, e.g. HelixAgentCredential or DelegationGrantCredential. */
+  /** The credential's own type, e.g. AgentIdentityCredential, CapabilityAttestationCredential or DelegationGrantCredential. */
   vcType?: string | undefined;
   agentName?: string | undefined;
   scopes: string[];
@@ -132,8 +135,8 @@ export interface VCSummary {
   parentVcId?: string | undefined;
 }
 
+/** Renewal of a user credential: a fresh validity. Identity credentials renew through CredentialService.renewIdentity. */
 export interface RenewVCOptions {
-  privilegeScopes?: string[] | undefined;
   expiresInSeconds?: number | undefined;
 }
 
@@ -167,11 +170,7 @@ export interface IVCService {
     vc: Record<string, unknown>;
     status: 'active' | 'revoked' | 'expired';
   } | null>;
-  getStatusList(listId: string): Promise<ReturnType<typeof buildStatusListCredential>>;
-  createStatusList(input?: {
-    listId?: string;
-    length?: number;
-  }): Promise<ReturnType<typeof buildStatusListCredential>>;
+  createStatusList(input?: { listId?: string; length?: number }): Promise<{ listId: string; encodedList: string }>;
   registerSignedVC(vc: SignedVC, options?: ReconcileOptions): Promise<ReconcileResult>;
 
   /** See IVCService.registerExternalVC() in ./IVCService.ts. */
@@ -198,19 +197,88 @@ export interface IVCService {
 /**
  * Implementation of Verifiable Credential lifecycle management.
  */
+
+const DID_PATTERN = /^did:[^\r\n]+$/;
+
+/** A `public_did` reference, or nothing when the value is not a DID: the event then names no party rather than failing validation. */
+function didRef(value: string | undefined): PartyRef | undefined {
+  return value !== undefined && DID_PATTERN.test(value) ? publicDid(value) : undefined;
+}
+
+function reportAuditFailure(error: unknown): void {
+  console.error('AUDIT_RECORD_FAILED', error instanceof Error ? error.message : String(error));
+}
+
 export class VCService implements IVCService {
   private readonly DEFAULT_STATUS_LIST_ID = 'helix-status-list-1';
 
   constructor(
     private readonly vcRepo: VcRepository,
     private readonly didService: IDIDService,
-    private readonly audit: IAuditLogger,
+    private readonly auditTrail: AuditTrail,
     private readonly signingKeyHex: string,
     private readonly issuerDid: string,
     private readonly apiBaseUrl: string,
     private readonly statusListCache: ICache<string> = new NoopCache<string>(),
     private readonly statusListCacheTtlSeconds = 60,
   ) {}
+
+  /** Records one typed audit event; a failure to record never breaks the request. */
+  private audit(input: AuditEventInput): void {
+    try {
+      this.auditTrail.record(input).catch(reportAuditFailure);
+    } catch (error) {
+      reportAuditFailure(error);
+    }
+  }
+
+  /** `delegation.issued` for a credential this platform now holds; `parentRef` names what it renews or derives from. */
+  private auditCredentialIssued(requestId: string, name: string, subjectDid: string, ref: string, parentRef?: string): void {
+    const resource = didRef(subjectDid);
+    this.audit({
+      eventType: 'delegation.issued',
+      action: { category: 'credential', name },
+      outcome: 'succeeded',
+      correlationId: requestId,
+      ...(resource !== undefined ? { resource } : {}),
+      details: {
+        family: 'delegation',
+        phase: 'issued',
+        delegationRef: ref,
+        ...(parentRef !== undefined ? { parentRef } : {}),
+      },
+    });
+  }
+
+  private auditCredentialRevoked(requestId: string, subjectDid: string, vcId: string, code?: string): void {
+    const resource = didRef(subjectDid);
+    this.audit({
+      eventType: 'delegation.revoked',
+      action: { category: 'credential', name: 'revoked' },
+      outcome: 'succeeded',
+      correlationId: requestId,
+      ...(resource !== undefined ? { resource } : {}),
+      ...(code !== undefined ? { reason: { code } } : {}),
+      details: { family: 'delegation', phase: 'revoked', delegationRef: delegationReference(vcId) },
+    });
+  }
+
+  /** `consent.approved`: the service (issuer) recorded the user's consent to the agent. */
+  private auditConsentRegistered(requestId: string, vc: SignedVC, agentDid: string, userDid: string | undefined): void {
+    const actor = didRef(agentDid);
+    const resource = didRef(vc.issuer);
+    const responsibleParty = didRef(userDid);
+    this.audit({
+      eventType: 'consent.approved',
+      action: { category: 'consent', name: 'grant_registered' },
+      outcome: 'succeeded',
+      correlationId: requestId,
+      ...(actor !== undefined ? { actor } : {}),
+      ...(resource !== undefined ? { resource } : {}),
+      ...(responsibleParty !== undefined ? { responsibleParty } : {}),
+      details: { family: 'consent', phase: 'approved', consentRef: vc.id },
+    });
+  }
 
   async findActiveBySubjectDid(
     subjectDid: string,
@@ -239,6 +307,18 @@ export class VCService implements IVCService {
           unknown
         >,
     );
+  }
+
+  /**
+   * The newest credential of `vcType` for the subject, whatever its status
+   * (revoked and expired included), or null: what an agent's card shows as
+   * its `revocation` once its identity is revoked.
+   */
+  async latestBySubjectDid(subjectDid: string, vcType: string): Promise<Record<string, unknown> | null> {
+    const records = (await this.vcRepo.findMany({ subjectDid })).filter((record) => record.vcType === vcType);
+    const newest = records.reduce<VCRecord | undefined>((latest, record) => (latest === undefined || (record.createdAt?.getTime() ?? 0) >= (latest.createdAt?.getTime() ?? 0) ? record : latest), undefined);
+    if (!newest) return null;
+    return (typeof newest.vcJson === 'string' ? JSON.parse(newest.vcJson) : newest.vcJson) as Record<string, unknown>;
   }
 
   async findActiveByVcIdForSubject(
@@ -344,14 +424,7 @@ export class VCService implements IVCService {
     await this.vcRepo.revokeVc(record.vcId, this.DEFAULT_STATUS_LIST_ID, encoded);
     if (ownsBit) await this.statusListCache.delete(this.DEFAULT_STATUS_LIST_ID);
 
-    await this.audit.log({
-      event: 'VC_REVOKED',
-      timestamp: new Date().toISOString(),
-      requestId,
-      vcId: record.vcId,
-      subjectDid: record.subjectDid,
-      reason: 'superseded',
-    });
+    this.auditCredentialRevoked(requestId, record.subjectDid, record.vcId, 'superseded');
     return true;
   }
 
@@ -379,7 +452,7 @@ export class VCService implements IVCService {
    * revokedAt alone (see revokeVC / retire).
    */
   async registerSignedVC(vc: SignedVC, options: ReconcileOptions = {}): Promise<ReconcileResult> {
-    const subject = (vc as unknown as { credentialSubject: CredentialSubject & { id: string; privilegeScopes?: string[] } })
+    const subject = (vc as unknown as { credentialSubject: CredentialSubject & { id: string; scopes?: string[] } })
       .credentialSubject;
     const validUntil = (vc as unknown as { validUntil?: string }).validUntil;
     const ownIndex = this.pointsAtDefaultList(vc) ? Number(vc.credentialStatus?.statusListIndex) : NaN;
@@ -388,12 +461,9 @@ export class VCService implements IVCService {
       subjectDid: subject.id,
       subjectType: 'agent',
       vcJson: vc,
-      privilegeScopes: subject.privilegeScopes,
+      privilegeScopes: subject.scopes,
       statusListIndex: Number.isInteger(ownIndex) ? ownIndex : 0,
       expiresAt: validUntil ? new Date(validUntil) : null,
-      delegatedFrom: subject.delegatedFrom,
-      delegationDepth: subject.delegationDepth,
-      maxDelegationDepth: subject.maxDelegationDepth,
       parentVcId: subject.parentVcId,
       ...vcLookupColumns(vc),
     });
@@ -459,12 +529,11 @@ export class VCService implements IVCService {
     const subject = vc.credentialSubject as unknown as {
       id: string;
       scopes?: string[];
-      privilegeScopes?: string[];
     };
 
     // vcs.subjectDid is a FK onto dids. An onboarded agent is already
-    // registered; this covers a grant naming a DID this server has only ever
-    // seen inside a VP, and mirrors issueVC()'s own fallback.
+    // registered; this covers a grant naming a DID this server has not
+    // stored, and mirrors issueVC()'s own fallback.
     try {
       await this.didService.resolveDID(subject.id, requestId);
     } catch (err: unknown) {
@@ -481,10 +550,9 @@ export class VCService implements IVCService {
       }
     }
 
-    // A DelegationGrant names its scopes `scopes`; agent credentials use
-    // `privilegeScopes`. Store whichever this credential carries, so the row
-    // stays queryable by scope either way.
-    const privilegeScopes = subject.privilegeScopes ?? subject.scopes;
+    // A DelegationGrant names its scopes `scopes`; the row's scope column
+    // stores them so the grant stays queryable by scope.
+    const privilegeScopes = subject.scopes;
 
     await this.vcRepo.createVc({
       vcId: vc.id,
@@ -501,23 +569,33 @@ export class VCService implements IVCService {
       ...vcLookupColumns(vc),
     });
 
-    await this.audit.log({
-      event: 'CONSENT_GRANTED',
-      timestamp: new Date().toISOString(),
-      requestId,
-      vcId: vc.id,
-      subjectDid: subject.id,
-      subjectType: 'agent',
-      privilegeScopes,
-      expiresAt: expiresAt?.toISOString() ?? null,
-    });
+    this.auditCredentialIssued(requestId, 'registered', subject.id, delegationRef(vc) ?? delegationReference(vc.id));
 
     const reconciled = await this.reconcileActive(vc, options, requestId);
     return { vcId: vc.id, alreadyRegistered: false, ...reconciled };
   }
 
   async issueVC(params: IssueVCParams, requestId: string): Promise<IssueVCResult> {
-    // 1. Validate subject exists
+    // 1. Only user credentials are issued here. The body of POST /v1/vcs is
+    // not typed at runtime, so an agent request is refused explicitly: agents
+    // get an AgentIdentityCredential and capability attestations (story F-1).
+    const body = params as unknown as Record<string, unknown>;
+    if (body['subjectType'] !== 'user') {
+      throw new HelixError(
+        ErrorCode.VALIDATION_ERROR,
+        "Only user credentials are issued here (subjectType 'user'); agents receive an AgentIdentityCredential and capability attestations from POST /v1/agents",
+        400,
+      );
+    }
+    if (typeof body['userId'] !== 'string' || body['userId'] === '' || body['privilegeScopes'] !== undefined || body['agentName'] !== undefined) {
+      throw new HelixError(
+        ErrorCode.VALIDATION_ERROR,
+        'User VCs require userId and must not include privilegeScopes or agentName',
+        400,
+      );
+    }
+
+    // 2. Validate subject exists
     try {
       await this.didService.resolveDID(params.subjectDid, requestId);
     } catch (err: unknown) {
@@ -540,33 +618,13 @@ export class VCService implements IVCService {
       }
     }
 
-    // 2. Validate scopes (simplification for this story — real app would check a registry)
-    if (params.subjectType === 'agent' && (!Array.isArray(params.privilegeScopes) || !params.agentName)) {
-      throw new HelixError(
-        ErrorCode.VALIDATION_ERROR,
-        'Agent VCs require privilegeScopes and agentName',
-        400,
-      );
-    }
-    if (params.subjectType === 'user' && (!params.userId || params.privilegeScopes?.length)) {
-      throw new HelixError(
-        ErrorCode.VALIDATION_ERROR,
-        'User VCs require userId and must not include privilegeScopes',
-        400,
-      );
-    }
-    const scopeProblem = findScopeProblem(params.privilegeScopes ?? []);
-    if (scopeProblem) {
-      throw new HelixError(ErrorCode.VC_INVALID_PRIVILEGE_SCOPE, `Invalid scopes: ${scopeProblem}`, 400);
-    }
-
     // 3. Claim status list index
     let list = await this.vcRepo.findStatusListById(this.DEFAULT_STATUS_LIST_ID);
     if (!list) {
       const statusList = await this.createStatusList({ listId: this.DEFAULT_STATUS_LIST_ID });
       list = {
         listId: this.DEFAULT_STATUS_LIST_ID,
-        encodedList: statusList.credentialSubject.encodedList,
+        encodedList: statusList.encodedList,
         nextIndex: 0,
       };
     }
@@ -600,45 +658,20 @@ export class VCService implements IVCService {
       statusListIndex: claimedIndex.toString(),
       statusListCredential: `${this.apiBaseUrl}/v1/status-list/${this.DEFAULT_STATUS_LIST_ID}`,
     };
-    const credential: HelixVC =
-      params.subjectType === 'agent'
-        ? {
-            '@context': ['https://www.w3.org/ns/credentials/v2', 'https://helixid.io/contexts/v1'],
-            id: vcId,
-            type: ['VerifiableCredential', 'HelixAgentCredential'],
-            issuer: this.issuerDid,
-            validFrom: now.toISOString(),
-            ...validUntilField,
-            credentialStatus,
-            credentialSubject: {
-              id: params.subjectDid,
-              type: 'HelixAgent',
-              privilegeScopes: params.privilegeScopes!,
-              agentName: params.agentName!,
-              ...(params.delegatedFrom ? { delegatedFrom: params.delegatedFrom } : {}),
-              ...(params.delegationDepth === undefined
-                ? {}
-                : { delegationDepth: params.delegationDepth }),
-              ...(params.maxDelegationDepth === undefined
-                ? {}
-                : { maxDelegationDepth: params.maxDelegationDepth }),
-              ...(params.parentVcId ? { parentVcId: params.parentVcId } : {}),
-            },
-          }
-        : {
-            '@context': ['https://www.w3.org/ns/credentials/v2', 'https://helixid.io/contexts/v1'],
-            id: vcId,
-            type: ['VerifiableCredential', 'HelixUserCredential'],
-            issuer: this.issuerDid,
-            validFrom: now.toISOString(),
-            ...validUntilField,
-            credentialStatus,
-            credentialSubject: {
-              id: params.subjectDid,
-              type: 'HelixUser',
-              userId: params.userId!,
-            },
-          };
+    const credential: HelixVC = {
+      '@context': ['https://www.w3.org/ns/credentials/v2', 'https://helixid.io/contexts/v1'],
+      id: vcId,
+      type: ['VerifiableCredential', 'HelixUserCredential'],
+      issuer: this.issuerDid,
+      validFrom: now.toISOString(),
+      ...validUntilField,
+      credentialStatus,
+      credentialSubject: {
+        id: params.subjectDid,
+        type: 'HelixUser',
+        userId: params.userId,
+      },
+    };
 
     // 5. Sign VC (SHA-256 + Ed25519)
     const signedVc = await this.signCredential(credential);
@@ -649,28 +682,18 @@ export class VCService implements IVCService {
       subjectDid: params.subjectDid,
       subjectType: params.subjectType,
       vcJson: signedVc,
-      privilegeScopes: params.privilegeScopes,
       statusListIndex: claimedIndex,
       expiresAt,
-      delegatedFrom: params.delegatedFrom,
-      delegationDepth: params.delegationDepth,
-      maxDelegationDepth: params.maxDelegationDepth,
-      parentVcId: params.parentVcId,
       ...vcLookupColumns(signedVc),
     });
 
     // 7. Audit
-    await this.audit.log({
-      event: 'VC_ISSUED',
-      timestamp: now.toISOString(),
+    this.auditCredentialIssued(
       requestId,
-      vcId,
-      subjectDid: params.subjectDid,
-      subjectType: params.subjectType,
-      privilegeScopes: params.privilegeScopes,
-      expiresAt: expiresAt?.toISOString() ?? null,
-      statusListIndex: claimedIndex,
-    });
+      'issued',
+      params.subjectDid,
+      delegationRef(signedVc) ?? delegationReference(vcId),
+    );
 
     const reconciled = await this.reconcileActive(
       signedVc,
@@ -717,7 +740,7 @@ export class VCService implements IVCService {
         vcId: record.vcId,
         subjectDid: record.subjectDid,
         ...(vcType ? { vcType } : {}),
-        ...(subject.agentName ? { agentName: subject.agentName } : {}),
+        ...(agentNameOf(subject, vcType) ? { agentName: agentNameOf(subject, vcType) } : {}),
         scopes,
         status,
         issuedAt: record.createdAt?.toISOString() ?? validFrom,
@@ -807,13 +830,7 @@ export class VCService implements IVCService {
     const updatedRecord = await this.vcRepo.revokeVc(vcId, this.DEFAULT_STATUS_LIST_ID, newEncoded);
     if (ownsBit) await this.statusListCache.delete(this.DEFAULT_STATUS_LIST_ID);
 
-    await this.audit.log({
-      event: 'VC_REVOKED',
-      timestamp: new Date().toISOString(),
-      requestId,
-      vcId,
-      subjectDid: record.subjectDid,
-    });
+    this.auditCredentialRevoked(requestId, record.subjectDid, vcId);
 
     return {
       vcId,
@@ -835,32 +852,33 @@ export class VCService implements IVCService {
       throw new HelixError(ErrorCode.VC_ALREADY_REVOKED, 'Cannot renew a revoked credential', 409);
     }
 
-    const vcJson = asRecord(record.vcJson) as StoredCredentialJson;
+    const vcJson = asRecord(record.vcJson);
+    const types = Array.isArray(vcJson['type']) ? (vcJson['type'] as unknown[]) : [];
     const subject = getCredentialSubject(vcJson);
+    // Only a user credential renews here. An agent's identity credential
+    // renews through CredentialService.renewIdentity (the route tries that
+    // first); attestations, delegation hops and grants are re-issued by
+    // whoever signs them, never re-signed as another credential type.
+    if (!types.includes('HelixUserCredential') || typeof subject.userId !== 'string') {
+      throw new HelixError(
+        ErrorCode.VALIDATION_ERROR,
+        'Only user credentials renew here; identity credentials renew through the credential service, and attestations, delegation hops and grants are re-issued by their issuer',
+        400,
+      );
+    }
     const newVcResult = await this.issueVC(
       {
         subjectDid: record.subjectDid,
-        subjectType: record.subjectType as 'agent' | 'user',
-        privilegeScopes:
-          overrides.privilegeScopes || (record.privilegeScopes as unknown as string[]),
-        agentName: subject.agentName,
+        subjectType: 'user',
         userId: subject.userId,
         expiresInSeconds: overrides.expiresInSeconds,
-        // Carry over other metadata if needed
       },
       requestId,
     );
 
     await this.vcRepo.markAsRenewed(vcId, newVcResult.vcId);
 
-    await this.audit.log({
-      event: 'VC_RENEWED',
-      timestamp: new Date().toISOString(),
-      requestId,
-      oldVcId: vcId,
-      newVcId: newVcResult.vcId,
-      subjectDid: record.subjectDid,
-    });
+    this.auditCredentialIssued(requestId, 'renewed', record.subjectDid, delegationReference(newVcResult.vcId), vcId);
 
     return {
       ...newVcResult,
@@ -878,7 +896,7 @@ export class VCService implements IVCService {
       const created = await this.createStatusList({ listId: this.DEFAULT_STATUS_LIST_ID });
       list = {
         listId: this.DEFAULT_STATUS_LIST_ID,
-        encodedList: created.credentialSubject.encodedList,
+        encodedList: created.encodedList,
         nextIndex: 0,
       };
     }
@@ -922,19 +940,7 @@ export class VCService implements IVCService {
       ...vcLookupColumns(vc),
     });
 
-    await this.audit.log({
-      event: 'CONSENT_GRANTED',
-      timestamp: new Date().toISOString(),
-      requestId,
-      vcId: vc.id,
-      issuer: vc.issuer,
-      subjectDid: subject.id,
-      subjectType: 'agent',
-      userDid: subject.userDid,
-      scopes: subject.scopes,
-      durability: subject.durability,
-      expiresAt: validUntil ?? null,
-    });
+    this.auditConsentRegistered(requestId, vc, subject.id, subject.userDid);
 
     return this.reconcileActive(vc, options, requestId);
   }
@@ -957,29 +963,16 @@ export class VCService implements IVCService {
     }
   }
 
-  async getStatusList(listId: string): Promise<ReturnType<typeof buildStatusListCredential>> {
-    const cached = await this.statusListCache.get(listId);
-    if (cached) {
-      return buildStatusListCredential(listId, cached, this.issuerDid, this.apiBaseUrl);
-    }
-
-    const list = await this.vcRepo.findStatusListById(listId);
-    if (!list) {
-      throw new HelixError(ErrorCode.STATUS_LIST_NOT_FOUND, 'Status list not found', 404);
-    }
-    await this.statusListCache.set(listId, list.encodedList, this.statusListCacheTtlSeconds);
-
-    return buildStatusListCredential(listId, list.encodedList, this.issuerDid, this.apiBaseUrl);
-  }
-
-  async createStatusList(
-    input: { listId?: string; length?: number } = {},
-  ): Promise<ReturnType<typeof buildStatusListCredential>> {
+  /**
+   * Creates (or resets) a status list row. Serving and signing lists is the
+   * StatusListService's (story L3-C): one signed list per issuer DID.
+   */
+  async createStatusList(input: { listId?: string; length?: number } = {}): Promise<{ listId: string; encodedList: string }> {
     const listId = input.listId ?? this.DEFAULT_STATUS_LIST_ID;
     const encodedList = createStatusList(input.length);
     await this.vcRepo.createStatusList(listId, encodedList);
-    await this.statusListCache.set(listId, encodedList, this.statusListCacheTtlSeconds);
-    return buildStatusListCredential(listId, encodedList, this.issuerDid, this.apiBaseUrl);
+    await this.statusListCache.delete(listId);
+    return { listId, encodedList };
   }
 
   private async signCredential(credential: HelixVC): Promise<SignedVC> {

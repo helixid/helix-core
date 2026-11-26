@@ -1,16 +1,10 @@
 import { createHash, randomBytes } from 'node:crypto';
 import {
-  buildDelegationVC,
   AgentAlreadyOnboardedError,
-  AgentActiveCredentialNotFoundError,
-  AgentKeyNotFoundError,
-  AuditEvents,
   ChallengeAlreadyVerifiedError,
   ChallengeExpiredError,
   ChallengeNotFoundError,
   ChallengeSignatureInvalidError,
-  ConsentGrantNotFoundError,
-  DelegateeNotAnAgentError,
   ErrorCode,
   HelixError,
   EnrollmentTokenAlreadyUsedError,
@@ -21,23 +15,20 @@ import {
   parseScopes,
   signBytes,
   verifySignature,
-  VPBuilder,
-  VPMultipleActiveVCError,
-  type IAuditLogger,
-  type SignedVC,
-  type SignedVP,
+  publicDid,
+  type AuditEventInput,
+  type AuditTrail,
+  type PartyRef,
+  type SignedCapabilityAttestation,
+  type SignedIdentityCredential,
 } from '../../core/index.js';
 import type { AgentRepository } from '../../repositories/agent.repository.js';
 import type { DidKeyRepository } from '../../repositories/did-key.repository.js';
 import type { IDIDService } from '../did/IDIDService.js';
 import type { IVCService } from '../vc/IVCService.js';
 import type { IKeyCustody } from '../key-custody/key-custody.js';
-import type {
-  IAgentService,
-  ChallengeResult,
-  DelegateAuthorityResult,
-  DelegateAuthorityOptions,
-} from './IAgentService.js';
+import type { CredentialService } from '../credentials/credential.service.js';
+import type { IAgentService, ChallengeResult } from './IAgentService.js';
 
 type DIDVerificationMethodLike = {
   type?: unknown;
@@ -69,7 +60,7 @@ export function hashToken(token: string): string {
  * Accepts `http(s)://host[...]` or a bare host like `example.com` (assumed
  * https). Returns the normalized URL, or null if it isn't a usable web URL.
  */
-function normalizeDomain(domain: string): string | null {
+export function normalizeDomain(domain: string): string | null {
   const trimmed = domain.trim();
   if (!trimmed) return null;
   const candidate = /^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
@@ -101,24 +92,51 @@ function extractPublicKeyHex(doc: Awaited<ReturnType<IDIDService['resolveDID']>>
   throw new ChallengeSignatureInvalidError();
 }
 
+
+const DID_PATTERN = /^did:[^\r\n]+$/;
+
+/** A `public_did` reference, or nothing when the value is not a DID: the event then names no party rather than failing validation. */
+function didRef(value: string | undefined): PartyRef | undefined {
+  return value !== undefined && DID_PATTERN.test(value) ? publicDid(value) : undefined;
+}
+
+function reportAuditFailure(error: unknown): void {
+  console.error('AUDIT_RECORD_FAILED', error instanceof Error ? error.message : String(error));
+}
+
+/** The `consentRef` an enrollment token is recorded by: the digest the token row is keyed on, never the token. */
+function tokenRef(tokenHash: string): string {
+  return `sha256:${tokenHash}`;
+}
+
 export class AgentService implements IAgentService {
   constructor(
     private readonly repository: AgentRepository,
     private readonly didService: IDIDService,
     private readonly vcService: IVCService,
-    private readonly auditLogger: IAuditLogger,
+    private readonly auditTrail: AuditTrail,
     private readonly agentKeyRepository: DidKeyRepository,
     private readonly keyCustody: IKeyCustody,
+    /** Issues the split credentials of KYA-OS story F-1 at onboarding. */
+    private readonly credentialService: CredentialService,
     private readonly enrollmentTokenTtlSeconds = 900,
     private readonly challengeTtlSeconds = 300,
   ) {}
+
+  /** Records one typed audit event; a failure to record never breaks the request. */
+  private audit(input: AuditEventInput): void {
+    try {
+      this.auditTrail.record(input).catch(reportAuditFailure);
+    } catch (error) {
+      reportAuditFailure(error);
+    }
+  }
 
   async generateEnrollmentToken(
     input: {
       agentName: string;
       requestedScopes: string[];
       requestedDomains?: string[];
-      maxDelegationDepth?: number;
       /**
        * Whole days until the token expires, at the same time of day as now.
        * null, undefined or '' means the token has no expiry.
@@ -127,6 +145,10 @@ export class AgentService implements IAgentService {
     },
     requestId: string,
   ): Promise<{ token: string; expiresAt?: string }> {
+    // A JSON body may leave it out; the token row needs it, so refuse here (400), not at the database (500).
+    if (typeof input.agentName !== 'string' || input.agentName.trim() === '') {
+      throw new HelixError(ErrorCode.VALIDATION_ERROR, 'agentName is required', 400);
+    }
     // '' can still arrive at runtime from a JSON body even though the type says number.
     const expiry = input.expiry === null || (input.expiry as unknown) === '' ? undefined : input.expiry;
     if (expiry !== undefined && !(Number.isInteger(expiry) && expiry > 0)) {
@@ -157,16 +179,15 @@ export class AgentService implements IAgentService {
       agentName: input.agentName,
       requestedScopes: JSON.stringify(requestedScopes),
       requestedDomains: JSON.stringify(input.requestedDomains ?? []),
-      maxDelegationDepth: input.maxDelegationDepth ?? 0,
+      maxDelegationDepth: 0,
       expiresAt: expiresAt ?? null,
     });
-    this.auditLogger.log(AuditEvents.ENROLLMENT_TOKEN_GENERATED, {
-      requestId,
-      tokenIdHash: tokenHash,
-      agentName: input.agentName,
-      requestedScopes: input.requestedScopes,
-      // null: the token, and the agent it onboards, never expire.
-      expiresAt: expiresAt ? expiresAt.toISOString() : null,
+    this.audit({
+      eventType: 'credential.required',
+      action: { category: 'enrollment', name: 'token_generated' },
+      outcome: 'succeeded',
+      correlationId: requestId,
+      details: { family: 'consent', phase: 'credential_required', consentRef: tokenRef(tokenHash) },
     });
     return { token, ...(expiresAt ? { expiresAt: expiresAt.toISOString() } : {}) };
   }
@@ -181,9 +202,14 @@ export class AgentService implements IAgentService {
    * `agentKeyRepository`, never returned to the caller.
    */
   async onboardWithCustody(
-    input: { enrollmentToken: string; domains?: string[] },
+    input: { enrollmentToken: string; domains?: string[]; ownerDid?: string },
     requestId: string,
-  ): Promise<{ agentDid: string; vcId: string }> {
+  ): Promise<{
+    agentDid: string;
+    vcId: string;
+    identity: SignedIdentityCredential;
+    attestations: SignedCapabilityAttestation[];
+  }> {
     const { publicKey, encrypted } = this.keyCustody.generateAndEncrypt();
 
     const challenge = await this.processOnboardCreateChallenge(
@@ -211,261 +237,12 @@ export class AgentService implements IAgentService {
         ...(didCreateSignature ? { didCreateSignature } : {}),
       },
       requestId,
+      input.ownerDid === undefined ? {} : { ownerDid: input.ownerDid },
     );
 
     await this.agentKeyRepository.create({ did: result.agentDid, subjectType: 'agent', ...encrypted });
 
-    return { agentDid: result.agentDid, vcId: result.vcId };
-  }
-
-  /**
-   * Signs a VP on behalf of a server-custody agent — the caller never has,
-   * and never can have, the private key, so "present a VP" is an API call
-   * instead of a local VPBuilder.sign().
-   *
-   * The credentials are picked from the DIDs alone, never named by the
-   * caller: the VP carries every active HelixAgentCredential the agent holds
-   * (its own, plus any delegated to it) -- the verifier takes the union of
-   * their scopes.
-   *
-   * `targetService` is the DID of the service the VP is for. With a
-   * `userDid`, the VP is the agent acting on that user's behalf, and the
-   * consent that allows it is looked up here: every active
-   * DelegationGrantCredential that service issued to this agent for that
-   * user goes into the VP (the verifier takes the union of their scopes).
-   * No such grant means the user has not consented, and the caller should
-   * send them to the service's consent screen.
-   */
-  async signVP(
-    input: { did: string; targetService: string; userDid?: string },
-    requestId: string,
-  ): Promise<{ signedVP: SignedVP }> {
-    if (typeof input.targetService !== 'string' || !input.targetService.startsWith('did:')) {
-      throw new HelixError(ErrorCode.VALIDATION_ERROR, 'targetService must be the service DID', 400);
-    }
-
-    const keyRecord = await this.agentKeyRepository.findByDid(input.did);
-    if (!keyRecord) {
-      throw new AgentKeyNotFoundError(input.did);
-    }
-
-    const agentVCs = (await this.vcService.listActiveBySubjectDid(input.did, 'HelixAgentCredential')) as SignedVC[];
-    if (agentVCs.length === 0) {
-      throw new AgentActiveCredentialNotFoundError(input.did);
-    }
-
-    let agentCredentials = agentVCs;
-    let grants: SignedVC[] = [];
-    let grantHolderDids: string[] = [];
-    if (input.userDid) {
-      grants = await this.vcService.listActiveGrants({
-        agentDid: input.did,
-        serviceDid: input.targetService,
-        userDid: input.userDid,
-      });
-      if (grants.length === 0) {
-        const inherited = await this.findDelegatorGrants(agentVCs, input.targetService, input.userDid);
-        if (inherited) {
-          ({ agentCredentials, grants, grantHolderDids } = inherited);
-        }
-      }
-      if (grants.length === 0) {
-        throw new ConsentGrantNotFoundError(input.did, input.targetService, input.userDid);
-      }
-    }
-
-    const credentials = [...agentCredentials, ...grants];
-    const signedVP = await this.keyCustody.signWith(keyRecord, (privateKeyHex) =>
-      new VPBuilder({
-        credentials,
-        holderDid: input.did,
-        ...(input.userDid ? { userDid: input.userDid } : {}),
-        targetService: input.targetService,
-      }).sign(privateKeyHex, `${input.did}#key-1`),
-    );
-
-    this.auditLogger.log(AuditEvents.AGENT_VP_SIGNED, {
-      requestId,
-      agentDid: input.did,
-      targetService: input.targetService,
-      ...(input.userDid ? { userDid: input.userDid } : {}),
-      vcIds: agentCredentials.map((vc) => vc.id),
-      grantVcIds: grants.map((grant) => grant.id),
-      ...(grantHolderDids.length > 0 ? { grantHolderDids } : {}),
-    });
-
-    return { signedVP };
-  }
-
-  /**
-   * Consent passes down a delegation: when the user consented to an agent
-   * that delegated to this one (directly or further up the chain), that
-   * consent covers this agent too, unless the grant says
-   * `allowDelegation: false` -- the verifier accepts a grant issued to any
-   * agent in the VP's delegation chain on the same terms.
-   *
-   * Only the delegated credentials whose chain reaches a consenting
-   * delegator are presented with its grants, never this agent's other
-   * credentials: the verifier intersects the grant with the union of every
-   * agent credential in the VP, so presenting e.g. this agent's own
-   * onboarding credential alongside would let it act for the user with
-   * scopes the delegator never delegated to it.
-   *
-   * Nearest delegator first; returns null if no delegator in any chain holds
-   * an active grant for (service, user).
-   */
-  private async findDelegatorGrants(
-    agentVCs: SignedVC[],
-    serviceDid: string,
-    userDid: string,
-  ): Promise<{ agentCredentials: SignedVC[]; grants: SignedVC[]; grantHolderDids: string[] } | null> {
-    const chainDidsOf = (vc: SignedVC): string[] => {
-      const chain = (vc as SignedVC & { delegationChain?: SignedVC[] }).delegationChain ?? [];
-      return chain
-        .map((link) => (link.credentialSubject as { id?: unknown } | undefined)?.id)
-        .filter((id): id is string => typeof id === 'string')
-        .reverse();
-    };
-
-    const grantsByHolder = new Map<string, SignedVC[]>();
-    for (const did of new Set(agentVCs.flatMap(chainDidsOf))) {
-      // A grant whose user did not let it pass to delegates stays with the
-      // agent it names.
-      const found = (await this.vcService.listActiveGrants({ agentDid: did, serviceDid, userDid })).filter(
-        (grant) => (grant.credentialSubject as { allowDelegation?: unknown }).allowDelegation !== false,
-      );
-      if (found.length > 0) grantsByHolder.set(did, found);
-    }
-    if (grantsByHolder.size === 0) return null;
-
-    const agentCredentials = agentVCs.filter((vc) => chainDidsOf(vc).some((did) => grantsByHolder.has(did)));
-    const grants = new Map<string, SignedVC>();
-    for (const found of grantsByHolder.values()) for (const grant of found) grants.set(grant.id, grant);
-    return { agentCredentials, grants: [...grants.values()], grantHolderDids: [...grantsByHolder.keys()] };
-  }
-
-  /**
-   * Delegates a slice of a server-custody agent's authority to another DID —
-   * the custodial counterpart to the SDK's local delegate(), which needs a
-   * wallet's own private key and so has had nothing legitimate to call since
-   * agent self-custody was retired (see helix-sdk-js's delegation.ts and
-   * helix-sdk-py's agent_delegation_demo.py for the prior state of that gap).
-   *
-   * Same key lookup as signVP(). The credential delegated from must be an
-   * active HelixAgentCredential the agent holds per the DB: picked by
-   * resolveDelegationSourceVC(), or pinned via vcId when more than one is
-   * eligible (e.g. this agent already holds a VC delegated to it, alongside
-   * its own onboarding VC).
-   */
-  async delegateAuthority(
-    input: { did: string; to: string; scopes: string[]; expiresIn: number; vcId?: string; revokeExisting?: boolean },
-    requestId: string,
-    options: DelegateAuthorityOptions = {},
-  ): Promise<DelegateAuthorityResult> {
-    const keyRecord = await this.agentKeyRepository.findByDid(input.did);
-    if (!keyRecord) {
-      throw new AgentKeyNotFoundError(input.did);
-    }
-
-    const fromVC = input.vcId
-      ? await this.vcService.findActiveByVcIdForSubject(input.vcId, input.did, 'HelixAgentCredential')
-      : await this.resolveDelegationSourceVC(input.did, input.scopes);
-    if (!fromVC) {
-      throw new AgentActiveCredentialNotFoundError(input.did);
-    }
-
-    // The delegatee must be an agent this server onboarded and that is still
-    // active -- the same rule a consent grant's delegatee follows. Checked
-    // before anything is signed, so delegating to an unknown DID is refused
-    // here rather than tripping the Vc -> Did foreign key on store.
-    const delegateeKey = await this.agentKeyRepository.findByDid(input.to);
-    const delegateeActive =
-      delegateeKey?.subjectType === 'agent' &&
-      (await this.vcService.listActiveBySubjectDid(input.to, 'HelixAgentCredential')).length > 0;
-    if (!delegateeActive) {
-      throw new DelegateeNotAnAgentError(input.to);
-    }
-    // The deployment's own rule on who may receive this authority (e.g. an
-    // account's private agent), now that the source credential is known.
-    await options.authorizeDelegatee?.({ to: input.to, fromVC: fromVC as SignedVC });
-
-    // Its own entry on this platform's status list, as a consent grant gets:
-    // revoking the delegation then reaches every verifier through the chain
-    // walk, including VPs signed before the revocation.
-    const entry = await this.vcService.claimStatusListEntry();
-    const credentialStatus = {
-      id: `${entry.statusListCredentialUrl}#${entry.statusListIndex}`,
-      type: 'BitstringStatusListEntry' as const,
-      statusPurpose: 'revocation' as const,
-      statusListIndex: entry.statusListIndex.toString(),
-      statusListCredential: entry.statusListCredentialUrl,
-    };
-
-    // buildDelegationVC() does the scope-subset and max-depth checks and
-    // signs with the custody-held key, all in-process -- there is no
-    // prepare/finalize round trip because nobody outside holds a key.
-    const delegatedVC = await this.keyCustody.signWith(keyRecord, (privateKeyHex) =>
-      buildDelegationVC(
-        { to: input.to, scopes: input.scopes, expiresIn: input.expiresIn, fromVC: fromVC as SignedVC, credentialStatus },
-        { did: input.did, privateKeyHex },
-      ),
-    );
-
-    // Without this, the delegate DID could never be looked up again by
-    // vcId/subjectDid, so a second hop of delegation would always fail.
-    // registerSignedVC() stores it as-is, already signed by the delegator,
-    // and applies the one-credential-per-scope-set rule against whatever
-    // this delegator already delegated to the same DID.
-    const reconciled = await this.vcService.registerSignedVC(delegatedVC, {
-      revokeExisting: input.revokeExisting,
-    });
-
-    this.auditLogger.log(AuditEvents.VC_DELEGATED, {
-      requestId,
-      delegatorDid: input.did,
-      delegateDid: input.to,
-      scopes: input.scopes,
-      delegatedVcId: delegatedVC.id,
-      ...reconciled,
-    });
-
-    return { delegatedVC, ...reconciled };
-  }
-
-  /**
-   * Picks which of `did`'s active HelixAgentCredentials to delegate from
-   * when the caller didn't pin one via vcId — needed once an agent can hold
-   * more than one (its own onboarding VC, plus whatever it's been delegated)
-   * for delegateAuthority()'s default, no-vcId path to still work past the
-   * first hop. Eligible means: covers every scope being delegated, and has
-   * remaining delegation budget (delegationDepth + 1 <= maxDelegationDepth).
-   * Exactly one eligible candidate is the expected, common case; zero means
-   * "no active credential lets you do this" (same AgentActiveCredentialNotFoundError
-   * the caller would see for a nonexistent VC); more than one is genuine
-   * ambiguity this can't resolve on the caller's behalf (e.g. two separately
-   * delegated grants both cover the requested scopes) -- vcId is how the
-   * caller breaks that tie explicitly.
-   */
-  private async resolveDelegationSourceVC(
-    did: string,
-    requestedScopes: string[],
-  ): Promise<Record<string, unknown> | null> {
-    const candidates = await this.vcService.listActiveBySubjectDid(did, 'HelixAgentCredential');
-    const eligible = candidates.filter((vc) => {
-      const subject = (vc as { credentialSubject?: Record<string, unknown> }).credentialSubject ?? {};
-      const scopes = Array.isArray(subject['privilegeScopes']) ? (subject['privilegeScopes'] as string[]) : [];
-      const hasAllScopes = requestedScopes.every((scope) => scopes.includes(scope));
-      const depth = typeof subject['delegationDepth'] === 'number' ? (subject['delegationDepth'] as number) : 0;
-      const maxDepth =
-        typeof subject['maxDelegationDepth'] === 'number' ? (subject['maxDelegationDepth'] as number) : 0;
-      return hasAllScopes && depth + 1 <= maxDepth;
-    });
-
-    if (eligible.length === 0) return null;
-    if (eligible.length === 1) return eligible[0]!;
-    throw new VPMultipleActiveVCError(
-      `Multiple eligible credentials found for ${did} to delegate ${requestedScopes.join(', ')} from -- pass vcId to pick one explicitly`,
-    );
+    return { agentDid: result.agentDid, vcId: result.vcId, identity: result.identity, attestations: result.attestations };
   }
 
   async processOnboardCreateChallenge(
@@ -499,11 +276,13 @@ export class AgentService implements IAgentService {
       throw new EnrollmentTokenAlreadyUsedError();
     }
     if (tokenRecord.expiresAt && tokenRecord.expiresAt.getTime() <= Date.now()) {
-      this.auditLogger.log(AuditEvents.ENROLLMENT_TOKEN_REJECTED, {
-        requestId,
-        tokenIdHash: tokenHash,
-        reason: 'expired',
-        timestamp: new Date().toISOString(),
+      this.audit({
+        eventType: 'credential.failed',
+        action: { category: 'enrollment', name: 'token_rejected' },
+        outcome: 'failed',
+        correlationId: requestId,
+        reason: { code: 'enrollment_token_expired' },
+        details: { family: 'consent', phase: 'credential_failed', consentRef: tokenRef(tokenHash) },
       });
       throw new EnrollmentTokenExpiredError();
     }
@@ -542,17 +321,20 @@ export class AgentService implements IAgentService {
       enrollmentTokenId: tokenRecord.id,
     });
 
-    this.auditLogger.log(AuditEvents.ENROLLMENT_TOKEN_CONSUMED, {
-      requestId,
-      tokenIdHash: tokenHash,
-      timestamp: new Date().toISOString(),
+    this.audit({
+      eventType: 'credential.verified',
+      action: { category: 'enrollment', name: 'token_consumed' },
+      outcome: 'succeeded',
+      correlationId: requestId,
+      details: { family: 'consent', phase: 'credential_verified', consentRef: tokenRef(tokenHash) },
     });
-    this.auditLogger.log(AuditEvents.CHALLENGE_ISSUED, {
-      requestId,
-      challengeId,
-      did: '',
-      purpose: 'agent_onboarding',
-      expiresAt: expiresAt.toISOString(),
+    // The agent has no DID yet, so this challenge names no actor.
+    this.audit({
+      eventType: 'credential.required',
+      action: { category: 'challenge', name: 'agent_onboarding' },
+      outcome: 'succeeded',
+      correlationId: requestId,
+      details: { family: 'consent', phase: 'credential_required', consentRef: challengeId },
     });
 
     return {
@@ -563,14 +345,24 @@ export class AgentService implements IAgentService {
     };
   }
 
+  /**
+   * Finishes onboarding: creates the DID, then issues the split credential
+   * set of KYA-OS story F-1 — one identity credential (no scopes) naming
+   * `ownerDid` as the responsible party, and one capability attestation per
+   * scope the enrollment token asked for, signed by the Helix issuer. The
+   * returned `vc` and `vcId` are the identity credential.
+   */
   async processOnboardVerify(
     input: { challengeId: string; signature: string; didCreateSignature?: string },
     requestId: string,
+    options: { ownerDid?: string } = {},
   ): Promise<{
     agentDid: string;
     vc: Record<string, unknown>;
     hederaTransactionId: string;
     vcId: string;
+    identity: SignedIdentityCredential;
+    attestations: SignedCapabilityAttestation[];
   }> {
     const challenge = await this.repository.findChallengeById(input.challengeId);
     if (!challenge || challenge.purpose !== 'agent_onboarding') {
@@ -634,39 +426,46 @@ export class AgentService implements IAgentService {
       ? (JSON.parse(enrollmentToken.requestedScopes) as string[])
       : ['read:orders'];
     const agentName = enrollmentToken?.agentName ?? 'Agent';
-    const vc = await this.vcService.issueVC(
+    const validUntil = enrollmentToken?.expiresAt ?? null;
+    const identity = await this.credentialService.issueIdentity(
       {
-        subjectDid: didResult.did,
-        subjectType: 'agent',
-        privilegeScopes: scopes,
-        agentName,
-        delegationDepth: 0,
-        maxDelegationDepth: enrollmentToken?.maxDelegationDepth ?? 0,
-        expiresAt: enrollmentToken?.expiresAt ?? null,
+        agentDid: didResult.did,
+        name: agentName,
+        ownerDid: options.ownerDid ?? this.credentialService.issuerDid,
+        validUntil,
       },
+      requestId,
+    );
+    const attestations = await this.credentialService.issueAttestations(
+      { agentDid: didResult.did, capabilities: scopes, validUntil },
       requestId,
     );
 
     await this.repository.markChallengeVerified(input.challengeId);
-    this.auditLogger.log(AuditEvents.CHALLENGE_VERIFIED, {
-      requestId,
-      challengeId: input.challengeId,
-      did: didResult.did,
-      purpose: 'agent_onboarding',
-      success: true,
+    this.audit({
+      eventType: 'credential.verified',
+      action: { category: 'challenge', name: 'agent_onboarding' },
+      outcome: 'succeeded',
+      correlationId: requestId,
+      actor: publicDid(didResult.did),
+      details: { family: 'consent', phase: 'credential_verified', consentRef: input.challengeId },
     });
-    this.auditLogger.log(AuditEvents.AGENT_ONBOARDED, {
-      requestId,
-      agentDid: didResult.did,
-      agentName,
-      hederaTransactionId: didResult.hederaTransactionId,
+    this.audit({
+      eventType: 'credential.verified',
+      action: { category: 'onboarding', name: 'agent_onboarded' },
+      outcome: 'succeeded',
+      correlationId: requestId,
+      actor: publicDid(didResult.did),
+      details: { family: 'consent', phase: 'credential_verified', consentRef: identity.id },
     });
 
     return {
       agentDid: didResult.did,
-      vc: vc.vc,
+      vc: identity as unknown as Record<string, unknown>,
       hederaTransactionId: didResult.hederaTransactionId,
-      vcId: vc.vcId,
+      vcId: identity.id,
+      identity,
+      attestations,
     };
   }
 
@@ -688,12 +487,14 @@ export class AgentService implements IAgentService {
       expiresAt,
       enrollmentTokenId: null,
     });
-    this.auditLogger.log(AuditEvents.CHALLENGE_ISSUED, {
-      requestId,
-      challengeId,
-      did: input.did,
-      purpose: input.purpose,
-      expiresAt: expiresAt.toISOString(),
+    const actor = didRef(input.did);
+    this.audit({
+      eventType: 'credential.required',
+      action: { category: 'challenge', name: input.purpose },
+      outcome: 'succeeded',
+      correlationId: requestId,
+      ...(actor !== undefined ? { actor } : {}),
+      details: { family: 'consent', phase: 'credential_required', consentRef: challengeId },
     });
     return { challengeId, nonce, expiresAt: expiresAt.toISOString() };
   }
@@ -740,17 +541,22 @@ export class AgentService implements IAgentService {
       );
       vc = issued.vc;
     }
-    this.auditLogger.log(AuditEvents.CHALLENGE_VERIFIED, {
-      requestId,
-      challengeId,
-      did: challenge.did,
-      purpose: 'user_verification',
-      success: true,
+    const actor = didRef(challenge.did);
+    this.audit({
+      eventType: 'credential.verified',
+      action: { category: 'challenge', name: 'user_verification' },
+      outcome: 'succeeded',
+      correlationId: requestId,
+      ...(actor !== undefined ? { actor } : {}),
+      details: { family: 'consent', phase: 'credential_verified', consentRef: challengeId },
     });
-    this.auditLogger.log(AuditEvents.USER_DID_VERIFIED, {
-      requestId,
-      userDid: challenge.did,
-      timestamp: new Date().toISOString(),
+    this.audit({
+      eventType: 'credential.verified',
+      action: { category: 'user_verification' },
+      outcome: 'succeeded',
+      correlationId: requestId,
+      ...(actor !== undefined ? { actor } : {}),
+      details: { family: 'consent', phase: 'credential_verified' },
     });
     return { did: challenge.did, verified: true, vc };
   }

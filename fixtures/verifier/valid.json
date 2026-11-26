@@ -1,0 +1,4459 @@
+{
+  "generated_from": "helix-core scripts/gen-fixtures.ts with @helixid/sdk-js kyaos.verifier (the JavaScript reference)",
+  "cases": [
+    {
+      "name": "two_hop_chain",
+      "description": "owner → parent → agent, attested card, live status: L3 with both scopes",
+      "input": {
+        "proof": {
+          "prf": "org.kya-os/proof.v1",
+          "alg": "EdDSA",
+          "did": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+          "kid": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz#z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+          "audience": "did:key:z6MkpdiACd8WP1Fo79XkwdWYobFiNQtL9dWxr47zkxfiL6rp",
+          "nonce": "Zi0yLW5vbmNlLTAwMDE",
+          "created": 1780272000,
+          "expires": 1780272060,
+          "requestHash": "sha-256=:SLDK1O9OYO9nZhIru+5jNp2Xn4vnFfvEDFNR2EvhPAQ=:",
+          "jws": "eyJhbGciOiJFZERTQSIsImtpZCI6ImRpZDprZXk6ejZNa3RBajZqVXdjMVMzWERpZmFRaXU4ZUF3b1pQWGR3Q0M4cXVXd1hNQ3lwekp6I3o2TWt0QWo2alV3YzFTM1hEaWZhUWl1OGVBd29aUFhkd0NDOHF1V3dYTUN5cHpKeiJ9..VCD96FBrz3xNUcxyZWjFnMX5x9p4xn301nNHtqKQe2m2Wm3aI8LfptROh7P6QlzEzqQOAj4dkUIFOCjPNXsOBg"
+        },
+        "chain": [
+          {
+            "@context": [
+              "https://www.w3.org/ns/credentials/v2",
+              "https://w3id.org/security/zcap/v1",
+              "https://kya-os.org/ns/delegation/v1"
+            ],
+            "id": "urn:zcap:00000000-0000-4000-8000-00000000f300",
+            "type": [
+              "VerifiableCredential",
+              "DelegationCredential"
+            ],
+            "issuer": "did:key:z6Mkq3Bbq2EiVri4rJQhD8x5NdDpqHKNtuZoBGVhcyRnUTbb",
+            "validFrom": "2026-01-01T00:00:00Z",
+            "validUntil": "2027-01-01T00:00:00Z",
+            "credentialSubject": {
+              "id": "urn:zcap:00000000-0000-4000-8000-00000000f300",
+              "invoker": "did:key:z6MkpagnGTM3Ci2aLdBpE9WgHcBWwtBY8AnwJJpCDFDts2xb",
+              "parentCapability": "did:key:z6MkpdiACd8WP1Fo79XkwdWYobFiNQtL9dWxr47zkxfiL6rp",
+              "invocationTarget": "did:key:z6MkpdiACd8WP1Fo79XkwdWYobFiNQtL9dWxr47zkxfiL6rp",
+              "allowedAction": [
+                "read:orders",
+                "write:orders",
+                "read:catalog"
+              ],
+              "caveats": [
+                {
+                  "type": "MaxAmount",
+                  "limit": "1000.00",
+                  "currency": "USD"
+                },
+                {
+                  "type": "ValidUntil",
+                  "date": "2027-01-01T00:00:00Z"
+                }
+              ]
+            },
+            "credentialStatus": {
+              "id": "https://owner.example/status/1#1",
+              "type": "BitstringStatusListEntry",
+              "statusPurpose": "revocation",
+              "statusListIndex": "1",
+              "statusListCredential": "https://owner.example/status/1"
+            },
+            "proof": {
+              "type": "DataIntegrityProof",
+              "cryptosuite": "eddsa-jcs-2022",
+              "created": "2026-01-01T00:00:01Z",
+              "verificationMethod": "did:key:z6Mkq3Bbq2EiVri4rJQhD8x5NdDpqHKNtuZoBGVhcyRnUTbb#z6Mkq3Bbq2EiVri4rJQhD8x5NdDpqHKNtuZoBGVhcyRnUTbb",
+              "proofPurpose": "assertionMethod",
+              "proofValue": "z5b8u83CaSYMXLyj1CussH6ivLH192WQeVSFthLRyYjmfRU8sjHGQDRFRkH9Gyeu2eLCcVGu2pea1WWLdCNsqJTjr"
+            }
+          },
+          {
+            "@context": [
+              "https://www.w3.org/ns/credentials/v2",
+              "https://w3id.org/security/zcap/v1",
+              "https://kya-os.org/ns/delegation/v1"
+            ],
+            "id": "urn:zcap:00000000-0000-4000-8000-00000000f301",
+            "type": [
+              "VerifiableCredential",
+              "DelegationCredential"
+            ],
+            "issuer": "did:key:z6MkpagnGTM3Ci2aLdBpE9WgHcBWwtBY8AnwJJpCDFDts2xb",
+            "validFrom": "2026-01-01T00:00:00Z",
+            "validUntil": "2026-12-01T00:00:00Z",
+            "credentialSubject": {
+              "id": "urn:zcap:00000000-0000-4000-8000-00000000f301",
+              "invoker": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+              "parentCapability": "urn:zcap:00000000-0000-4000-8000-00000000f300",
+              "invocationTarget": "did:key:z6MkpdiACd8WP1Fo79XkwdWYobFiNQtL9dWxr47zkxfiL6rp",
+              "allowedAction": [
+                "read:orders",
+                "write:orders"
+              ],
+              "caveats": [
+                {
+                  "type": "MaxAmount",
+                  "limit": "500.00",
+                  "currency": "USD"
+                },
+                {
+                  "type": "ValidUntil",
+                  "date": "2026-12-01T00:00:00Z"
+                }
+              ]
+            },
+            "credentialStatus": {
+              "id": "https://parent.example/status/1#1",
+              "type": "BitstringStatusListEntry",
+              "statusPurpose": "revocation",
+              "statusListIndex": "1",
+              "statusListCredential": "https://parent.example/status/1"
+            },
+            "proof": {
+              "type": "DataIntegrityProof",
+              "cryptosuite": "eddsa-jcs-2022",
+              "created": "2026-01-01T00:00:01Z",
+              "verificationMethod": "did:key:z6MkpagnGTM3Ci2aLdBpE9WgHcBWwtBY8AnwJJpCDFDts2xb#z6MkpagnGTM3Ci2aLdBpE9WgHcBWwtBY8AnwJJpCDFDts2xb",
+              "proofPurpose": "assertionMethod",
+              "proofValue": "z5z9idj8Pwr9jC8wT7r9bNaGdZyicWGBvz6UZb5dfLucNBr4DvnnEWSmjgDD92m2xyViGsjFKFChAhCi4gok6Mbkr"
+            }
+          }
+        ],
+        "request": {
+          "method": "tools/call",
+          "params": {
+            "name": "lookup_order",
+            "arguments": {
+              "orderId": "ORD-1001"
+            },
+            "_meta": {
+              "org.kya-os/request-proof": "stripped before hashing"
+            }
+          }
+        },
+        "card": {
+          "id": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+          "entityType": "agent",
+          "name": "orders-agent",
+          "kid": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz#z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+          "capabilities": [
+            {
+              "name": "read:orders",
+              "attestations": [
+                {
+                  "vc": {
+                    "@context": [
+                      "https://www.w3.org/ns/credentials/v2",
+                      "https://helixid.io/contexts/v1"
+                    ],
+                    "id": "urn:uuid:00000000-0000-4000-8000-0000000f2001",
+                    "type": [
+                      "VerifiableCredential",
+                      "CapabilityAttestationCredential"
+                    ],
+                    "issuer": "did:key:z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P",
+                    "validFrom": "2026-01-01T00:00:00Z",
+                    "validUntil": "2026-12-31T00:00:00Z",
+                    "credentialSubject": {
+                      "id": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+                      "capability": "read:orders"
+                    },
+                    "credentialStatus": {
+                      "id": "https://helix.example/status/1#1",
+                      "type": "BitstringStatusListEntry",
+                      "statusPurpose": "revocation",
+                      "statusListIndex": "1",
+                      "statusListCredential": "https://helix.example/status/1"
+                    },
+                    "proof": {
+                      "type": "DataIntegrityProof",
+                      "cryptosuite": "eddsa-jcs-2022",
+                      "created": "2026-01-01T00:00:01Z",
+                      "verificationMethod": "did:key:z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P#z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P",
+                      "proofPurpose": "assertionMethod",
+                      "proofValue": "zhtkQ8KW69miAa2ys4sJYhq46Z4JJyq3fUHRcbvke85PmxgqAR5WKbQunzZc7JeC3CrqHDi5Ct9syQHccP2ZDEjs"
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "name": "write:orders",
+              "attestations": [
+                {
+                  "vc": {
+                    "@context": [
+                      "https://www.w3.org/ns/credentials/v2",
+                      "https://helixid.io/contexts/v1"
+                    ],
+                    "id": "urn:uuid:00000000-0000-4000-8000-0000000f2002",
+                    "type": [
+                      "VerifiableCredential",
+                      "CapabilityAttestationCredential"
+                    ],
+                    "issuer": "did:key:z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P",
+                    "validFrom": "2026-01-01T00:00:00Z",
+                    "validUntil": "2026-12-31T00:00:00Z",
+                    "credentialSubject": {
+                      "id": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+                      "capability": "write:orders"
+                    },
+                    "credentialStatus": {
+                      "id": "https://helix.example/status/1#2",
+                      "type": "BitstringStatusListEntry",
+                      "statusPurpose": "revocation",
+                      "statusListIndex": "2",
+                      "statusListCredential": "https://helix.example/status/1"
+                    },
+                    "proof": {
+                      "type": "DataIntegrityProof",
+                      "cryptosuite": "eddsa-jcs-2022",
+                      "created": "2026-01-01T00:00:01Z",
+                      "verificationMethod": "did:key:z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P#z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P",
+                      "proofPurpose": "assertionMethod",
+                      "proofValue": "z4nwMYMoveEVoFthDXhobmW3fZFgkbBVuerRd55WDJNGdhgbVZYwtQ3gdg12aK5k9xhEVNuPDB8LHk515xkNzV32r"
+                    }
+                  }
+                }
+              ]
+            }
+          ],
+          "responsibleParty": "did:key:z6Mkq3Bbq2EiVri4rJQhD8x5NdDpqHKNtuZoBGVhcyRnUTbb",
+          "proofProfile": "org.kya-os/proof.v1"
+        }
+      },
+      "seams": {
+        "resolveDid": "documents",
+        "resolveDidKeys": "documents",
+        "fetchStatusList": "lists",
+        "nonceStore": "fresh",
+        "clock": "fixed",
+        "trustedIssuers": "*",
+        "resolveCard": "missing"
+      },
+      "options": {
+        "expectedAudience": "did:key:z6MkpdiACd8WP1Fo79XkwdWYobFiNQtL9dWxr47zkxfiL6rp",
+        "resource": "did:key:z6MkpdiACd8WP1Fo79XkwdWYobFiNQtL9dWxr47zkxfiL6rp"
+      },
+      "now": 1780272000000,
+      "expected": {
+        "ok": true,
+        "level": "L3",
+        "effectiveScopes": [
+          "read:orders",
+          "write:orders"
+        ],
+        "reasons": [],
+        "chainSummary": {
+          "depth": 2,
+          "responsibleParty": "did:key:z6Mkq3Bbq2EiVri4rJQhD8x5NdDpqHKNtuZoBGVhcyRnUTbb",
+          "leafInvoker": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+          "invocationTarget": "did:key:z6MkpdiACd8WP1Fo79XkwdWYobFiNQtL9dWxr47zkxfiL6rp",
+          "allowedAction": [
+            "read:orders",
+            "write:orders"
+          ],
+          "fresh": true
+        }
+      }
+    },
+    {
+      "name": "single_root_hop",
+      "description": "the owner delegates straight to the agent",
+      "input": {
+        "proof": {
+          "prf": "org.kya-os/proof.v1",
+          "alg": "EdDSA",
+          "did": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+          "kid": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz#z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+          "audience": "did:key:z6MkpdiACd8WP1Fo79XkwdWYobFiNQtL9dWxr47zkxfiL6rp",
+          "nonce": "Zi0yLW5vbmNlLTAwMDI",
+          "created": 1780272000,
+          "expires": 1780272060,
+          "requestHash": "sha-256=:SLDK1O9OYO9nZhIru+5jNp2Xn4vnFfvEDFNR2EvhPAQ=:",
+          "jws": "eyJhbGciOiJFZERTQSIsImtpZCI6ImRpZDprZXk6ejZNa3RBajZqVXdjMVMzWERpZmFRaXU4ZUF3b1pQWGR3Q0M4cXVXd1hNQ3lwekp6I3o2TWt0QWo2alV3YzFTM1hEaWZhUWl1OGVBd29aUFhkd0NDOHF1V3dYTUN5cHpKeiJ9..5sDmASCtGSjuwW396hXz6c8nh8sopH4HgdEtcYGzaB05W0UoT3aNYL4NceaP0fZJyyeLUSCb8cEqz9N-nzzyDw"
+        },
+        "chain": [
+          {
+            "@context": [
+              "https://www.w3.org/ns/credentials/v2",
+              "https://w3id.org/security/zcap/v1",
+              "https://kya-os.org/ns/delegation/v1"
+            ],
+            "id": "urn:zcap:00000000-0000-4000-8000-00000000f310",
+            "type": [
+              "VerifiableCredential",
+              "DelegationCredential"
+            ],
+            "issuer": "did:key:z6Mkq3Bbq2EiVri4rJQhD8x5NdDpqHKNtuZoBGVhcyRnUTbb",
+            "validFrom": "2026-01-01T00:00:00Z",
+            "validUntil": "2027-01-01T00:00:00Z",
+            "credentialSubject": {
+              "id": "urn:zcap:00000000-0000-4000-8000-00000000f310",
+              "invoker": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+              "parentCapability": "did:key:z6MkpdiACd8WP1Fo79XkwdWYobFiNQtL9dWxr47zkxfiL6rp",
+              "invocationTarget": "did:key:z6MkpdiACd8WP1Fo79XkwdWYobFiNQtL9dWxr47zkxfiL6rp",
+              "allowedAction": [
+                "read:orders",
+                "write:orders",
+                "read:catalog"
+              ],
+              "caveats": [
+                {
+                  "type": "MaxAmount",
+                  "limit": "1000.00",
+                  "currency": "USD"
+                },
+                {
+                  "type": "ValidUntil",
+                  "date": "2027-01-01T00:00:00Z"
+                }
+              ]
+            },
+            "credentialStatus": {
+              "id": "https://owner.example/status/1#2",
+              "type": "BitstringStatusListEntry",
+              "statusPurpose": "revocation",
+              "statusListIndex": "2",
+              "statusListCredential": "https://owner.example/status/1"
+            },
+            "proof": {
+              "type": "DataIntegrityProof",
+              "cryptosuite": "eddsa-jcs-2022",
+              "created": "2026-01-01T00:00:01Z",
+              "verificationMethod": "did:key:z6Mkq3Bbq2EiVri4rJQhD8x5NdDpqHKNtuZoBGVhcyRnUTbb#z6Mkq3Bbq2EiVri4rJQhD8x5NdDpqHKNtuZoBGVhcyRnUTbb",
+              "proofPurpose": "assertionMethod",
+              "proofValue": "z661xz8fjCrD1kvoR4Dw4xhFfC72ra6f3qvSytwG6c5WY1gUnSrC17WJmiGgxikSSD2RdjawajTbKPrk6urDq4na8"
+            }
+          }
+        ],
+        "request": {
+          "method": "tools/call",
+          "params": {
+            "name": "lookup_order",
+            "arguments": {
+              "orderId": "ORD-1001"
+            },
+            "_meta": {
+              "org.kya-os/request-proof": "stripped before hashing"
+            }
+          }
+        },
+        "card": {
+          "id": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+          "entityType": "agent",
+          "name": "orders-agent",
+          "kid": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz#z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+          "capabilities": [
+            {
+              "name": "read:orders",
+              "attestations": [
+                {
+                  "vc": {
+                    "@context": [
+                      "https://www.w3.org/ns/credentials/v2",
+                      "https://helixid.io/contexts/v1"
+                    ],
+                    "id": "urn:uuid:00000000-0000-4000-8000-0000000f2001",
+                    "type": [
+                      "VerifiableCredential",
+                      "CapabilityAttestationCredential"
+                    ],
+                    "issuer": "did:key:z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P",
+                    "validFrom": "2026-01-01T00:00:00Z",
+                    "validUntil": "2026-12-31T00:00:00Z",
+                    "credentialSubject": {
+                      "id": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+                      "capability": "read:orders"
+                    },
+                    "credentialStatus": {
+                      "id": "https://helix.example/status/1#1",
+                      "type": "BitstringStatusListEntry",
+                      "statusPurpose": "revocation",
+                      "statusListIndex": "1",
+                      "statusListCredential": "https://helix.example/status/1"
+                    },
+                    "proof": {
+                      "type": "DataIntegrityProof",
+                      "cryptosuite": "eddsa-jcs-2022",
+                      "created": "2026-01-01T00:00:01Z",
+                      "verificationMethod": "did:key:z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P#z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P",
+                      "proofPurpose": "assertionMethod",
+                      "proofValue": "zhtkQ8KW69miAa2ys4sJYhq46Z4JJyq3fUHRcbvke85PmxgqAR5WKbQunzZc7JeC3CrqHDi5Ct9syQHccP2ZDEjs"
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "name": "write:orders",
+              "attestations": [
+                {
+                  "vc": {
+                    "@context": [
+                      "https://www.w3.org/ns/credentials/v2",
+                      "https://helixid.io/contexts/v1"
+                    ],
+                    "id": "urn:uuid:00000000-0000-4000-8000-0000000f2002",
+                    "type": [
+                      "VerifiableCredential",
+                      "CapabilityAttestationCredential"
+                    ],
+                    "issuer": "did:key:z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P",
+                    "validFrom": "2026-01-01T00:00:00Z",
+                    "validUntil": "2026-12-31T00:00:00Z",
+                    "credentialSubject": {
+                      "id": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+                      "capability": "write:orders"
+                    },
+                    "credentialStatus": {
+                      "id": "https://helix.example/status/1#2",
+                      "type": "BitstringStatusListEntry",
+                      "statusPurpose": "revocation",
+                      "statusListIndex": "2",
+                      "statusListCredential": "https://helix.example/status/1"
+                    },
+                    "proof": {
+                      "type": "DataIntegrityProof",
+                      "cryptosuite": "eddsa-jcs-2022",
+                      "created": "2026-01-01T00:00:01Z",
+                      "verificationMethod": "did:key:z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P#z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P",
+                      "proofPurpose": "assertionMethod",
+                      "proofValue": "z4nwMYMoveEVoFthDXhobmW3fZFgkbBVuerRd55WDJNGdhgbVZYwtQ3gdg12aK5k9xhEVNuPDB8LHk515xkNzV32r"
+                    }
+                  }
+                }
+              ]
+            }
+          ],
+          "responsibleParty": "did:key:z6Mkq3Bbq2EiVri4rJQhD8x5NdDpqHKNtuZoBGVhcyRnUTbb",
+          "proofProfile": "org.kya-os/proof.v1"
+        }
+      },
+      "seams": {
+        "resolveDid": "documents",
+        "resolveDidKeys": "documents",
+        "fetchStatusList": "lists",
+        "nonceStore": "fresh",
+        "clock": "fixed",
+        "trustedIssuers": "*",
+        "resolveCard": "missing"
+      },
+      "options": {
+        "expectedAudience": "did:key:z6MkpdiACd8WP1Fo79XkwdWYobFiNQtL9dWxr47zkxfiL6rp",
+        "resource": "did:key:z6MkpdiACd8WP1Fo79XkwdWYobFiNQtL9dWxr47zkxfiL6rp"
+      },
+      "now": 1780272000000,
+      "expected": {
+        "ok": true,
+        "level": "L3",
+        "effectiveScopes": [
+          "read:orders",
+          "write:orders"
+        ],
+        "reasons": [],
+        "chainSummary": {
+          "depth": 1,
+          "responsibleParty": "did:key:z6Mkq3Bbq2EiVri4rJQhD8x5NdDpqHKNtuZoBGVhcyRnUTbb",
+          "leafInvoker": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+          "invocationTarget": "did:key:z6MkpdiACd8WP1Fo79XkwdWYobFiNQtL9dWxr47zkxfiL6rp",
+          "allowedAction": [
+            "read:orders",
+            "write:orders",
+            "read:catalog"
+          ],
+          "fresh": true
+        }
+      }
+    },
+    {
+      "name": "catalog_narrows",
+      "description": "the service offers only read:orders",
+      "input": {
+        "proof": {
+          "prf": "org.kya-os/proof.v1",
+          "alg": "EdDSA",
+          "did": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+          "kid": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz#z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+          "audience": "did:key:z6MkpdiACd8WP1Fo79XkwdWYobFiNQtL9dWxr47zkxfiL6rp",
+          "nonce": "Zi0yLW5vbmNlLTAwMDM",
+          "created": 1780272000,
+          "expires": 1780272060,
+          "requestHash": "sha-256=:SLDK1O9OYO9nZhIru+5jNp2Xn4vnFfvEDFNR2EvhPAQ=:",
+          "jws": "eyJhbGciOiJFZERTQSIsImtpZCI6ImRpZDprZXk6ejZNa3RBajZqVXdjMVMzWERpZmFRaXU4ZUF3b1pQWGR3Q0M4cXVXd1hNQ3lwekp6I3o2TWt0QWo2alV3YzFTM1hEaWZhUWl1OGVBd29aUFhkd0NDOHF1V3dYTUN5cHpKeiJ9..EgXm7RvoVCb6QIa4nR81bas-k0XDo4RVigm4vZXvcKhtIG9o5cKAuym66wCcw9wCnpRxN-oX0JvwmUfhhC9ABw"
+        },
+        "chain": [
+          {
+            "@context": [
+              "https://www.w3.org/ns/credentials/v2",
+              "https://w3id.org/security/zcap/v1",
+              "https://kya-os.org/ns/delegation/v1"
+            ],
+            "id": "urn:zcap:00000000-0000-4000-8000-00000000f300",
+            "type": [
+              "VerifiableCredential",
+              "DelegationCredential"
+            ],
+            "issuer": "did:key:z6Mkq3Bbq2EiVri4rJQhD8x5NdDpqHKNtuZoBGVhcyRnUTbb",
+            "validFrom": "2026-01-01T00:00:00Z",
+            "validUntil": "2027-01-01T00:00:00Z",
+            "credentialSubject": {
+              "id": "urn:zcap:00000000-0000-4000-8000-00000000f300",
+              "invoker": "did:key:z6MkpagnGTM3Ci2aLdBpE9WgHcBWwtBY8AnwJJpCDFDts2xb",
+              "parentCapability": "did:key:z6MkpdiACd8WP1Fo79XkwdWYobFiNQtL9dWxr47zkxfiL6rp",
+              "invocationTarget": "did:key:z6MkpdiACd8WP1Fo79XkwdWYobFiNQtL9dWxr47zkxfiL6rp",
+              "allowedAction": [
+                "read:orders",
+                "write:orders",
+                "read:catalog"
+              ],
+              "caveats": [
+                {
+                  "type": "MaxAmount",
+                  "limit": "1000.00",
+                  "currency": "USD"
+                },
+                {
+                  "type": "ValidUntil",
+                  "date": "2027-01-01T00:00:00Z"
+                }
+              ]
+            },
+            "credentialStatus": {
+              "id": "https://owner.example/status/1#1",
+              "type": "BitstringStatusListEntry",
+              "statusPurpose": "revocation",
+              "statusListIndex": "1",
+              "statusListCredential": "https://owner.example/status/1"
+            },
+            "proof": {
+              "type": "DataIntegrityProof",
+              "cryptosuite": "eddsa-jcs-2022",
+              "created": "2026-01-01T00:00:01Z",
+              "verificationMethod": "did:key:z6Mkq3Bbq2EiVri4rJQhD8x5NdDpqHKNtuZoBGVhcyRnUTbb#z6Mkq3Bbq2EiVri4rJQhD8x5NdDpqHKNtuZoBGVhcyRnUTbb",
+              "proofPurpose": "assertionMethod",
+              "proofValue": "z5b8u83CaSYMXLyj1CussH6ivLH192WQeVSFthLRyYjmfRU8sjHGQDRFRkH9Gyeu2eLCcVGu2pea1WWLdCNsqJTjr"
+            }
+          },
+          {
+            "@context": [
+              "https://www.w3.org/ns/credentials/v2",
+              "https://w3id.org/security/zcap/v1",
+              "https://kya-os.org/ns/delegation/v1"
+            ],
+            "id": "urn:zcap:00000000-0000-4000-8000-00000000f301",
+            "type": [
+              "VerifiableCredential",
+              "DelegationCredential"
+            ],
+            "issuer": "did:key:z6MkpagnGTM3Ci2aLdBpE9WgHcBWwtBY8AnwJJpCDFDts2xb",
+            "validFrom": "2026-01-01T00:00:00Z",
+            "validUntil": "2026-12-01T00:00:00Z",
+            "credentialSubject": {
+              "id": "urn:zcap:00000000-0000-4000-8000-00000000f301",
+              "invoker": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+              "parentCapability": "urn:zcap:00000000-0000-4000-8000-00000000f300",
+              "invocationTarget": "did:key:z6MkpdiACd8WP1Fo79XkwdWYobFiNQtL9dWxr47zkxfiL6rp",
+              "allowedAction": [
+                "read:orders",
+                "write:orders"
+              ],
+              "caveats": [
+                {
+                  "type": "MaxAmount",
+                  "limit": "500.00",
+                  "currency": "USD"
+                },
+                {
+                  "type": "ValidUntil",
+                  "date": "2026-12-01T00:00:00Z"
+                }
+              ]
+            },
+            "credentialStatus": {
+              "id": "https://parent.example/status/1#1",
+              "type": "BitstringStatusListEntry",
+              "statusPurpose": "revocation",
+              "statusListIndex": "1",
+              "statusListCredential": "https://parent.example/status/1"
+            },
+            "proof": {
+              "type": "DataIntegrityProof",
+              "cryptosuite": "eddsa-jcs-2022",
+              "created": "2026-01-01T00:00:01Z",
+              "verificationMethod": "did:key:z6MkpagnGTM3Ci2aLdBpE9WgHcBWwtBY8AnwJJpCDFDts2xb#z6MkpagnGTM3Ci2aLdBpE9WgHcBWwtBY8AnwJJpCDFDts2xb",
+              "proofPurpose": "assertionMethod",
+              "proofValue": "z5z9idj8Pwr9jC8wT7r9bNaGdZyicWGBvz6UZb5dfLucNBr4DvnnEWSmjgDD92m2xyViGsjFKFChAhCi4gok6Mbkr"
+            }
+          }
+        ],
+        "request": {
+          "method": "tools/call",
+          "params": {
+            "name": "lookup_order",
+            "arguments": {
+              "orderId": "ORD-1001"
+            },
+            "_meta": {
+              "org.kya-os/request-proof": "stripped before hashing"
+            }
+          }
+        },
+        "card": {
+          "id": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+          "entityType": "agent",
+          "name": "orders-agent",
+          "kid": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz#z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+          "capabilities": [
+            {
+              "name": "read:orders",
+              "attestations": [
+                {
+                  "vc": {
+                    "@context": [
+                      "https://www.w3.org/ns/credentials/v2",
+                      "https://helixid.io/contexts/v1"
+                    ],
+                    "id": "urn:uuid:00000000-0000-4000-8000-0000000f2001",
+                    "type": [
+                      "VerifiableCredential",
+                      "CapabilityAttestationCredential"
+                    ],
+                    "issuer": "did:key:z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P",
+                    "validFrom": "2026-01-01T00:00:00Z",
+                    "validUntil": "2026-12-31T00:00:00Z",
+                    "credentialSubject": {
+                      "id": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+                      "capability": "read:orders"
+                    },
+                    "credentialStatus": {
+                      "id": "https://helix.example/status/1#1",
+                      "type": "BitstringStatusListEntry",
+                      "statusPurpose": "revocation",
+                      "statusListIndex": "1",
+                      "statusListCredential": "https://helix.example/status/1"
+                    },
+                    "proof": {
+                      "type": "DataIntegrityProof",
+                      "cryptosuite": "eddsa-jcs-2022",
+                      "created": "2026-01-01T00:00:01Z",
+                      "verificationMethod": "did:key:z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P#z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P",
+                      "proofPurpose": "assertionMethod",
+                      "proofValue": "zhtkQ8KW69miAa2ys4sJYhq46Z4JJyq3fUHRcbvke85PmxgqAR5WKbQunzZc7JeC3CrqHDi5Ct9syQHccP2ZDEjs"
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "name": "write:orders",
+              "attestations": [
+                {
+                  "vc": {
+                    "@context": [
+                      "https://www.w3.org/ns/credentials/v2",
+                      "https://helixid.io/contexts/v1"
+                    ],
+                    "id": "urn:uuid:00000000-0000-4000-8000-0000000f2002",
+                    "type": [
+                      "VerifiableCredential",
+                      "CapabilityAttestationCredential"
+                    ],
+                    "issuer": "did:key:z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P",
+                    "validFrom": "2026-01-01T00:00:00Z",
+                    "validUntil": "2026-12-31T00:00:00Z",
+                    "credentialSubject": {
+                      "id": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+                      "capability": "write:orders"
+                    },
+                    "credentialStatus": {
+                      "id": "https://helix.example/status/1#2",
+                      "type": "BitstringStatusListEntry",
+                      "statusPurpose": "revocation",
+                      "statusListIndex": "2",
+                      "statusListCredential": "https://helix.example/status/1"
+                    },
+                    "proof": {
+                      "type": "DataIntegrityProof",
+                      "cryptosuite": "eddsa-jcs-2022",
+                      "created": "2026-01-01T00:00:01Z",
+                      "verificationMethod": "did:key:z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P#z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P",
+                      "proofPurpose": "assertionMethod",
+                      "proofValue": "z4nwMYMoveEVoFthDXhobmW3fZFgkbBVuerRd55WDJNGdhgbVZYwtQ3gdg12aK5k9xhEVNuPDB8LHk515xkNzV32r"
+                    }
+                  }
+                }
+              ]
+            }
+          ],
+          "responsibleParty": "did:key:z6Mkq3Bbq2EiVri4rJQhD8x5NdDpqHKNtuZoBGVhcyRnUTbb",
+          "proofProfile": "org.kya-os/proof.v1"
+        }
+      },
+      "seams": {
+        "resolveDid": "documents",
+        "resolveDidKeys": "documents",
+        "fetchStatusList": "lists",
+        "nonceStore": "fresh",
+        "clock": "fixed",
+        "trustedIssuers": "*",
+        "resolveCard": "missing"
+      },
+      "options": {
+        "expectedAudience": "did:key:z6MkpdiACd8WP1Fo79XkwdWYobFiNQtL9dWxr47zkxfiL6rp",
+        "resource": "did:key:z6MkpdiACd8WP1Fo79XkwdWYobFiNQtL9dWxr47zkxfiL6rp",
+        "catalog": [
+          "read:orders"
+        ]
+      },
+      "now": 1780272000000,
+      "expected": {
+        "ok": true,
+        "level": "L3",
+        "effectiveScopes": [
+          "read:orders"
+        ],
+        "reasons": [],
+        "chainSummary": {
+          "depth": 2,
+          "responsibleParty": "did:key:z6Mkq3Bbq2EiVri4rJQhD8x5NdDpqHKNtuZoBGVhcyRnUTbb",
+          "leafInvoker": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+          "invocationTarget": "did:key:z6MkpdiACd8WP1Fo79XkwdWYobFiNQtL9dWxr47zkxfiL6rp",
+          "allowedAction": [
+            "read:orders",
+            "write:orders"
+          ],
+          "fresh": true
+        }
+      }
+    },
+    {
+      "name": "action_delegated",
+      "description": "the invoked action is in the leaf allowedAction",
+      "input": {
+        "proof": {
+          "prf": "org.kya-os/proof.v1",
+          "alg": "EdDSA",
+          "did": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+          "kid": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz#z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+          "audience": "did:key:z6MkpdiACd8WP1Fo79XkwdWYobFiNQtL9dWxr47zkxfiL6rp",
+          "nonce": "Zi0yLW5vbmNlLTAwMDQ",
+          "created": 1780272000,
+          "expires": 1780272060,
+          "requestHash": "sha-256=:SLDK1O9OYO9nZhIru+5jNp2Xn4vnFfvEDFNR2EvhPAQ=:",
+          "jws": "eyJhbGciOiJFZERTQSIsImtpZCI6ImRpZDprZXk6ejZNa3RBajZqVXdjMVMzWERpZmFRaXU4ZUF3b1pQWGR3Q0M4cXVXd1hNQ3lwekp6I3o2TWt0QWo2alV3YzFTM1hEaWZhUWl1OGVBd29aUFhkd0NDOHF1V3dYTUN5cHpKeiJ9..iXTz0gI34CQbxfctFUfxaKmC3O-d0GGKCZYM4Z2FpxxFg4JPcL-x69kiYXyrejmLQRuC_clh2bMz7-J_8TxhDw"
+        },
+        "chain": [
+          {
+            "@context": [
+              "https://www.w3.org/ns/credentials/v2",
+              "https://w3id.org/security/zcap/v1",
+              "https://kya-os.org/ns/delegation/v1"
+            ],
+            "id": "urn:zcap:00000000-0000-4000-8000-00000000f300",
+            "type": [
+              "VerifiableCredential",
+              "DelegationCredential"
+            ],
+            "issuer": "did:key:z6Mkq3Bbq2EiVri4rJQhD8x5NdDpqHKNtuZoBGVhcyRnUTbb",
+            "validFrom": "2026-01-01T00:00:00Z",
+            "validUntil": "2027-01-01T00:00:00Z",
+            "credentialSubject": {
+              "id": "urn:zcap:00000000-0000-4000-8000-00000000f300",
+              "invoker": "did:key:z6MkpagnGTM3Ci2aLdBpE9WgHcBWwtBY8AnwJJpCDFDts2xb",
+              "parentCapability": "did:key:z6MkpdiACd8WP1Fo79XkwdWYobFiNQtL9dWxr47zkxfiL6rp",
+              "invocationTarget": "did:key:z6MkpdiACd8WP1Fo79XkwdWYobFiNQtL9dWxr47zkxfiL6rp",
+              "allowedAction": [
+                "read:orders",
+                "write:orders",
+                "read:catalog"
+              ],
+              "caveats": [
+                {
+                  "type": "MaxAmount",
+                  "limit": "1000.00",
+                  "currency": "USD"
+                },
+                {
+                  "type": "ValidUntil",
+                  "date": "2027-01-01T00:00:00Z"
+                }
+              ]
+            },
+            "credentialStatus": {
+              "id": "https://owner.example/status/1#1",
+              "type": "BitstringStatusListEntry",
+              "statusPurpose": "revocation",
+              "statusListIndex": "1",
+              "statusListCredential": "https://owner.example/status/1"
+            },
+            "proof": {
+              "type": "DataIntegrityProof",
+              "cryptosuite": "eddsa-jcs-2022",
+              "created": "2026-01-01T00:00:01Z",
+              "verificationMethod": "did:key:z6Mkq3Bbq2EiVri4rJQhD8x5NdDpqHKNtuZoBGVhcyRnUTbb#z6Mkq3Bbq2EiVri4rJQhD8x5NdDpqHKNtuZoBGVhcyRnUTbb",
+              "proofPurpose": "assertionMethod",
+              "proofValue": "z5b8u83CaSYMXLyj1CussH6ivLH192WQeVSFthLRyYjmfRU8sjHGQDRFRkH9Gyeu2eLCcVGu2pea1WWLdCNsqJTjr"
+            }
+          },
+          {
+            "@context": [
+              "https://www.w3.org/ns/credentials/v2",
+              "https://w3id.org/security/zcap/v1",
+              "https://kya-os.org/ns/delegation/v1"
+            ],
+            "id": "urn:zcap:00000000-0000-4000-8000-00000000f301",
+            "type": [
+              "VerifiableCredential",
+              "DelegationCredential"
+            ],
+            "issuer": "did:key:z6MkpagnGTM3Ci2aLdBpE9WgHcBWwtBY8AnwJJpCDFDts2xb",
+            "validFrom": "2026-01-01T00:00:00Z",
+            "validUntil": "2026-12-01T00:00:00Z",
+            "credentialSubject": {
+              "id": "urn:zcap:00000000-0000-4000-8000-00000000f301",
+              "invoker": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+              "parentCapability": "urn:zcap:00000000-0000-4000-8000-00000000f300",
+              "invocationTarget": "did:key:z6MkpdiACd8WP1Fo79XkwdWYobFiNQtL9dWxr47zkxfiL6rp",
+              "allowedAction": [
+                "read:orders",
+                "write:orders"
+              ],
+              "caveats": [
+                {
+                  "type": "MaxAmount",
+                  "limit": "500.00",
+                  "currency": "USD"
+                },
+                {
+                  "type": "ValidUntil",
+                  "date": "2026-12-01T00:00:00Z"
+                }
+              ]
+            },
+            "credentialStatus": {
+              "id": "https://parent.example/status/1#1",
+              "type": "BitstringStatusListEntry",
+              "statusPurpose": "revocation",
+              "statusListIndex": "1",
+              "statusListCredential": "https://parent.example/status/1"
+            },
+            "proof": {
+              "type": "DataIntegrityProof",
+              "cryptosuite": "eddsa-jcs-2022",
+              "created": "2026-01-01T00:00:01Z",
+              "verificationMethod": "did:key:z6MkpagnGTM3Ci2aLdBpE9WgHcBWwtBY8AnwJJpCDFDts2xb#z6MkpagnGTM3Ci2aLdBpE9WgHcBWwtBY8AnwJJpCDFDts2xb",
+              "proofPurpose": "assertionMethod",
+              "proofValue": "z5z9idj8Pwr9jC8wT7r9bNaGdZyicWGBvz6UZb5dfLucNBr4DvnnEWSmjgDD92m2xyViGsjFKFChAhCi4gok6Mbkr"
+            }
+          }
+        ],
+        "request": {
+          "method": "tools/call",
+          "params": {
+            "name": "lookup_order",
+            "arguments": {
+              "orderId": "ORD-1001"
+            },
+            "_meta": {
+              "org.kya-os/request-proof": "stripped before hashing"
+            }
+          }
+        },
+        "card": {
+          "id": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+          "entityType": "agent",
+          "name": "orders-agent",
+          "kid": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz#z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+          "capabilities": [
+            {
+              "name": "read:orders",
+              "attestations": [
+                {
+                  "vc": {
+                    "@context": [
+                      "https://www.w3.org/ns/credentials/v2",
+                      "https://helixid.io/contexts/v1"
+                    ],
+                    "id": "urn:uuid:00000000-0000-4000-8000-0000000f2001",
+                    "type": [
+                      "VerifiableCredential",
+                      "CapabilityAttestationCredential"
+                    ],
+                    "issuer": "did:key:z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P",
+                    "validFrom": "2026-01-01T00:00:00Z",
+                    "validUntil": "2026-12-31T00:00:00Z",
+                    "credentialSubject": {
+                      "id": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+                      "capability": "read:orders"
+                    },
+                    "credentialStatus": {
+                      "id": "https://helix.example/status/1#1",
+                      "type": "BitstringStatusListEntry",
+                      "statusPurpose": "revocation",
+                      "statusListIndex": "1",
+                      "statusListCredential": "https://helix.example/status/1"
+                    },
+                    "proof": {
+                      "type": "DataIntegrityProof",
+                      "cryptosuite": "eddsa-jcs-2022",
+                      "created": "2026-01-01T00:00:01Z",
+                      "verificationMethod": "did:key:z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P#z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P",
+                      "proofPurpose": "assertionMethod",
+                      "proofValue": "zhtkQ8KW69miAa2ys4sJYhq46Z4JJyq3fUHRcbvke85PmxgqAR5WKbQunzZc7JeC3CrqHDi5Ct9syQHccP2ZDEjs"
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "name": "write:orders",
+              "attestations": [
+                {
+                  "vc": {
+                    "@context": [
+                      "https://www.w3.org/ns/credentials/v2",
+                      "https://helixid.io/contexts/v1"
+                    ],
+                    "id": "urn:uuid:00000000-0000-4000-8000-0000000f2002",
+                    "type": [
+                      "VerifiableCredential",
+                      "CapabilityAttestationCredential"
+                    ],
+                    "issuer": "did:key:z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P",
+                    "validFrom": "2026-01-01T00:00:00Z",
+                    "validUntil": "2026-12-31T00:00:00Z",
+                    "credentialSubject": {
+                      "id": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+                      "capability": "write:orders"
+                    },
+                    "credentialStatus": {
+                      "id": "https://helix.example/status/1#2",
+                      "type": "BitstringStatusListEntry",
+                      "statusPurpose": "revocation",
+                      "statusListIndex": "2",
+                      "statusListCredential": "https://helix.example/status/1"
+                    },
+                    "proof": {
+                      "type": "DataIntegrityProof",
+                      "cryptosuite": "eddsa-jcs-2022",
+                      "created": "2026-01-01T00:00:01Z",
+                      "verificationMethod": "did:key:z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P#z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P",
+                      "proofPurpose": "assertionMethod",
+                      "proofValue": "z4nwMYMoveEVoFthDXhobmW3fZFgkbBVuerRd55WDJNGdhgbVZYwtQ3gdg12aK5k9xhEVNuPDB8LHk515xkNzV32r"
+                    }
+                  }
+                }
+              ]
+            }
+          ],
+          "responsibleParty": "did:key:z6Mkq3Bbq2EiVri4rJQhD8x5NdDpqHKNtuZoBGVhcyRnUTbb",
+          "proofProfile": "org.kya-os/proof.v1"
+        }
+      },
+      "seams": {
+        "resolveDid": "documents",
+        "resolveDidKeys": "documents",
+        "fetchStatusList": "lists",
+        "nonceStore": "fresh",
+        "clock": "fixed",
+        "trustedIssuers": "*",
+        "resolveCard": "missing"
+      },
+      "options": {
+        "expectedAudience": "did:key:z6MkpdiACd8WP1Fo79XkwdWYobFiNQtL9dWxr47zkxfiL6rp",
+        "resource": "did:key:z6MkpdiACd8WP1Fo79XkwdWYobFiNQtL9dWxr47zkxfiL6rp",
+        "action": "read:orders"
+      },
+      "now": 1780272000000,
+      "expected": {
+        "ok": true,
+        "level": "L3",
+        "effectiveScopes": [
+          "read:orders",
+          "write:orders"
+        ],
+        "reasons": [],
+        "chainSummary": {
+          "depth": 2,
+          "responsibleParty": "did:key:z6Mkq3Bbq2EiVri4rJQhD8x5NdDpqHKNtuZoBGVhcyRnUTbb",
+          "leafInvoker": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+          "invocationTarget": "did:key:z6MkpdiACd8WP1Fo79XkwdWYobFiNQtL9dWxr47zkxfiL6rp",
+          "allowedAction": [
+            "read:orders",
+            "write:orders"
+          ],
+          "fresh": true
+        }
+      }
+    },
+    {
+      "name": "proof_only_no_chain",
+      "description": "a proof without a chain is a valid proof that grants no scope",
+      "input": {
+        "proof": {
+          "prf": "org.kya-os/proof.v1",
+          "alg": "EdDSA",
+          "did": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+          "kid": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz#z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+          "audience": "did:key:z6MkpdiACd8WP1Fo79XkwdWYobFiNQtL9dWxr47zkxfiL6rp",
+          "nonce": "Zi0yLW5vbmNlLTAwMDU",
+          "created": 1780272000,
+          "expires": 1780272060,
+          "requestHash": "sha-256=:SLDK1O9OYO9nZhIru+5jNp2Xn4vnFfvEDFNR2EvhPAQ=:",
+          "jws": "eyJhbGciOiJFZERTQSIsImtpZCI6ImRpZDprZXk6ejZNa3RBajZqVXdjMVMzWERpZmFRaXU4ZUF3b1pQWGR3Q0M4cXVXd1hNQ3lwekp6I3o2TWt0QWo2alV3YzFTM1hEaWZhUWl1OGVBd29aUFhkd0NDOHF1V3dYTUN5cHpKeiJ9..rx7IGwQ_SzF9GRMTsW3TFGM_9atcfevKZQ_nxG2rBcRHmab-qEHi0s4Z0_ZaK5elK_es1VrKVnJYAMJD6kpsAg"
+        },
+        "request": {
+          "method": "tools/call",
+          "params": {
+            "name": "lookup_order",
+            "arguments": {
+              "orderId": "ORD-1001"
+            },
+            "_meta": {
+              "org.kya-os/request-proof": "stripped before hashing"
+            }
+          }
+        },
+        "card": {
+          "id": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+          "entityType": "agent",
+          "name": "orders-agent",
+          "kid": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz#z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+          "capabilities": [
+            {
+              "name": "read:orders",
+              "attestations": [
+                {
+                  "vc": {
+                    "@context": [
+                      "https://www.w3.org/ns/credentials/v2",
+                      "https://helixid.io/contexts/v1"
+                    ],
+                    "id": "urn:uuid:00000000-0000-4000-8000-0000000f2001",
+                    "type": [
+                      "VerifiableCredential",
+                      "CapabilityAttestationCredential"
+                    ],
+                    "issuer": "did:key:z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P",
+                    "validFrom": "2026-01-01T00:00:00Z",
+                    "validUntil": "2026-12-31T00:00:00Z",
+                    "credentialSubject": {
+                      "id": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+                      "capability": "read:orders"
+                    },
+                    "credentialStatus": {
+                      "id": "https://helix.example/status/1#1",
+                      "type": "BitstringStatusListEntry",
+                      "statusPurpose": "revocation",
+                      "statusListIndex": "1",
+                      "statusListCredential": "https://helix.example/status/1"
+                    },
+                    "proof": {
+                      "type": "DataIntegrityProof",
+                      "cryptosuite": "eddsa-jcs-2022",
+                      "created": "2026-01-01T00:00:01Z",
+                      "verificationMethod": "did:key:z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P#z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P",
+                      "proofPurpose": "assertionMethod",
+                      "proofValue": "zhtkQ8KW69miAa2ys4sJYhq46Z4JJyq3fUHRcbvke85PmxgqAR5WKbQunzZc7JeC3CrqHDi5Ct9syQHccP2ZDEjs"
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "name": "write:orders",
+              "attestations": [
+                {
+                  "vc": {
+                    "@context": [
+                      "https://www.w3.org/ns/credentials/v2",
+                      "https://helixid.io/contexts/v1"
+                    ],
+                    "id": "urn:uuid:00000000-0000-4000-8000-0000000f2002",
+                    "type": [
+                      "VerifiableCredential",
+                      "CapabilityAttestationCredential"
+                    ],
+                    "issuer": "did:key:z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P",
+                    "validFrom": "2026-01-01T00:00:00Z",
+                    "validUntil": "2026-12-31T00:00:00Z",
+                    "credentialSubject": {
+                      "id": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+                      "capability": "write:orders"
+                    },
+                    "credentialStatus": {
+                      "id": "https://helix.example/status/1#2",
+                      "type": "BitstringStatusListEntry",
+                      "statusPurpose": "revocation",
+                      "statusListIndex": "2",
+                      "statusListCredential": "https://helix.example/status/1"
+                    },
+                    "proof": {
+                      "type": "DataIntegrityProof",
+                      "cryptosuite": "eddsa-jcs-2022",
+                      "created": "2026-01-01T00:00:01Z",
+                      "verificationMethod": "did:key:z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P#z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P",
+                      "proofPurpose": "assertionMethod",
+                      "proofValue": "z4nwMYMoveEVoFthDXhobmW3fZFgkbBVuerRd55WDJNGdhgbVZYwtQ3gdg12aK5k9xhEVNuPDB8LHk515xkNzV32r"
+                    }
+                  }
+                }
+              ]
+            }
+          ],
+          "responsibleParty": "did:key:z6Mkq3Bbq2EiVri4rJQhD8x5NdDpqHKNtuZoBGVhcyRnUTbb",
+          "proofProfile": "org.kya-os/proof.v1"
+        }
+      },
+      "seams": {
+        "resolveDid": "documents",
+        "resolveDidKeys": "documents",
+        "fetchStatusList": "lists",
+        "nonceStore": "fresh",
+        "clock": "fixed",
+        "trustedIssuers": "*",
+        "resolveCard": "missing"
+      },
+      "options": {
+        "expectedAudience": "did:key:z6MkpdiACd8WP1Fo79XkwdWYobFiNQtL9dWxr47zkxfiL6rp",
+        "resource": "did:key:z6MkpdiACd8WP1Fo79XkwdWYobFiNQtL9dWxr47zkxfiL6rp"
+      },
+      "now": 1780272000000,
+      "expected": {
+        "ok": true,
+        "level": "L3",
+        "effectiveScopes": [],
+        "reasons": [],
+        "chainSummary": {
+          "depth": 0,
+          "allowedAction": [],
+          "fresh": true
+        }
+      }
+    },
+    {
+      "name": "no_card",
+      "description": "a chain without a card verifies at L1 with nothing attested",
+      "input": {
+        "proof": {
+          "prf": "org.kya-os/proof.v1",
+          "alg": "EdDSA",
+          "did": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+          "kid": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz#z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+          "audience": "did:key:z6MkpdiACd8WP1Fo79XkwdWYobFiNQtL9dWxr47zkxfiL6rp",
+          "nonce": "Zi0yLW5vbmNlLTAwMDY",
+          "created": 1780272000,
+          "expires": 1780272060,
+          "requestHash": "sha-256=:SLDK1O9OYO9nZhIru+5jNp2Xn4vnFfvEDFNR2EvhPAQ=:",
+          "jws": "eyJhbGciOiJFZERTQSIsImtpZCI6ImRpZDprZXk6ejZNa3RBajZqVXdjMVMzWERpZmFRaXU4ZUF3b1pQWGR3Q0M4cXVXd1hNQ3lwekp6I3o2TWt0QWo2alV3YzFTM1hEaWZhUWl1OGVBd29aUFhkd0NDOHF1V3dYTUN5cHpKeiJ9..oOjcOM6Vv657djoZeAyAXQkDMNfYn4uLtpUyvOaRp6Hx82AR4Z2VbX--1yOfenkarnm47QBsreTmYEfQSfB0Dg"
+        },
+        "chain": [
+          {
+            "@context": [
+              "https://www.w3.org/ns/credentials/v2",
+              "https://w3id.org/security/zcap/v1",
+              "https://kya-os.org/ns/delegation/v1"
+            ],
+            "id": "urn:zcap:00000000-0000-4000-8000-00000000f300",
+            "type": [
+              "VerifiableCredential",
+              "DelegationCredential"
+            ],
+            "issuer": "did:key:z6Mkq3Bbq2EiVri4rJQhD8x5NdDpqHKNtuZoBGVhcyRnUTbb",
+            "validFrom": "2026-01-01T00:00:00Z",
+            "validUntil": "2027-01-01T00:00:00Z",
+            "credentialSubject": {
+              "id": "urn:zcap:00000000-0000-4000-8000-00000000f300",
+              "invoker": "did:key:z6MkpagnGTM3Ci2aLdBpE9WgHcBWwtBY8AnwJJpCDFDts2xb",
+              "parentCapability": "did:key:z6MkpdiACd8WP1Fo79XkwdWYobFiNQtL9dWxr47zkxfiL6rp",
+              "invocationTarget": "did:key:z6MkpdiACd8WP1Fo79XkwdWYobFiNQtL9dWxr47zkxfiL6rp",
+              "allowedAction": [
+                "read:orders",
+                "write:orders",
+                "read:catalog"
+              ],
+              "caveats": [
+                {
+                  "type": "MaxAmount",
+                  "limit": "1000.00",
+                  "currency": "USD"
+                },
+                {
+                  "type": "ValidUntil",
+                  "date": "2027-01-01T00:00:00Z"
+                }
+              ]
+            },
+            "credentialStatus": {
+              "id": "https://owner.example/status/1#1",
+              "type": "BitstringStatusListEntry",
+              "statusPurpose": "revocation",
+              "statusListIndex": "1",
+              "statusListCredential": "https://owner.example/status/1"
+            },
+            "proof": {
+              "type": "DataIntegrityProof",
+              "cryptosuite": "eddsa-jcs-2022",
+              "created": "2026-01-01T00:00:01Z",
+              "verificationMethod": "did:key:z6Mkq3Bbq2EiVri4rJQhD8x5NdDpqHKNtuZoBGVhcyRnUTbb#z6Mkq3Bbq2EiVri4rJQhD8x5NdDpqHKNtuZoBGVhcyRnUTbb",
+              "proofPurpose": "assertionMethod",
+              "proofValue": "z5b8u83CaSYMXLyj1CussH6ivLH192WQeVSFthLRyYjmfRU8sjHGQDRFRkH9Gyeu2eLCcVGu2pea1WWLdCNsqJTjr"
+            }
+          },
+          {
+            "@context": [
+              "https://www.w3.org/ns/credentials/v2",
+              "https://w3id.org/security/zcap/v1",
+              "https://kya-os.org/ns/delegation/v1"
+            ],
+            "id": "urn:zcap:00000000-0000-4000-8000-00000000f301",
+            "type": [
+              "VerifiableCredential",
+              "DelegationCredential"
+            ],
+            "issuer": "did:key:z6MkpagnGTM3Ci2aLdBpE9WgHcBWwtBY8AnwJJpCDFDts2xb",
+            "validFrom": "2026-01-01T00:00:00Z",
+            "validUntil": "2026-12-01T00:00:00Z",
+            "credentialSubject": {
+              "id": "urn:zcap:00000000-0000-4000-8000-00000000f301",
+              "invoker": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+              "parentCapability": "urn:zcap:00000000-0000-4000-8000-00000000f300",
+              "invocationTarget": "did:key:z6MkpdiACd8WP1Fo79XkwdWYobFiNQtL9dWxr47zkxfiL6rp",
+              "allowedAction": [
+                "read:orders",
+                "write:orders"
+              ],
+              "caveats": [
+                {
+                  "type": "MaxAmount",
+                  "limit": "500.00",
+                  "currency": "USD"
+                },
+                {
+                  "type": "ValidUntil",
+                  "date": "2026-12-01T00:00:00Z"
+                }
+              ]
+            },
+            "credentialStatus": {
+              "id": "https://parent.example/status/1#1",
+              "type": "BitstringStatusListEntry",
+              "statusPurpose": "revocation",
+              "statusListIndex": "1",
+              "statusListCredential": "https://parent.example/status/1"
+            },
+            "proof": {
+              "type": "DataIntegrityProof",
+              "cryptosuite": "eddsa-jcs-2022",
+              "created": "2026-01-01T00:00:01Z",
+              "verificationMethod": "did:key:z6MkpagnGTM3Ci2aLdBpE9WgHcBWwtBY8AnwJJpCDFDts2xb#z6MkpagnGTM3Ci2aLdBpE9WgHcBWwtBY8AnwJJpCDFDts2xb",
+              "proofPurpose": "assertionMethod",
+              "proofValue": "z5z9idj8Pwr9jC8wT7r9bNaGdZyicWGBvz6UZb5dfLucNBr4DvnnEWSmjgDD92m2xyViGsjFKFChAhCi4gok6Mbkr"
+            }
+          }
+        ],
+        "request": {
+          "method": "tools/call",
+          "params": {
+            "name": "lookup_order",
+            "arguments": {
+              "orderId": "ORD-1001"
+            },
+            "_meta": {
+              "org.kya-os/request-proof": "stripped before hashing"
+            }
+          }
+        }
+      },
+      "seams": {
+        "resolveDid": "documents",
+        "resolveDidKeys": "documents",
+        "fetchStatusList": "lists",
+        "nonceStore": "fresh",
+        "clock": "fixed",
+        "trustedIssuers": "*",
+        "resolveCard": "missing"
+      },
+      "options": {
+        "expectedAudience": "did:key:z6MkpdiACd8WP1Fo79XkwdWYobFiNQtL9dWxr47zkxfiL6rp",
+        "resource": "did:key:z6MkpdiACd8WP1Fo79XkwdWYobFiNQtL9dWxr47zkxfiL6rp"
+      },
+      "now": 1780272000000,
+      "expected": {
+        "ok": true,
+        "level": "L1",
+        "effectiveScopes": [],
+        "reasons": [],
+        "chainSummary": {
+          "depth": 2,
+          "responsibleParty": "did:key:z6Mkq3Bbq2EiVri4rJQhD8x5NdDpqHKNtuZoBGVhcyRnUTbb",
+          "leafInvoker": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+          "invocationTarget": "did:key:z6MkpdiACd8WP1Fo79XkwdWYobFiNQtL9dWxr47zkxfiL6rp",
+          "allowedAction": [
+            "read:orders",
+            "write:orders"
+          ],
+          "fresh": true
+        }
+      }
+    },
+    {
+      "name": "card_resolved_by_seam",
+      "description": "the card comes from the resolveCard seam when the input carries none",
+      "input": {
+        "proof": {
+          "prf": "org.kya-os/proof.v1",
+          "alg": "EdDSA",
+          "did": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+          "kid": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz#z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+          "audience": "did:key:z6MkpdiACd8WP1Fo79XkwdWYobFiNQtL9dWxr47zkxfiL6rp",
+          "nonce": "Zi0yLW5vbmNlLTAwMDc",
+          "created": 1780272000,
+          "expires": 1780272060,
+          "requestHash": "sha-256=:SLDK1O9OYO9nZhIru+5jNp2Xn4vnFfvEDFNR2EvhPAQ=:",
+          "jws": "eyJhbGciOiJFZERTQSIsImtpZCI6ImRpZDprZXk6ejZNa3RBajZqVXdjMVMzWERpZmFRaXU4ZUF3b1pQWGR3Q0M4cXVXd1hNQ3lwekp6I3o2TWt0QWo2alV3YzFTM1hEaWZhUWl1OGVBd29aUFhkd0NDOHF1V3dYTUN5cHpKeiJ9..5UBiM8gNO9DSOTX0O0GcOI-1lk7unHfQTu7vCSI4zG9ci5oEwE9nE5DHBS9TILaqjYWg5cVE6xUk1iNvCuThBA"
+        },
+        "chain": [
+          {
+            "@context": [
+              "https://www.w3.org/ns/credentials/v2",
+              "https://w3id.org/security/zcap/v1",
+              "https://kya-os.org/ns/delegation/v1"
+            ],
+            "id": "urn:zcap:00000000-0000-4000-8000-00000000f300",
+            "type": [
+              "VerifiableCredential",
+              "DelegationCredential"
+            ],
+            "issuer": "did:key:z6Mkq3Bbq2EiVri4rJQhD8x5NdDpqHKNtuZoBGVhcyRnUTbb",
+            "validFrom": "2026-01-01T00:00:00Z",
+            "validUntil": "2027-01-01T00:00:00Z",
+            "credentialSubject": {
+              "id": "urn:zcap:00000000-0000-4000-8000-00000000f300",
+              "invoker": "did:key:z6MkpagnGTM3Ci2aLdBpE9WgHcBWwtBY8AnwJJpCDFDts2xb",
+              "parentCapability": "did:key:z6MkpdiACd8WP1Fo79XkwdWYobFiNQtL9dWxr47zkxfiL6rp",
+              "invocationTarget": "did:key:z6MkpdiACd8WP1Fo79XkwdWYobFiNQtL9dWxr47zkxfiL6rp",
+              "allowedAction": [
+                "read:orders",
+                "write:orders",
+                "read:catalog"
+              ],
+              "caveats": [
+                {
+                  "type": "MaxAmount",
+                  "limit": "1000.00",
+                  "currency": "USD"
+                },
+                {
+                  "type": "ValidUntil",
+                  "date": "2027-01-01T00:00:00Z"
+                }
+              ]
+            },
+            "credentialStatus": {
+              "id": "https://owner.example/status/1#1",
+              "type": "BitstringStatusListEntry",
+              "statusPurpose": "revocation",
+              "statusListIndex": "1",
+              "statusListCredential": "https://owner.example/status/1"
+            },
+            "proof": {
+              "type": "DataIntegrityProof",
+              "cryptosuite": "eddsa-jcs-2022",
+              "created": "2026-01-01T00:00:01Z",
+              "verificationMethod": "did:key:z6Mkq3Bbq2EiVri4rJQhD8x5NdDpqHKNtuZoBGVhcyRnUTbb#z6Mkq3Bbq2EiVri4rJQhD8x5NdDpqHKNtuZoBGVhcyRnUTbb",
+              "proofPurpose": "assertionMethod",
+              "proofValue": "z5b8u83CaSYMXLyj1CussH6ivLH192WQeVSFthLRyYjmfRU8sjHGQDRFRkH9Gyeu2eLCcVGu2pea1WWLdCNsqJTjr"
+            }
+          },
+          {
+            "@context": [
+              "https://www.w3.org/ns/credentials/v2",
+              "https://w3id.org/security/zcap/v1",
+              "https://kya-os.org/ns/delegation/v1"
+            ],
+            "id": "urn:zcap:00000000-0000-4000-8000-00000000f301",
+            "type": [
+              "VerifiableCredential",
+              "DelegationCredential"
+            ],
+            "issuer": "did:key:z6MkpagnGTM3Ci2aLdBpE9WgHcBWwtBY8AnwJJpCDFDts2xb",
+            "validFrom": "2026-01-01T00:00:00Z",
+            "validUntil": "2026-12-01T00:00:00Z",
+            "credentialSubject": {
+              "id": "urn:zcap:00000000-0000-4000-8000-00000000f301",
+              "invoker": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+              "parentCapability": "urn:zcap:00000000-0000-4000-8000-00000000f300",
+              "invocationTarget": "did:key:z6MkpdiACd8WP1Fo79XkwdWYobFiNQtL9dWxr47zkxfiL6rp",
+              "allowedAction": [
+                "read:orders",
+                "write:orders"
+              ],
+              "caveats": [
+                {
+                  "type": "MaxAmount",
+                  "limit": "500.00",
+                  "currency": "USD"
+                },
+                {
+                  "type": "ValidUntil",
+                  "date": "2026-12-01T00:00:00Z"
+                }
+              ]
+            },
+            "credentialStatus": {
+              "id": "https://parent.example/status/1#1",
+              "type": "BitstringStatusListEntry",
+              "statusPurpose": "revocation",
+              "statusListIndex": "1",
+              "statusListCredential": "https://parent.example/status/1"
+            },
+            "proof": {
+              "type": "DataIntegrityProof",
+              "cryptosuite": "eddsa-jcs-2022",
+              "created": "2026-01-01T00:00:01Z",
+              "verificationMethod": "did:key:z6MkpagnGTM3Ci2aLdBpE9WgHcBWwtBY8AnwJJpCDFDts2xb#z6MkpagnGTM3Ci2aLdBpE9WgHcBWwtBY8AnwJJpCDFDts2xb",
+              "proofPurpose": "assertionMethod",
+              "proofValue": "z5z9idj8Pwr9jC8wT7r9bNaGdZyicWGBvz6UZb5dfLucNBr4DvnnEWSmjgDD92m2xyViGsjFKFChAhCi4gok6Mbkr"
+            }
+          }
+        ],
+        "request": {
+          "method": "tools/call",
+          "params": {
+            "name": "lookup_order",
+            "arguments": {
+              "orderId": "ORD-1001"
+            },
+            "_meta": {
+              "org.kya-os/request-proof": "stripped before hashing"
+            }
+          }
+        }
+      },
+      "seams": {
+        "resolveDid": "documents",
+        "resolveDidKeys": "documents",
+        "fetchStatusList": "lists",
+        "nonceStore": "fresh",
+        "clock": "fixed",
+        "trustedIssuers": "*",
+        "resolveCard": "attested"
+      },
+      "options": {
+        "expectedAudience": "did:key:z6MkpdiACd8WP1Fo79XkwdWYobFiNQtL9dWxr47zkxfiL6rp",
+        "resource": "did:key:z6MkpdiACd8WP1Fo79XkwdWYobFiNQtL9dWxr47zkxfiL6rp"
+      },
+      "now": 1780272000000,
+      "expected": {
+        "ok": true,
+        "level": "L3",
+        "effectiveScopes": [
+          "read:orders",
+          "write:orders"
+        ],
+        "reasons": [],
+        "chainSummary": {
+          "depth": 2,
+          "responsibleParty": "did:key:z6Mkq3Bbq2EiVri4rJQhD8x5NdDpqHKNtuZoBGVhcyRnUTbb",
+          "leafInvoker": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+          "invocationTarget": "did:key:z6MkpdiACd8WP1Fo79XkwdWYobFiNQtL9dWxr47zkxfiL6rp",
+          "allowedAction": [
+            "read:orders",
+            "write:orders"
+          ],
+          "fresh": true
+        }
+      }
+    },
+    {
+      "name": "input_card_wins_over_seam",
+      "description": "a card in the input is used before the seam is asked",
+      "input": {
+        "proof": {
+          "prf": "org.kya-os/proof.v1",
+          "alg": "EdDSA",
+          "did": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+          "kid": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz#z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+          "audience": "did:key:z6MkpdiACd8WP1Fo79XkwdWYobFiNQtL9dWxr47zkxfiL6rp",
+          "nonce": "Zi0yLW5vbmNlLTAwMDg",
+          "created": 1780272000,
+          "expires": 1780272060,
+          "requestHash": "sha-256=:SLDK1O9OYO9nZhIru+5jNp2Xn4vnFfvEDFNR2EvhPAQ=:",
+          "jws": "eyJhbGciOiJFZERTQSIsImtpZCI6ImRpZDprZXk6ejZNa3RBajZqVXdjMVMzWERpZmFRaXU4ZUF3b1pQWGR3Q0M4cXVXd1hNQ3lwekp6I3o2TWt0QWo2alV3YzFTM1hEaWZhUWl1OGVBd29aUFhkd0NDOHF1V3dYTUN5cHpKeiJ9..cjaR0m-TMqZMwOchjoc2zIXZCzYQzLX0mIVPsPAdFWmz9cGyKGdje8fisugR6zmRQKS0tq8itZ5b8EHPChOVCQ"
+        },
+        "chain": [
+          {
+            "@context": [
+              "https://www.w3.org/ns/credentials/v2",
+              "https://w3id.org/security/zcap/v1",
+              "https://kya-os.org/ns/delegation/v1"
+            ],
+            "id": "urn:zcap:00000000-0000-4000-8000-00000000f300",
+            "type": [
+              "VerifiableCredential",
+              "DelegationCredential"
+            ],
+            "issuer": "did:key:z6Mkq3Bbq2EiVri4rJQhD8x5NdDpqHKNtuZoBGVhcyRnUTbb",
+            "validFrom": "2026-01-01T00:00:00Z",
+            "validUntil": "2027-01-01T00:00:00Z",
+            "credentialSubject": {
+              "id": "urn:zcap:00000000-0000-4000-8000-00000000f300",
+              "invoker": "did:key:z6MkpagnGTM3Ci2aLdBpE9WgHcBWwtBY8AnwJJpCDFDts2xb",
+              "parentCapability": "did:key:z6MkpdiACd8WP1Fo79XkwdWYobFiNQtL9dWxr47zkxfiL6rp",
+              "invocationTarget": "did:key:z6MkpdiACd8WP1Fo79XkwdWYobFiNQtL9dWxr47zkxfiL6rp",
+              "allowedAction": [
+                "read:orders",
+                "write:orders",
+                "read:catalog"
+              ],
+              "caveats": [
+                {
+                  "type": "MaxAmount",
+                  "limit": "1000.00",
+                  "currency": "USD"
+                },
+                {
+                  "type": "ValidUntil",
+                  "date": "2027-01-01T00:00:00Z"
+                }
+              ]
+            },
+            "credentialStatus": {
+              "id": "https://owner.example/status/1#1",
+              "type": "BitstringStatusListEntry",
+              "statusPurpose": "revocation",
+              "statusListIndex": "1",
+              "statusListCredential": "https://owner.example/status/1"
+            },
+            "proof": {
+              "type": "DataIntegrityProof",
+              "cryptosuite": "eddsa-jcs-2022",
+              "created": "2026-01-01T00:00:01Z",
+              "verificationMethod": "did:key:z6Mkq3Bbq2EiVri4rJQhD8x5NdDpqHKNtuZoBGVhcyRnUTbb#z6Mkq3Bbq2EiVri4rJQhD8x5NdDpqHKNtuZoBGVhcyRnUTbb",
+              "proofPurpose": "assertionMethod",
+              "proofValue": "z5b8u83CaSYMXLyj1CussH6ivLH192WQeVSFthLRyYjmfRU8sjHGQDRFRkH9Gyeu2eLCcVGu2pea1WWLdCNsqJTjr"
+            }
+          },
+          {
+            "@context": [
+              "https://www.w3.org/ns/credentials/v2",
+              "https://w3id.org/security/zcap/v1",
+              "https://kya-os.org/ns/delegation/v1"
+            ],
+            "id": "urn:zcap:00000000-0000-4000-8000-00000000f301",
+            "type": [
+              "VerifiableCredential",
+              "DelegationCredential"
+            ],
+            "issuer": "did:key:z6MkpagnGTM3Ci2aLdBpE9WgHcBWwtBY8AnwJJpCDFDts2xb",
+            "validFrom": "2026-01-01T00:00:00Z",
+            "validUntil": "2026-12-01T00:00:00Z",
+            "credentialSubject": {
+              "id": "urn:zcap:00000000-0000-4000-8000-00000000f301",
+              "invoker": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+              "parentCapability": "urn:zcap:00000000-0000-4000-8000-00000000f300",
+              "invocationTarget": "did:key:z6MkpdiACd8WP1Fo79XkwdWYobFiNQtL9dWxr47zkxfiL6rp",
+              "allowedAction": [
+                "read:orders",
+                "write:orders"
+              ],
+              "caveats": [
+                {
+                  "type": "MaxAmount",
+                  "limit": "500.00",
+                  "currency": "USD"
+                },
+                {
+                  "type": "ValidUntil",
+                  "date": "2026-12-01T00:00:00Z"
+                }
+              ]
+            },
+            "credentialStatus": {
+              "id": "https://parent.example/status/1#1",
+              "type": "BitstringStatusListEntry",
+              "statusPurpose": "revocation",
+              "statusListIndex": "1",
+              "statusListCredential": "https://parent.example/status/1"
+            },
+            "proof": {
+              "type": "DataIntegrityProof",
+              "cryptosuite": "eddsa-jcs-2022",
+              "created": "2026-01-01T00:00:01Z",
+              "verificationMethod": "did:key:z6MkpagnGTM3Ci2aLdBpE9WgHcBWwtBY8AnwJJpCDFDts2xb#z6MkpagnGTM3Ci2aLdBpE9WgHcBWwtBY8AnwJJpCDFDts2xb",
+              "proofPurpose": "assertionMethod",
+              "proofValue": "z5z9idj8Pwr9jC8wT7r9bNaGdZyicWGBvz6UZb5dfLucNBr4DvnnEWSmjgDD92m2xyViGsjFKFChAhCi4gok6Mbkr"
+            }
+          }
+        ],
+        "request": {
+          "method": "tools/call",
+          "params": {
+            "name": "lookup_order",
+            "arguments": {
+              "orderId": "ORD-1001"
+            },
+            "_meta": {
+              "org.kya-os/request-proof": "stripped before hashing"
+            }
+          }
+        },
+        "card": {
+          "id": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+          "entityType": "agent",
+          "name": "orders-agent",
+          "kid": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz#z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+          "capabilities": [
+            {
+              "name": "read:orders",
+              "attestations": [
+                {
+                  "vc": {
+                    "@context": [
+                      "https://www.w3.org/ns/credentials/v2",
+                      "https://helixid.io/contexts/v1"
+                    ],
+                    "id": "urn:uuid:00000000-0000-4000-8000-0000000f2001",
+                    "type": [
+                      "VerifiableCredential",
+                      "CapabilityAttestationCredential"
+                    ],
+                    "issuer": "did:key:z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P",
+                    "validFrom": "2026-01-01T00:00:00Z",
+                    "validUntil": "2026-12-31T00:00:00Z",
+                    "credentialSubject": {
+                      "id": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+                      "capability": "read:orders"
+                    },
+                    "credentialStatus": {
+                      "id": "https://helix.example/status/1#1",
+                      "type": "BitstringStatusListEntry",
+                      "statusPurpose": "revocation",
+                      "statusListIndex": "1",
+                      "statusListCredential": "https://helix.example/status/1"
+                    },
+                    "proof": {
+                      "type": "DataIntegrityProof",
+                      "cryptosuite": "eddsa-jcs-2022",
+                      "created": "2026-01-01T00:00:01Z",
+                      "verificationMethod": "did:key:z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P#z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P",
+                      "proofPurpose": "assertionMethod",
+                      "proofValue": "zhtkQ8KW69miAa2ys4sJYhq46Z4JJyq3fUHRcbvke85PmxgqAR5WKbQunzZc7JeC3CrqHDi5Ct9syQHccP2ZDEjs"
+                    }
+                  }
+                }
+              ]
+            },
+            "write:orders"
+          ],
+          "responsibleParty": "did:key:z6Mkq3Bbq2EiVri4rJQhD8x5NdDpqHKNtuZoBGVhcyRnUTbb",
+          "proofProfile": "org.kya-os/proof.v1"
+        }
+      },
+      "seams": {
+        "resolveDid": "documents",
+        "resolveDidKeys": "documents",
+        "fetchStatusList": "lists",
+        "nonceStore": "fresh",
+        "clock": "fixed",
+        "trustedIssuers": "*",
+        "resolveCard": "attested"
+      },
+      "options": {
+        "expectedAudience": "did:key:z6MkpdiACd8WP1Fo79XkwdWYobFiNQtL9dWxr47zkxfiL6rp",
+        "resource": "did:key:z6MkpdiACd8WP1Fo79XkwdWYobFiNQtL9dWxr47zkxfiL6rp"
+      },
+      "now": 1780272000000,
+      "expected": {
+        "ok": true,
+        "level": "L1",
+        "effectiveScopes": [
+          "read:orders"
+        ],
+        "reasons": [],
+        "chainSummary": {
+          "depth": 2,
+          "responsibleParty": "did:key:z6Mkq3Bbq2EiVri4rJQhD8x5NdDpqHKNtuZoBGVhcyRnUTbb",
+          "leafInvoker": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+          "invocationTarget": "did:key:z6MkpdiACd8WP1Fo79XkwdWYobFiNQtL9dWxr47zkxfiL6rp",
+          "allowedAction": [
+            "read:orders",
+            "write:orders"
+          ],
+          "fresh": true
+        }
+      }
+    },
+    {
+      "name": "legacy_proof_profile",
+      "description": "the legacy org.kya-os/proof@1 profile id is accepted for one major version",
+      "input": {
+        "proof": {
+          "prf": "org.kya-os/proof@1",
+          "alg": "EdDSA",
+          "did": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+          "kid": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz#z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+          "audience": "did:key:z6MkpdiACd8WP1Fo79XkwdWYobFiNQtL9dWxr47zkxfiL6rp",
+          "nonce": "Zi0yLW5vbmNlLTAwMDk",
+          "created": 1780272000,
+          "expires": 1780272060,
+          "requestHash": "sha-256=:SLDK1O9OYO9nZhIru+5jNp2Xn4vnFfvEDFNR2EvhPAQ=:",
+          "jws": "eyJhbGciOiJFZERTQSIsImtpZCI6ImRpZDprZXk6ejZNa3RBajZqVXdjMVMzWERpZmFRaXU4ZUF3b1pQWGR3Q0M4cXVXd1hNQ3lwekp6I3o2TWt0QWo2alV3YzFTM1hEaWZhUWl1OGVBd29aUFhkd0NDOHF1V3dYTUN5cHpKeiJ9..Nge8Eyqc4ZqbwaUujgY1XyWhxwRWYHHOP6cTp8oUtNrUxBe3skcRHHzMG9yBTMhyVn2yOzJNCbI9TWApf4nLCQ"
+        },
+        "chain": [
+          {
+            "@context": [
+              "https://www.w3.org/ns/credentials/v2",
+              "https://w3id.org/security/zcap/v1",
+              "https://kya-os.org/ns/delegation/v1"
+            ],
+            "id": "urn:zcap:00000000-0000-4000-8000-00000000f300",
+            "type": [
+              "VerifiableCredential",
+              "DelegationCredential"
+            ],
+            "issuer": "did:key:z6Mkq3Bbq2EiVri4rJQhD8x5NdDpqHKNtuZoBGVhcyRnUTbb",
+            "validFrom": "2026-01-01T00:00:00Z",
+            "validUntil": "2027-01-01T00:00:00Z",
+            "credentialSubject": {
+              "id": "urn:zcap:00000000-0000-4000-8000-00000000f300",
+              "invoker": "did:key:z6MkpagnGTM3Ci2aLdBpE9WgHcBWwtBY8AnwJJpCDFDts2xb",
+              "parentCapability": "did:key:z6MkpdiACd8WP1Fo79XkwdWYobFiNQtL9dWxr47zkxfiL6rp",
+              "invocationTarget": "did:key:z6MkpdiACd8WP1Fo79XkwdWYobFiNQtL9dWxr47zkxfiL6rp",
+              "allowedAction": [
+                "read:orders",
+                "write:orders",
+                "read:catalog"
+              ],
+              "caveats": [
+                {
+                  "type": "MaxAmount",
+                  "limit": "1000.00",
+                  "currency": "USD"
+                },
+                {
+                  "type": "ValidUntil",
+                  "date": "2027-01-01T00:00:00Z"
+                }
+              ]
+            },
+            "credentialStatus": {
+              "id": "https://owner.example/status/1#1",
+              "type": "BitstringStatusListEntry",
+              "statusPurpose": "revocation",
+              "statusListIndex": "1",
+              "statusListCredential": "https://owner.example/status/1"
+            },
+            "proof": {
+              "type": "DataIntegrityProof",
+              "cryptosuite": "eddsa-jcs-2022",
+              "created": "2026-01-01T00:00:01Z",
+              "verificationMethod": "did:key:z6Mkq3Bbq2EiVri4rJQhD8x5NdDpqHKNtuZoBGVhcyRnUTbb#z6Mkq3Bbq2EiVri4rJQhD8x5NdDpqHKNtuZoBGVhcyRnUTbb",
+              "proofPurpose": "assertionMethod",
+              "proofValue": "z5b8u83CaSYMXLyj1CussH6ivLH192WQeVSFthLRyYjmfRU8sjHGQDRFRkH9Gyeu2eLCcVGu2pea1WWLdCNsqJTjr"
+            }
+          },
+          {
+            "@context": [
+              "https://www.w3.org/ns/credentials/v2",
+              "https://w3id.org/security/zcap/v1",
+              "https://kya-os.org/ns/delegation/v1"
+            ],
+            "id": "urn:zcap:00000000-0000-4000-8000-00000000f301",
+            "type": [
+              "VerifiableCredential",
+              "DelegationCredential"
+            ],
+            "issuer": "did:key:z6MkpagnGTM3Ci2aLdBpE9WgHcBWwtBY8AnwJJpCDFDts2xb",
+            "validFrom": "2026-01-01T00:00:00Z",
+            "validUntil": "2026-12-01T00:00:00Z",
+            "credentialSubject": {
+              "id": "urn:zcap:00000000-0000-4000-8000-00000000f301",
+              "invoker": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+              "parentCapability": "urn:zcap:00000000-0000-4000-8000-00000000f300",
+              "invocationTarget": "did:key:z6MkpdiACd8WP1Fo79XkwdWYobFiNQtL9dWxr47zkxfiL6rp",
+              "allowedAction": [
+                "read:orders",
+                "write:orders"
+              ],
+              "caveats": [
+                {
+                  "type": "MaxAmount",
+                  "limit": "500.00",
+                  "currency": "USD"
+                },
+                {
+                  "type": "ValidUntil",
+                  "date": "2026-12-01T00:00:00Z"
+                }
+              ]
+            },
+            "credentialStatus": {
+              "id": "https://parent.example/status/1#1",
+              "type": "BitstringStatusListEntry",
+              "statusPurpose": "revocation",
+              "statusListIndex": "1",
+              "statusListCredential": "https://parent.example/status/1"
+            },
+            "proof": {
+              "type": "DataIntegrityProof",
+              "cryptosuite": "eddsa-jcs-2022",
+              "created": "2026-01-01T00:00:01Z",
+              "verificationMethod": "did:key:z6MkpagnGTM3Ci2aLdBpE9WgHcBWwtBY8AnwJJpCDFDts2xb#z6MkpagnGTM3Ci2aLdBpE9WgHcBWwtBY8AnwJJpCDFDts2xb",
+              "proofPurpose": "assertionMethod",
+              "proofValue": "z5z9idj8Pwr9jC8wT7r9bNaGdZyicWGBvz6UZb5dfLucNBr4DvnnEWSmjgDD92m2xyViGsjFKFChAhCi4gok6Mbkr"
+            }
+          }
+        ],
+        "request": {
+          "method": "tools/call",
+          "params": {
+            "name": "lookup_order",
+            "arguments": {
+              "orderId": "ORD-1001"
+            },
+            "_meta": {
+              "org.kya-os/request-proof": "stripped before hashing"
+            }
+          }
+        },
+        "card": {
+          "id": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+          "entityType": "agent",
+          "name": "orders-agent",
+          "kid": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz#z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+          "capabilities": [
+            {
+              "name": "read:orders",
+              "attestations": [
+                {
+                  "vc": {
+                    "@context": [
+                      "https://www.w3.org/ns/credentials/v2",
+                      "https://helixid.io/contexts/v1"
+                    ],
+                    "id": "urn:uuid:00000000-0000-4000-8000-0000000f2001",
+                    "type": [
+                      "VerifiableCredential",
+                      "CapabilityAttestationCredential"
+                    ],
+                    "issuer": "did:key:z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P",
+                    "validFrom": "2026-01-01T00:00:00Z",
+                    "validUntil": "2026-12-31T00:00:00Z",
+                    "credentialSubject": {
+                      "id": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+                      "capability": "read:orders"
+                    },
+                    "credentialStatus": {
+                      "id": "https://helix.example/status/1#1",
+                      "type": "BitstringStatusListEntry",
+                      "statusPurpose": "revocation",
+                      "statusListIndex": "1",
+                      "statusListCredential": "https://helix.example/status/1"
+                    },
+                    "proof": {
+                      "type": "DataIntegrityProof",
+                      "cryptosuite": "eddsa-jcs-2022",
+                      "created": "2026-01-01T00:00:01Z",
+                      "verificationMethod": "did:key:z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P#z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P",
+                      "proofPurpose": "assertionMethod",
+                      "proofValue": "zhtkQ8KW69miAa2ys4sJYhq46Z4JJyq3fUHRcbvke85PmxgqAR5WKbQunzZc7JeC3CrqHDi5Ct9syQHccP2ZDEjs"
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "name": "write:orders",
+              "attestations": [
+                {
+                  "vc": {
+                    "@context": [
+                      "https://www.w3.org/ns/credentials/v2",
+                      "https://helixid.io/contexts/v1"
+                    ],
+                    "id": "urn:uuid:00000000-0000-4000-8000-0000000f2002",
+                    "type": [
+                      "VerifiableCredential",
+                      "CapabilityAttestationCredential"
+                    ],
+                    "issuer": "did:key:z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P",
+                    "validFrom": "2026-01-01T00:00:00Z",
+                    "validUntil": "2026-12-31T00:00:00Z",
+                    "credentialSubject": {
+                      "id": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+                      "capability": "write:orders"
+                    },
+                    "credentialStatus": {
+                      "id": "https://helix.example/status/1#2",
+                      "type": "BitstringStatusListEntry",
+                      "statusPurpose": "revocation",
+                      "statusListIndex": "2",
+                      "statusListCredential": "https://helix.example/status/1"
+                    },
+                    "proof": {
+                      "type": "DataIntegrityProof",
+                      "cryptosuite": "eddsa-jcs-2022",
+                      "created": "2026-01-01T00:00:01Z",
+                      "verificationMethod": "did:key:z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P#z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P",
+                      "proofPurpose": "assertionMethod",
+                      "proofValue": "z4nwMYMoveEVoFthDXhobmW3fZFgkbBVuerRd55WDJNGdhgbVZYwtQ3gdg12aK5k9xhEVNuPDB8LHk515xkNzV32r"
+                    }
+                  }
+                }
+              ]
+            }
+          ],
+          "responsibleParty": "did:key:z6Mkq3Bbq2EiVri4rJQhD8x5NdDpqHKNtuZoBGVhcyRnUTbb",
+          "proofProfile": "org.kya-os/proof.v1"
+        }
+      },
+      "seams": {
+        "resolveDid": "documents",
+        "resolveDidKeys": "documents",
+        "fetchStatusList": "lists",
+        "nonceStore": "fresh",
+        "clock": "fixed",
+        "trustedIssuers": "*",
+        "resolveCard": "missing"
+      },
+      "options": {
+        "expectedAudience": "did:key:z6MkpdiACd8WP1Fo79XkwdWYobFiNQtL9dWxr47zkxfiL6rp",
+        "resource": "did:key:z6MkpdiACd8WP1Fo79XkwdWYobFiNQtL9dWxr47zkxfiL6rp"
+      },
+      "now": 1780272000000,
+      "expected": {
+        "ok": true,
+        "level": "L3",
+        "effectiveScopes": [
+          "read:orders",
+          "write:orders"
+        ],
+        "reasons": [],
+        "chainSummary": {
+          "depth": 2,
+          "responsibleParty": "did:key:z6Mkq3Bbq2EiVri4rJQhD8x5NdDpqHKNtuZoBGVhcyRnUTbb",
+          "leafInvoker": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+          "invocationTarget": "did:key:z6MkpdiACd8WP1Fo79XkwdWYobFiNQtL9dWxr47zkxfiL6rp",
+          "allowedAction": [
+            "read:orders",
+            "write:orders"
+          ],
+          "fresh": true
+        }
+      }
+    },
+    {
+      "name": "one_bare_capability_is_l1",
+      "description": "one self-declared capability floors the level at L1",
+      "input": {
+        "proof": {
+          "prf": "org.kya-os/proof.v1",
+          "alg": "EdDSA",
+          "did": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+          "kid": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz#z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+          "audience": "did:key:z6MkpdiACd8WP1Fo79XkwdWYobFiNQtL9dWxr47zkxfiL6rp",
+          "nonce": "Zi0yLW5vbmNlLTAwMTA",
+          "created": 1780272000,
+          "expires": 1780272060,
+          "requestHash": "sha-256=:SLDK1O9OYO9nZhIru+5jNp2Xn4vnFfvEDFNR2EvhPAQ=:",
+          "jws": "eyJhbGciOiJFZERTQSIsImtpZCI6ImRpZDprZXk6ejZNa3RBajZqVXdjMVMzWERpZmFRaXU4ZUF3b1pQWGR3Q0M4cXVXd1hNQ3lwekp6I3o2TWt0QWo2alV3YzFTM1hEaWZhUWl1OGVBd29aUFhkd0NDOHF1V3dYTUN5cHpKeiJ9..66C2L3qjO2e5LxMEsH5w5UcgMmQxWiAK-KPY9kaPHKY5hK_kjhJE743oV4NBCd1Z11_FxzLDBp1nvdE_5qqgDA"
+        },
+        "chain": [
+          {
+            "@context": [
+              "https://www.w3.org/ns/credentials/v2",
+              "https://w3id.org/security/zcap/v1",
+              "https://kya-os.org/ns/delegation/v1"
+            ],
+            "id": "urn:zcap:00000000-0000-4000-8000-00000000f300",
+            "type": [
+              "VerifiableCredential",
+              "DelegationCredential"
+            ],
+            "issuer": "did:key:z6Mkq3Bbq2EiVri4rJQhD8x5NdDpqHKNtuZoBGVhcyRnUTbb",
+            "validFrom": "2026-01-01T00:00:00Z",
+            "validUntil": "2027-01-01T00:00:00Z",
+            "credentialSubject": {
+              "id": "urn:zcap:00000000-0000-4000-8000-00000000f300",
+              "invoker": "did:key:z6MkpagnGTM3Ci2aLdBpE9WgHcBWwtBY8AnwJJpCDFDts2xb",
+              "parentCapability": "did:key:z6MkpdiACd8WP1Fo79XkwdWYobFiNQtL9dWxr47zkxfiL6rp",
+              "invocationTarget": "did:key:z6MkpdiACd8WP1Fo79XkwdWYobFiNQtL9dWxr47zkxfiL6rp",
+              "allowedAction": [
+                "read:orders",
+                "write:orders",
+                "read:catalog"
+              ],
+              "caveats": [
+                {
+                  "type": "MaxAmount",
+                  "limit": "1000.00",
+                  "currency": "USD"
+                },
+                {
+                  "type": "ValidUntil",
+                  "date": "2027-01-01T00:00:00Z"
+                }
+              ]
+            },
+            "credentialStatus": {
+              "id": "https://owner.example/status/1#1",
+              "type": "BitstringStatusListEntry",
+              "statusPurpose": "revocation",
+              "statusListIndex": "1",
+              "statusListCredential": "https://owner.example/status/1"
+            },
+            "proof": {
+              "type": "DataIntegrityProof",
+              "cryptosuite": "eddsa-jcs-2022",
+              "created": "2026-01-01T00:00:01Z",
+              "verificationMethod": "did:key:z6Mkq3Bbq2EiVri4rJQhD8x5NdDpqHKNtuZoBGVhcyRnUTbb#z6Mkq3Bbq2EiVri4rJQhD8x5NdDpqHKNtuZoBGVhcyRnUTbb",
+              "proofPurpose": "assertionMethod",
+              "proofValue": "z5b8u83CaSYMXLyj1CussH6ivLH192WQeVSFthLRyYjmfRU8sjHGQDRFRkH9Gyeu2eLCcVGu2pea1WWLdCNsqJTjr"
+            }
+          },
+          {
+            "@context": [
+              "https://www.w3.org/ns/credentials/v2",
+              "https://w3id.org/security/zcap/v1",
+              "https://kya-os.org/ns/delegation/v1"
+            ],
+            "id": "urn:zcap:00000000-0000-4000-8000-00000000f301",
+            "type": [
+              "VerifiableCredential",
+              "DelegationCredential"
+            ],
+            "issuer": "did:key:z6MkpagnGTM3Ci2aLdBpE9WgHcBWwtBY8AnwJJpCDFDts2xb",
+            "validFrom": "2026-01-01T00:00:00Z",
+            "validUntil": "2026-12-01T00:00:00Z",
+            "credentialSubject": {
+              "id": "urn:zcap:00000000-0000-4000-8000-00000000f301",
+              "invoker": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+              "parentCapability": "urn:zcap:00000000-0000-4000-8000-00000000f300",
+              "invocationTarget": "did:key:z6MkpdiACd8WP1Fo79XkwdWYobFiNQtL9dWxr47zkxfiL6rp",
+              "allowedAction": [
+                "read:orders",
+                "write:orders"
+              ],
+              "caveats": [
+                {
+                  "type": "MaxAmount",
+                  "limit": "500.00",
+                  "currency": "USD"
+                },
+                {
+                  "type": "ValidUntil",
+                  "date": "2026-12-01T00:00:00Z"
+                }
+              ]
+            },
+            "credentialStatus": {
+              "id": "https://parent.example/status/1#1",
+              "type": "BitstringStatusListEntry",
+              "statusPurpose": "revocation",
+              "statusListIndex": "1",
+              "statusListCredential": "https://parent.example/status/1"
+            },
+            "proof": {
+              "type": "DataIntegrityProof",
+              "cryptosuite": "eddsa-jcs-2022",
+              "created": "2026-01-01T00:00:01Z",
+              "verificationMethod": "did:key:z6MkpagnGTM3Ci2aLdBpE9WgHcBWwtBY8AnwJJpCDFDts2xb#z6MkpagnGTM3Ci2aLdBpE9WgHcBWwtBY8AnwJJpCDFDts2xb",
+              "proofPurpose": "assertionMethod",
+              "proofValue": "z5z9idj8Pwr9jC8wT7r9bNaGdZyicWGBvz6UZb5dfLucNBr4DvnnEWSmjgDD92m2xyViGsjFKFChAhCi4gok6Mbkr"
+            }
+          }
+        ],
+        "request": {
+          "method": "tools/call",
+          "params": {
+            "name": "lookup_order",
+            "arguments": {
+              "orderId": "ORD-1001"
+            },
+            "_meta": {
+              "org.kya-os/request-proof": "stripped before hashing"
+            }
+          }
+        },
+        "card": {
+          "id": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+          "entityType": "agent",
+          "name": "orders-agent",
+          "kid": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz#z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+          "capabilities": [
+            {
+              "name": "read:orders",
+              "attestations": [
+                {
+                  "vc": {
+                    "@context": [
+                      "https://www.w3.org/ns/credentials/v2",
+                      "https://helixid.io/contexts/v1"
+                    ],
+                    "id": "urn:uuid:00000000-0000-4000-8000-0000000f2001",
+                    "type": [
+                      "VerifiableCredential",
+                      "CapabilityAttestationCredential"
+                    ],
+                    "issuer": "did:key:z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P",
+                    "validFrom": "2026-01-01T00:00:00Z",
+                    "validUntil": "2026-12-31T00:00:00Z",
+                    "credentialSubject": {
+                      "id": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+                      "capability": "read:orders"
+                    },
+                    "credentialStatus": {
+                      "id": "https://helix.example/status/1#1",
+                      "type": "BitstringStatusListEntry",
+                      "statusPurpose": "revocation",
+                      "statusListIndex": "1",
+                      "statusListCredential": "https://helix.example/status/1"
+                    },
+                    "proof": {
+                      "type": "DataIntegrityProof",
+                      "cryptosuite": "eddsa-jcs-2022",
+                      "created": "2026-01-01T00:00:01Z",
+                      "verificationMethod": "did:key:z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P#z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P",
+                      "proofPurpose": "assertionMethod",
+                      "proofValue": "zhtkQ8KW69miAa2ys4sJYhq46Z4JJyq3fUHRcbvke85PmxgqAR5WKbQunzZc7JeC3CrqHDi5Ct9syQHccP2ZDEjs"
+                    }
+                  }
+                }
+              ]
+            },
+            "write:orders"
+          ],
+          "responsibleParty": "did:key:z6Mkq3Bbq2EiVri4rJQhD8x5NdDpqHKNtuZoBGVhcyRnUTbb",
+          "proofProfile": "org.kya-os/proof.v1"
+        }
+      },
+      "seams": {
+        "resolveDid": "documents",
+        "resolveDidKeys": "documents",
+        "fetchStatusList": "lists",
+        "nonceStore": "fresh",
+        "clock": "fixed",
+        "trustedIssuers": "*",
+        "resolveCard": "missing"
+      },
+      "options": {
+        "expectedAudience": "did:key:z6MkpdiACd8WP1Fo79XkwdWYobFiNQtL9dWxr47zkxfiL6rp",
+        "resource": "did:key:z6MkpdiACd8WP1Fo79XkwdWYobFiNQtL9dWxr47zkxfiL6rp"
+      },
+      "now": 1780272000000,
+      "expected": {
+        "ok": true,
+        "level": "L1",
+        "effectiveScopes": [
+          "read:orders"
+        ],
+        "reasons": [],
+        "chainSummary": {
+          "depth": 2,
+          "responsibleParty": "did:key:z6Mkq3Bbq2EiVri4rJQhD8x5NdDpqHKNtuZoBGVhcyRnUTbb",
+          "leafInvoker": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+          "invocationTarget": "did:key:z6MkpdiACd8WP1Fo79XkwdWYobFiNQtL9dWxr47zkxfiL6rp",
+          "allowedAction": [
+            "read:orders",
+            "write:orders"
+          ],
+          "fresh": true
+        }
+      }
+    },
+    {
+      "name": "cached_status_demotes_to_l2",
+      "description": "a status read from a cache keeps the call allowed at L2",
+      "input": {
+        "proof": {
+          "prf": "org.kya-os/proof.v1",
+          "alg": "EdDSA",
+          "did": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+          "kid": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz#z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+          "audience": "did:key:z6MkpdiACd8WP1Fo79XkwdWYobFiNQtL9dWxr47zkxfiL6rp",
+          "nonce": "Zi0yLW5vbmNlLTAwMTE",
+          "created": 1780272000,
+          "expires": 1780272060,
+          "requestHash": "sha-256=:SLDK1O9OYO9nZhIru+5jNp2Xn4vnFfvEDFNR2EvhPAQ=:",
+          "jws": "eyJhbGciOiJFZERTQSIsImtpZCI6ImRpZDprZXk6ejZNa3RBajZqVXdjMVMzWERpZmFRaXU4ZUF3b1pQWGR3Q0M4cXVXd1hNQ3lwekp6I3o2TWt0QWo2alV3YzFTM1hEaWZhUWl1OGVBd29aUFhkd0NDOHF1V3dYTUN5cHpKeiJ9..WAKZ5bbfhfGu0qt3UpE2zqVIgDHPD5w8wAPNIM_bR5G_T3F95eOaITR6Axfyc6hwSZAkFjovWq_NZbfkOZBVCQ"
+        },
+        "chain": [
+          {
+            "@context": [
+              "https://www.w3.org/ns/credentials/v2",
+              "https://w3id.org/security/zcap/v1",
+              "https://kya-os.org/ns/delegation/v1"
+            ],
+            "id": "urn:zcap:00000000-0000-4000-8000-00000000f311",
+            "type": [
+              "VerifiableCredential",
+              "DelegationCredential"
+            ],
+            "issuer": "did:key:z6Mkq3Bbq2EiVri4rJQhD8x5NdDpqHKNtuZoBGVhcyRnUTbb",
+            "validFrom": "2026-01-01T00:00:00Z",
+            "validUntil": "2027-01-01T00:00:00Z",
+            "credentialSubject": {
+              "id": "urn:zcap:00000000-0000-4000-8000-00000000f311",
+              "invoker": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+              "parentCapability": "did:key:z6MkpdiACd8WP1Fo79XkwdWYobFiNQtL9dWxr47zkxfiL6rp",
+              "invocationTarget": "did:key:z6MkpdiACd8WP1Fo79XkwdWYobFiNQtL9dWxr47zkxfiL6rp",
+              "allowedAction": [
+                "read:orders",
+                "write:orders",
+                "read:catalog"
+              ],
+              "caveats": [
+                {
+                  "type": "MaxAmount",
+                  "limit": "1000.00",
+                  "currency": "USD"
+                },
+                {
+                  "type": "ValidUntil",
+                  "date": "2027-01-01T00:00:00Z"
+                }
+              ]
+            },
+            "credentialStatus": {
+              "id": "https://owner.example/status/cached#3",
+              "type": "BitstringStatusListEntry",
+              "statusPurpose": "revocation",
+              "statusListIndex": "3",
+              "statusListCredential": "https://owner.example/status/cached"
+            },
+            "proof": {
+              "type": "DataIntegrityProof",
+              "cryptosuite": "eddsa-jcs-2022",
+              "created": "2026-01-01T00:00:01Z",
+              "verificationMethod": "did:key:z6Mkq3Bbq2EiVri4rJQhD8x5NdDpqHKNtuZoBGVhcyRnUTbb#z6Mkq3Bbq2EiVri4rJQhD8x5NdDpqHKNtuZoBGVhcyRnUTbb",
+              "proofPurpose": "assertionMethod",
+              "proofValue": "zzqVnP8KshKJAD3ibvD6faZKUtwmQV1MgSpKM2a25heDzTi49kAvzYCeeQ9FdRmvoE34WJkFfBNRstWJMWUSFsmj"
+            }
+          }
+        ],
+        "request": {
+          "method": "tools/call",
+          "params": {
+            "name": "lookup_order",
+            "arguments": {
+              "orderId": "ORD-1001"
+            },
+            "_meta": {
+              "org.kya-os/request-proof": "stripped before hashing"
+            }
+          }
+        },
+        "card": {
+          "id": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+          "entityType": "agent",
+          "name": "orders-agent",
+          "kid": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz#z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+          "capabilities": [
+            {
+              "name": "read:orders",
+              "attestations": [
+                {
+                  "vc": {
+                    "@context": [
+                      "https://www.w3.org/ns/credentials/v2",
+                      "https://helixid.io/contexts/v1"
+                    ],
+                    "id": "urn:uuid:00000000-0000-4000-8000-0000000f2001",
+                    "type": [
+                      "VerifiableCredential",
+                      "CapabilityAttestationCredential"
+                    ],
+                    "issuer": "did:key:z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P",
+                    "validFrom": "2026-01-01T00:00:00Z",
+                    "validUntil": "2026-12-31T00:00:00Z",
+                    "credentialSubject": {
+                      "id": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+                      "capability": "read:orders"
+                    },
+                    "credentialStatus": {
+                      "id": "https://helix.example/status/1#1",
+                      "type": "BitstringStatusListEntry",
+                      "statusPurpose": "revocation",
+                      "statusListIndex": "1",
+                      "statusListCredential": "https://helix.example/status/1"
+                    },
+                    "proof": {
+                      "type": "DataIntegrityProof",
+                      "cryptosuite": "eddsa-jcs-2022",
+                      "created": "2026-01-01T00:00:01Z",
+                      "verificationMethod": "did:key:z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P#z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P",
+                      "proofPurpose": "assertionMethod",
+                      "proofValue": "zhtkQ8KW69miAa2ys4sJYhq46Z4JJyq3fUHRcbvke85PmxgqAR5WKbQunzZc7JeC3CrqHDi5Ct9syQHccP2ZDEjs"
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "name": "write:orders",
+              "attestations": [
+                {
+                  "vc": {
+                    "@context": [
+                      "https://www.w3.org/ns/credentials/v2",
+                      "https://helixid.io/contexts/v1"
+                    ],
+                    "id": "urn:uuid:00000000-0000-4000-8000-0000000f2002",
+                    "type": [
+                      "VerifiableCredential",
+                      "CapabilityAttestationCredential"
+                    ],
+                    "issuer": "did:key:z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P",
+                    "validFrom": "2026-01-01T00:00:00Z",
+                    "validUntil": "2026-12-31T00:00:00Z",
+                    "credentialSubject": {
+                      "id": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+                      "capability": "write:orders"
+                    },
+                    "credentialStatus": {
+                      "id": "https://helix.example/status/1#2",
+                      "type": "BitstringStatusListEntry",
+                      "statusPurpose": "revocation",
+                      "statusListIndex": "2",
+                      "statusListCredential": "https://helix.example/status/1"
+                    },
+                    "proof": {
+                      "type": "DataIntegrityProof",
+                      "cryptosuite": "eddsa-jcs-2022",
+                      "created": "2026-01-01T00:00:01Z",
+                      "verificationMethod": "did:key:z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P#z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P",
+                      "proofPurpose": "assertionMethod",
+                      "proofValue": "z4nwMYMoveEVoFthDXhobmW3fZFgkbBVuerRd55WDJNGdhgbVZYwtQ3gdg12aK5k9xhEVNuPDB8LHk515xkNzV32r"
+                    }
+                  }
+                }
+              ]
+            }
+          ],
+          "responsibleParty": "did:key:z6Mkq3Bbq2EiVri4rJQhD8x5NdDpqHKNtuZoBGVhcyRnUTbb",
+          "proofProfile": "org.kya-os/proof.v1"
+        }
+      },
+      "seams": {
+        "resolveDid": "documents",
+        "resolveDidKeys": "documents",
+        "fetchStatusList": "lists",
+        "nonceStore": "fresh",
+        "clock": "fixed",
+        "trustedIssuers": "*",
+        "resolveCard": "missing"
+      },
+      "options": {
+        "expectedAudience": "did:key:z6MkpdiACd8WP1Fo79XkwdWYobFiNQtL9dWxr47zkxfiL6rp",
+        "resource": "did:key:z6MkpdiACd8WP1Fo79XkwdWYobFiNQtL9dWxr47zkxfiL6rp"
+      },
+      "now": 1780272000000,
+      "expected": {
+        "ok": true,
+        "level": "L2",
+        "effectiveScopes": [
+          "read:orders",
+          "write:orders"
+        ],
+        "reasons": [],
+        "chainSummary": {
+          "depth": 1,
+          "responsibleParty": "did:key:z6Mkq3Bbq2EiVri4rJQhD8x5NdDpqHKNtuZoBGVhcyRnUTbb",
+          "leafInvoker": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+          "invocationTarget": "did:key:z6MkpdiACd8WP1Fo79XkwdWYobFiNQtL9dWxr47zkxfiL6rp",
+          "allowedAction": [
+            "read:orders",
+            "write:orders",
+            "read:catalog"
+          ],
+          "fresh": false
+        }
+      }
+    },
+    {
+      "name": "trusted_issuer_list_with_helix",
+      "description": "a trusted-issuer list naming Helix verifies the Helix attestations",
+      "input": {
+        "proof": {
+          "prf": "org.kya-os/proof.v1",
+          "alg": "EdDSA",
+          "did": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+          "kid": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz#z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+          "audience": "did:key:z6MkpdiACd8WP1Fo79XkwdWYobFiNQtL9dWxr47zkxfiL6rp",
+          "nonce": "Zi0yLW5vbmNlLTAwMTI",
+          "created": 1780272000,
+          "expires": 1780272060,
+          "requestHash": "sha-256=:SLDK1O9OYO9nZhIru+5jNp2Xn4vnFfvEDFNR2EvhPAQ=:",
+          "jws": "eyJhbGciOiJFZERTQSIsImtpZCI6ImRpZDprZXk6ejZNa3RBajZqVXdjMVMzWERpZmFRaXU4ZUF3b1pQWGR3Q0M4cXVXd1hNQ3lwekp6I3o2TWt0QWo2alV3YzFTM1hEaWZhUWl1OGVBd29aUFhkd0NDOHF1V3dYTUN5cHpKeiJ9..bHyk3jOMHAlYoVSW07-siec1OovFKpqGFXRFMxH-JbCYc_ua7mqB_3eQnVNjaDzkCBIZQXVL--d8U3wSFmDhAw"
+        },
+        "chain": [
+          {
+            "@context": [
+              "https://www.w3.org/ns/credentials/v2",
+              "https://w3id.org/security/zcap/v1",
+              "https://kya-os.org/ns/delegation/v1"
+            ],
+            "id": "urn:zcap:00000000-0000-4000-8000-00000000f300",
+            "type": [
+              "VerifiableCredential",
+              "DelegationCredential"
+            ],
+            "issuer": "did:key:z6Mkq3Bbq2EiVri4rJQhD8x5NdDpqHKNtuZoBGVhcyRnUTbb",
+            "validFrom": "2026-01-01T00:00:00Z",
+            "validUntil": "2027-01-01T00:00:00Z",
+            "credentialSubject": {
+              "id": "urn:zcap:00000000-0000-4000-8000-00000000f300",
+              "invoker": "did:key:z6MkpagnGTM3Ci2aLdBpE9WgHcBWwtBY8AnwJJpCDFDts2xb",
+              "parentCapability": "did:key:z6MkpdiACd8WP1Fo79XkwdWYobFiNQtL9dWxr47zkxfiL6rp",
+              "invocationTarget": "did:key:z6MkpdiACd8WP1Fo79XkwdWYobFiNQtL9dWxr47zkxfiL6rp",
+              "allowedAction": [
+                "read:orders",
+                "write:orders",
+                "read:catalog"
+              ],
+              "caveats": [
+                {
+                  "type": "MaxAmount",
+                  "limit": "1000.00",
+                  "currency": "USD"
+                },
+                {
+                  "type": "ValidUntil",
+                  "date": "2027-01-01T00:00:00Z"
+                }
+              ]
+            },
+            "credentialStatus": {
+              "id": "https://owner.example/status/1#1",
+              "type": "BitstringStatusListEntry",
+              "statusPurpose": "revocation",
+              "statusListIndex": "1",
+              "statusListCredential": "https://owner.example/status/1"
+            },
+            "proof": {
+              "type": "DataIntegrityProof",
+              "cryptosuite": "eddsa-jcs-2022",
+              "created": "2026-01-01T00:00:01Z",
+              "verificationMethod": "did:key:z6Mkq3Bbq2EiVri4rJQhD8x5NdDpqHKNtuZoBGVhcyRnUTbb#z6Mkq3Bbq2EiVri4rJQhD8x5NdDpqHKNtuZoBGVhcyRnUTbb",
+              "proofPurpose": "assertionMethod",
+              "proofValue": "z5b8u83CaSYMXLyj1CussH6ivLH192WQeVSFthLRyYjmfRU8sjHGQDRFRkH9Gyeu2eLCcVGu2pea1WWLdCNsqJTjr"
+            }
+          },
+          {
+            "@context": [
+              "https://www.w3.org/ns/credentials/v2",
+              "https://w3id.org/security/zcap/v1",
+              "https://kya-os.org/ns/delegation/v1"
+            ],
+            "id": "urn:zcap:00000000-0000-4000-8000-00000000f301",
+            "type": [
+              "VerifiableCredential",
+              "DelegationCredential"
+            ],
+            "issuer": "did:key:z6MkpagnGTM3Ci2aLdBpE9WgHcBWwtBY8AnwJJpCDFDts2xb",
+            "validFrom": "2026-01-01T00:00:00Z",
+            "validUntil": "2026-12-01T00:00:00Z",
+            "credentialSubject": {
+              "id": "urn:zcap:00000000-0000-4000-8000-00000000f301",
+              "invoker": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+              "parentCapability": "urn:zcap:00000000-0000-4000-8000-00000000f300",
+              "invocationTarget": "did:key:z6MkpdiACd8WP1Fo79XkwdWYobFiNQtL9dWxr47zkxfiL6rp",
+              "allowedAction": [
+                "read:orders",
+                "write:orders"
+              ],
+              "caveats": [
+                {
+                  "type": "MaxAmount",
+                  "limit": "500.00",
+                  "currency": "USD"
+                },
+                {
+                  "type": "ValidUntil",
+                  "date": "2026-12-01T00:00:00Z"
+                }
+              ]
+            },
+            "credentialStatus": {
+              "id": "https://parent.example/status/1#1",
+              "type": "BitstringStatusListEntry",
+              "statusPurpose": "revocation",
+              "statusListIndex": "1",
+              "statusListCredential": "https://parent.example/status/1"
+            },
+            "proof": {
+              "type": "DataIntegrityProof",
+              "cryptosuite": "eddsa-jcs-2022",
+              "created": "2026-01-01T00:00:01Z",
+              "verificationMethod": "did:key:z6MkpagnGTM3Ci2aLdBpE9WgHcBWwtBY8AnwJJpCDFDts2xb#z6MkpagnGTM3Ci2aLdBpE9WgHcBWwtBY8AnwJJpCDFDts2xb",
+              "proofPurpose": "assertionMethod",
+              "proofValue": "z5z9idj8Pwr9jC8wT7r9bNaGdZyicWGBvz6UZb5dfLucNBr4DvnnEWSmjgDD92m2xyViGsjFKFChAhCi4gok6Mbkr"
+            }
+          }
+        ],
+        "request": {
+          "method": "tools/call",
+          "params": {
+            "name": "lookup_order",
+            "arguments": {
+              "orderId": "ORD-1001"
+            },
+            "_meta": {
+              "org.kya-os/request-proof": "stripped before hashing"
+            }
+          }
+        },
+        "card": {
+          "id": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+          "entityType": "agent",
+          "name": "orders-agent",
+          "kid": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz#z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+          "capabilities": [
+            {
+              "name": "read:orders",
+              "attestations": [
+                {
+                  "vc": {
+                    "@context": [
+                      "https://www.w3.org/ns/credentials/v2",
+                      "https://helixid.io/contexts/v1"
+                    ],
+                    "id": "urn:uuid:00000000-0000-4000-8000-0000000f2001",
+                    "type": [
+                      "VerifiableCredential",
+                      "CapabilityAttestationCredential"
+                    ],
+                    "issuer": "did:key:z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P",
+                    "validFrom": "2026-01-01T00:00:00Z",
+                    "validUntil": "2026-12-31T00:00:00Z",
+                    "credentialSubject": {
+                      "id": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+                      "capability": "read:orders"
+                    },
+                    "credentialStatus": {
+                      "id": "https://helix.example/status/1#1",
+                      "type": "BitstringStatusListEntry",
+                      "statusPurpose": "revocation",
+                      "statusListIndex": "1",
+                      "statusListCredential": "https://helix.example/status/1"
+                    },
+                    "proof": {
+                      "type": "DataIntegrityProof",
+                      "cryptosuite": "eddsa-jcs-2022",
+                      "created": "2026-01-01T00:00:01Z",
+                      "verificationMethod": "did:key:z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P#z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P",
+                      "proofPurpose": "assertionMethod",
+                      "proofValue": "zhtkQ8KW69miAa2ys4sJYhq46Z4JJyq3fUHRcbvke85PmxgqAR5WKbQunzZc7JeC3CrqHDi5Ct9syQHccP2ZDEjs"
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "name": "write:orders",
+              "attestations": [
+                {
+                  "vc": {
+                    "@context": [
+                      "https://www.w3.org/ns/credentials/v2",
+                      "https://helixid.io/contexts/v1"
+                    ],
+                    "id": "urn:uuid:00000000-0000-4000-8000-0000000f2002",
+                    "type": [
+                      "VerifiableCredential",
+                      "CapabilityAttestationCredential"
+                    ],
+                    "issuer": "did:key:z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P",
+                    "validFrom": "2026-01-01T00:00:00Z",
+                    "validUntil": "2026-12-31T00:00:00Z",
+                    "credentialSubject": {
+                      "id": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+                      "capability": "write:orders"
+                    },
+                    "credentialStatus": {
+                      "id": "https://helix.example/status/1#2",
+                      "type": "BitstringStatusListEntry",
+                      "statusPurpose": "revocation",
+                      "statusListIndex": "2",
+                      "statusListCredential": "https://helix.example/status/1"
+                    },
+                    "proof": {
+                      "type": "DataIntegrityProof",
+                      "cryptosuite": "eddsa-jcs-2022",
+                      "created": "2026-01-01T00:00:01Z",
+                      "verificationMethod": "did:key:z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P#z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P",
+                      "proofPurpose": "assertionMethod",
+                      "proofValue": "z4nwMYMoveEVoFthDXhobmW3fZFgkbBVuerRd55WDJNGdhgbVZYwtQ3gdg12aK5k9xhEVNuPDB8LHk515xkNzV32r"
+                    }
+                  }
+                }
+              ]
+            }
+          ],
+          "responsibleParty": "did:key:z6Mkq3Bbq2EiVri4rJQhD8x5NdDpqHKNtuZoBGVhcyRnUTbb",
+          "proofProfile": "org.kya-os/proof.v1"
+        }
+      },
+      "seams": {
+        "resolveDid": "documents",
+        "resolveDidKeys": "documents",
+        "fetchStatusList": "lists",
+        "nonceStore": "fresh",
+        "clock": "fixed",
+        "trustedIssuers": [
+          "did:key:z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P"
+        ],
+        "resolveCard": "missing"
+      },
+      "options": {
+        "expectedAudience": "did:key:z6MkpdiACd8WP1Fo79XkwdWYobFiNQtL9dWxr47zkxfiL6rp",
+        "resource": "did:key:z6MkpdiACd8WP1Fo79XkwdWYobFiNQtL9dWxr47zkxfiL6rp"
+      },
+      "now": 1780272000000,
+      "expected": {
+        "ok": true,
+        "level": "L3",
+        "effectiveScopes": [
+          "read:orders",
+          "write:orders"
+        ],
+        "reasons": [],
+        "chainSummary": {
+          "depth": 2,
+          "responsibleParty": "did:key:z6Mkq3Bbq2EiVri4rJQhD8x5NdDpqHKNtuZoBGVhcyRnUTbb",
+          "leafInvoker": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+          "invocationTarget": "did:key:z6MkpdiACd8WP1Fo79XkwdWYobFiNQtL9dWxr47zkxfiL6rp",
+          "allowedAction": [
+            "read:orders",
+            "write:orders"
+          ],
+          "fresh": true
+        }
+      }
+    },
+    {
+      "name": "unlisted_issuer_demotes",
+      "description": "a trusted-issuer list without Helix leaves every attestation unverified: L1, no scopes",
+      "input": {
+        "proof": {
+          "prf": "org.kya-os/proof.v1",
+          "alg": "EdDSA",
+          "did": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+          "kid": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz#z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+          "audience": "did:key:z6MkpdiACd8WP1Fo79XkwdWYobFiNQtL9dWxr47zkxfiL6rp",
+          "nonce": "Zi0yLW5vbmNlLTAwMTM",
+          "created": 1780272000,
+          "expires": 1780272060,
+          "requestHash": "sha-256=:SLDK1O9OYO9nZhIru+5jNp2Xn4vnFfvEDFNR2EvhPAQ=:",
+          "jws": "eyJhbGciOiJFZERTQSIsImtpZCI6ImRpZDprZXk6ejZNa3RBajZqVXdjMVMzWERpZmFRaXU4ZUF3b1pQWGR3Q0M4cXVXd1hNQ3lwekp6I3o2TWt0QWo2alV3YzFTM1hEaWZhUWl1OGVBd29aUFhkd0NDOHF1V3dYTUN5cHpKeiJ9..K4a3_auFGgGAi-o8iEuod1ZRGepKrwZw7pm715luN9gpBQfPBO60Qod-ByQVhW3udgLcikiMdFPofixuXu-2CQ"
+        },
+        "chain": [
+          {
+            "@context": [
+              "https://www.w3.org/ns/credentials/v2",
+              "https://w3id.org/security/zcap/v1",
+              "https://kya-os.org/ns/delegation/v1"
+            ],
+            "id": "urn:zcap:00000000-0000-4000-8000-00000000f300",
+            "type": [
+              "VerifiableCredential",
+              "DelegationCredential"
+            ],
+            "issuer": "did:key:z6Mkq3Bbq2EiVri4rJQhD8x5NdDpqHKNtuZoBGVhcyRnUTbb",
+            "validFrom": "2026-01-01T00:00:00Z",
+            "validUntil": "2027-01-01T00:00:00Z",
+            "credentialSubject": {
+              "id": "urn:zcap:00000000-0000-4000-8000-00000000f300",
+              "invoker": "did:key:z6MkpagnGTM3Ci2aLdBpE9WgHcBWwtBY8AnwJJpCDFDts2xb",
+              "parentCapability": "did:key:z6MkpdiACd8WP1Fo79XkwdWYobFiNQtL9dWxr47zkxfiL6rp",
+              "invocationTarget": "did:key:z6MkpdiACd8WP1Fo79XkwdWYobFiNQtL9dWxr47zkxfiL6rp",
+              "allowedAction": [
+                "read:orders",
+                "write:orders",
+                "read:catalog"
+              ],
+              "caveats": [
+                {
+                  "type": "MaxAmount",
+                  "limit": "1000.00",
+                  "currency": "USD"
+                },
+                {
+                  "type": "ValidUntil",
+                  "date": "2027-01-01T00:00:00Z"
+                }
+              ]
+            },
+            "credentialStatus": {
+              "id": "https://owner.example/status/1#1",
+              "type": "BitstringStatusListEntry",
+              "statusPurpose": "revocation",
+              "statusListIndex": "1",
+              "statusListCredential": "https://owner.example/status/1"
+            },
+            "proof": {
+              "type": "DataIntegrityProof",
+              "cryptosuite": "eddsa-jcs-2022",
+              "created": "2026-01-01T00:00:01Z",
+              "verificationMethod": "did:key:z6Mkq3Bbq2EiVri4rJQhD8x5NdDpqHKNtuZoBGVhcyRnUTbb#z6Mkq3Bbq2EiVri4rJQhD8x5NdDpqHKNtuZoBGVhcyRnUTbb",
+              "proofPurpose": "assertionMethod",
+              "proofValue": "z5b8u83CaSYMXLyj1CussH6ivLH192WQeVSFthLRyYjmfRU8sjHGQDRFRkH9Gyeu2eLCcVGu2pea1WWLdCNsqJTjr"
+            }
+          },
+          {
+            "@context": [
+              "https://www.w3.org/ns/credentials/v2",
+              "https://w3id.org/security/zcap/v1",
+              "https://kya-os.org/ns/delegation/v1"
+            ],
+            "id": "urn:zcap:00000000-0000-4000-8000-00000000f301",
+            "type": [
+              "VerifiableCredential",
+              "DelegationCredential"
+            ],
+            "issuer": "did:key:z6MkpagnGTM3Ci2aLdBpE9WgHcBWwtBY8AnwJJpCDFDts2xb",
+            "validFrom": "2026-01-01T00:00:00Z",
+            "validUntil": "2026-12-01T00:00:00Z",
+            "credentialSubject": {
+              "id": "urn:zcap:00000000-0000-4000-8000-00000000f301",
+              "invoker": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+              "parentCapability": "urn:zcap:00000000-0000-4000-8000-00000000f300",
+              "invocationTarget": "did:key:z6MkpdiACd8WP1Fo79XkwdWYobFiNQtL9dWxr47zkxfiL6rp",
+              "allowedAction": [
+                "read:orders",
+                "write:orders"
+              ],
+              "caveats": [
+                {
+                  "type": "MaxAmount",
+                  "limit": "500.00",
+                  "currency": "USD"
+                },
+                {
+                  "type": "ValidUntil",
+                  "date": "2026-12-01T00:00:00Z"
+                }
+              ]
+            },
+            "credentialStatus": {
+              "id": "https://parent.example/status/1#1",
+              "type": "BitstringStatusListEntry",
+              "statusPurpose": "revocation",
+              "statusListIndex": "1",
+              "statusListCredential": "https://parent.example/status/1"
+            },
+            "proof": {
+              "type": "DataIntegrityProof",
+              "cryptosuite": "eddsa-jcs-2022",
+              "created": "2026-01-01T00:00:01Z",
+              "verificationMethod": "did:key:z6MkpagnGTM3Ci2aLdBpE9WgHcBWwtBY8AnwJJpCDFDts2xb#z6MkpagnGTM3Ci2aLdBpE9WgHcBWwtBY8AnwJJpCDFDts2xb",
+              "proofPurpose": "assertionMethod",
+              "proofValue": "z5z9idj8Pwr9jC8wT7r9bNaGdZyicWGBvz6UZb5dfLucNBr4DvnnEWSmjgDD92m2xyViGsjFKFChAhCi4gok6Mbkr"
+            }
+          }
+        ],
+        "request": {
+          "method": "tools/call",
+          "params": {
+            "name": "lookup_order",
+            "arguments": {
+              "orderId": "ORD-1001"
+            },
+            "_meta": {
+              "org.kya-os/request-proof": "stripped before hashing"
+            }
+          }
+        },
+        "card": {
+          "id": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+          "entityType": "agent",
+          "name": "orders-agent",
+          "kid": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz#z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+          "capabilities": [
+            {
+              "name": "read:orders",
+              "attestations": [
+                {
+                  "vc": {
+                    "@context": [
+                      "https://www.w3.org/ns/credentials/v2",
+                      "https://helixid.io/contexts/v1"
+                    ],
+                    "id": "urn:uuid:00000000-0000-4000-8000-0000000f2001",
+                    "type": [
+                      "VerifiableCredential",
+                      "CapabilityAttestationCredential"
+                    ],
+                    "issuer": "did:key:z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P",
+                    "validFrom": "2026-01-01T00:00:00Z",
+                    "validUntil": "2026-12-31T00:00:00Z",
+                    "credentialSubject": {
+                      "id": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+                      "capability": "read:orders"
+                    },
+                    "credentialStatus": {
+                      "id": "https://helix.example/status/1#1",
+                      "type": "BitstringStatusListEntry",
+                      "statusPurpose": "revocation",
+                      "statusListIndex": "1",
+                      "statusListCredential": "https://helix.example/status/1"
+                    },
+                    "proof": {
+                      "type": "DataIntegrityProof",
+                      "cryptosuite": "eddsa-jcs-2022",
+                      "created": "2026-01-01T00:00:01Z",
+                      "verificationMethod": "did:key:z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P#z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P",
+                      "proofPurpose": "assertionMethod",
+                      "proofValue": "zhtkQ8KW69miAa2ys4sJYhq46Z4JJyq3fUHRcbvke85PmxgqAR5WKbQunzZc7JeC3CrqHDi5Ct9syQHccP2ZDEjs"
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "name": "write:orders",
+              "attestations": [
+                {
+                  "vc": {
+                    "@context": [
+                      "https://www.w3.org/ns/credentials/v2",
+                      "https://helixid.io/contexts/v1"
+                    ],
+                    "id": "urn:uuid:00000000-0000-4000-8000-0000000f2002",
+                    "type": [
+                      "VerifiableCredential",
+                      "CapabilityAttestationCredential"
+                    ],
+                    "issuer": "did:key:z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P",
+                    "validFrom": "2026-01-01T00:00:00Z",
+                    "validUntil": "2026-12-31T00:00:00Z",
+                    "credentialSubject": {
+                      "id": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+                      "capability": "write:orders"
+                    },
+                    "credentialStatus": {
+                      "id": "https://helix.example/status/1#2",
+                      "type": "BitstringStatusListEntry",
+                      "statusPurpose": "revocation",
+                      "statusListIndex": "2",
+                      "statusListCredential": "https://helix.example/status/1"
+                    },
+                    "proof": {
+                      "type": "DataIntegrityProof",
+                      "cryptosuite": "eddsa-jcs-2022",
+                      "created": "2026-01-01T00:00:01Z",
+                      "verificationMethod": "did:key:z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P#z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P",
+                      "proofPurpose": "assertionMethod",
+                      "proofValue": "z4nwMYMoveEVoFthDXhobmW3fZFgkbBVuerRd55WDJNGdhgbVZYwtQ3gdg12aK5k9xhEVNuPDB8LHk515xkNzV32r"
+                    }
+                  }
+                }
+              ]
+            }
+          ],
+          "responsibleParty": "did:key:z6Mkq3Bbq2EiVri4rJQhD8x5NdDpqHKNtuZoBGVhcyRnUTbb",
+          "proofProfile": "org.kya-os/proof.v1"
+        }
+      },
+      "seams": {
+        "resolveDid": "documents",
+        "resolveDidKeys": "documents",
+        "fetchStatusList": "lists",
+        "nonceStore": "fresh",
+        "clock": "fixed",
+        "trustedIssuers": [
+          "did:key:z6MkhGe4c3bBPBRU6UvBm8y5WKucfAhmYSATY83er8MsxbKw"
+        ],
+        "resolveCard": "missing"
+      },
+      "options": {
+        "expectedAudience": "did:key:z6MkpdiACd8WP1Fo79XkwdWYobFiNQtL9dWxr47zkxfiL6rp",
+        "resource": "did:key:z6MkpdiACd8WP1Fo79XkwdWYobFiNQtL9dWxr47zkxfiL6rp"
+      },
+      "now": 1780272000000,
+      "expected": {
+        "ok": true,
+        "level": "L1",
+        "effectiveScopes": [],
+        "reasons": [],
+        "chainSummary": {
+          "depth": 2,
+          "responsibleParty": "did:key:z6Mkq3Bbq2EiVri4rJQhD8x5NdDpqHKNtuZoBGVhcyRnUTbb",
+          "leafInvoker": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+          "invocationTarget": "did:key:z6MkpdiACd8WP1Fo79XkwdWYobFiNQtL9dWxr47zkxfiL6rp",
+          "allowedAction": [
+            "read:orders",
+            "write:orders"
+          ],
+          "fresh": true
+        }
+      }
+    },
+    {
+      "name": "stranger_attestation_under_allow_all",
+      "description": "under allow-all an attestation from any issuer verifies",
+      "input": {
+        "proof": {
+          "prf": "org.kya-os/proof.v1",
+          "alg": "EdDSA",
+          "did": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+          "kid": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz#z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+          "audience": "did:key:z6MkpdiACd8WP1Fo79XkwdWYobFiNQtL9dWxr47zkxfiL6rp",
+          "nonce": "Zi0yLW5vbmNlLTAwMTQ",
+          "created": 1780272000,
+          "expires": 1780272060,
+          "requestHash": "sha-256=:SLDK1O9OYO9nZhIru+5jNp2Xn4vnFfvEDFNR2EvhPAQ=:",
+          "jws": "eyJhbGciOiJFZERTQSIsImtpZCI6ImRpZDprZXk6ejZNa3RBajZqVXdjMVMzWERpZmFRaXU4ZUF3b1pQWGR3Q0M4cXVXd1hNQ3lwekp6I3o2TWt0QWo2alV3YzFTM1hEaWZhUWl1OGVBd29aUFhkd0NDOHF1V3dYTUN5cHpKeiJ9..jiTsGIfz27RX5EqzhMz6ps_ELwiH_ZJL_EFwSQKYvbvLVxRnmgsRC_0Y0FEu77ryq3J60xpUZ0rFFcnb6bxwDw"
+        },
+        "chain": [
+          {
+            "@context": [
+              "https://www.w3.org/ns/credentials/v2",
+              "https://w3id.org/security/zcap/v1",
+              "https://kya-os.org/ns/delegation/v1"
+            ],
+            "id": "urn:zcap:00000000-0000-4000-8000-00000000f300",
+            "type": [
+              "VerifiableCredential",
+              "DelegationCredential"
+            ],
+            "issuer": "did:key:z6Mkq3Bbq2EiVri4rJQhD8x5NdDpqHKNtuZoBGVhcyRnUTbb",
+            "validFrom": "2026-01-01T00:00:00Z",
+            "validUntil": "2027-01-01T00:00:00Z",
+            "credentialSubject": {
+              "id": "urn:zcap:00000000-0000-4000-8000-00000000f300",
+              "invoker": "did:key:z6MkpagnGTM3Ci2aLdBpE9WgHcBWwtBY8AnwJJpCDFDts2xb",
+              "parentCapability": "did:key:z6MkpdiACd8WP1Fo79XkwdWYobFiNQtL9dWxr47zkxfiL6rp",
+              "invocationTarget": "did:key:z6MkpdiACd8WP1Fo79XkwdWYobFiNQtL9dWxr47zkxfiL6rp",
+              "allowedAction": [
+                "read:orders",
+                "write:orders",
+                "read:catalog"
+              ],
+              "caveats": [
+                {
+                  "type": "MaxAmount",
+                  "limit": "1000.00",
+                  "currency": "USD"
+                },
+                {
+                  "type": "ValidUntil",
+                  "date": "2027-01-01T00:00:00Z"
+                }
+              ]
+            },
+            "credentialStatus": {
+              "id": "https://owner.example/status/1#1",
+              "type": "BitstringStatusListEntry",
+              "statusPurpose": "revocation",
+              "statusListIndex": "1",
+              "statusListCredential": "https://owner.example/status/1"
+            },
+            "proof": {
+              "type": "DataIntegrityProof",
+              "cryptosuite": "eddsa-jcs-2022",
+              "created": "2026-01-01T00:00:01Z",
+              "verificationMethod": "did:key:z6Mkq3Bbq2EiVri4rJQhD8x5NdDpqHKNtuZoBGVhcyRnUTbb#z6Mkq3Bbq2EiVri4rJQhD8x5NdDpqHKNtuZoBGVhcyRnUTbb",
+              "proofPurpose": "assertionMethod",
+              "proofValue": "z5b8u83CaSYMXLyj1CussH6ivLH192WQeVSFthLRyYjmfRU8sjHGQDRFRkH9Gyeu2eLCcVGu2pea1WWLdCNsqJTjr"
+            }
+          },
+          {
+            "@context": [
+              "https://www.w3.org/ns/credentials/v2",
+              "https://w3id.org/security/zcap/v1",
+              "https://kya-os.org/ns/delegation/v1"
+            ],
+            "id": "urn:zcap:00000000-0000-4000-8000-00000000f301",
+            "type": [
+              "VerifiableCredential",
+              "DelegationCredential"
+            ],
+            "issuer": "did:key:z6MkpagnGTM3Ci2aLdBpE9WgHcBWwtBY8AnwJJpCDFDts2xb",
+            "validFrom": "2026-01-01T00:00:00Z",
+            "validUntil": "2026-12-01T00:00:00Z",
+            "credentialSubject": {
+              "id": "urn:zcap:00000000-0000-4000-8000-00000000f301",
+              "invoker": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+              "parentCapability": "urn:zcap:00000000-0000-4000-8000-00000000f300",
+              "invocationTarget": "did:key:z6MkpdiACd8WP1Fo79XkwdWYobFiNQtL9dWxr47zkxfiL6rp",
+              "allowedAction": [
+                "read:orders",
+                "write:orders"
+              ],
+              "caveats": [
+                {
+                  "type": "MaxAmount",
+                  "limit": "500.00",
+                  "currency": "USD"
+                },
+                {
+                  "type": "ValidUntil",
+                  "date": "2026-12-01T00:00:00Z"
+                }
+              ]
+            },
+            "credentialStatus": {
+              "id": "https://parent.example/status/1#1",
+              "type": "BitstringStatusListEntry",
+              "statusPurpose": "revocation",
+              "statusListIndex": "1",
+              "statusListCredential": "https://parent.example/status/1"
+            },
+            "proof": {
+              "type": "DataIntegrityProof",
+              "cryptosuite": "eddsa-jcs-2022",
+              "created": "2026-01-01T00:00:01Z",
+              "verificationMethod": "did:key:z6MkpagnGTM3Ci2aLdBpE9WgHcBWwtBY8AnwJJpCDFDts2xb#z6MkpagnGTM3Ci2aLdBpE9WgHcBWwtBY8AnwJJpCDFDts2xb",
+              "proofPurpose": "assertionMethod",
+              "proofValue": "z5z9idj8Pwr9jC8wT7r9bNaGdZyicWGBvz6UZb5dfLucNBr4DvnnEWSmjgDD92m2xyViGsjFKFChAhCi4gok6Mbkr"
+            }
+          }
+        ],
+        "request": {
+          "method": "tools/call",
+          "params": {
+            "name": "lookup_order",
+            "arguments": {
+              "orderId": "ORD-1001"
+            },
+            "_meta": {
+              "org.kya-os/request-proof": "stripped before hashing"
+            }
+          }
+        },
+        "card": {
+          "id": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+          "entityType": "agent",
+          "name": "orders-agent",
+          "kid": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz#z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+          "capabilities": [
+            {
+              "name": "read:orders",
+              "attestations": [
+                {
+                  "vc": {
+                    "@context": [
+                      "https://www.w3.org/ns/credentials/v2",
+                      "https://helixid.io/contexts/v1"
+                    ],
+                    "id": "urn:uuid:00000000-0000-4000-8000-0000000f2003",
+                    "type": [
+                      "VerifiableCredential",
+                      "CapabilityAttestationCredential"
+                    ],
+                    "issuer": "did:key:z6MkhGe4c3bBPBRU6UvBm8y5WKucfAhmYSATY83er8MsxbKw",
+                    "validFrom": "2026-01-01T00:00:00Z",
+                    "validUntil": "2026-12-31T00:00:00Z",
+                    "credentialSubject": {
+                      "id": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+                      "capability": "read:orders"
+                    },
+                    "credentialStatus": {
+                      "id": "https://stranger.example/status/1#3",
+                      "type": "BitstringStatusListEntry",
+                      "statusPurpose": "revocation",
+                      "statusListIndex": "3",
+                      "statusListCredential": "https://stranger.example/status/1"
+                    },
+                    "proof": {
+                      "type": "DataIntegrityProof",
+                      "cryptosuite": "eddsa-jcs-2022",
+                      "created": "2026-01-01T00:00:01Z",
+                      "verificationMethod": "did:key:z6MkhGe4c3bBPBRU6UvBm8y5WKucfAhmYSATY83er8MsxbKw#z6MkhGe4c3bBPBRU6UvBm8y5WKucfAhmYSATY83er8MsxbKw",
+                      "proofPurpose": "assertionMethod",
+                      "proofValue": "z5oFTjPrr1zq6bMLPsSRRNTbuMGbUatZhYo8m1tmgR7qjfXWY1cRCGgBT8C2MeUaUBi428F93pBt4wRLF4SdVgirP"
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "name": "write:orders",
+              "attestations": [
+                {
+                  "vc": {
+                    "@context": [
+                      "https://www.w3.org/ns/credentials/v2",
+                      "https://helixid.io/contexts/v1"
+                    ],
+                    "id": "urn:uuid:00000000-0000-4000-8000-0000000f2002",
+                    "type": [
+                      "VerifiableCredential",
+                      "CapabilityAttestationCredential"
+                    ],
+                    "issuer": "did:key:z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P",
+                    "validFrom": "2026-01-01T00:00:00Z",
+                    "validUntil": "2026-12-31T00:00:00Z",
+                    "credentialSubject": {
+                      "id": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+                      "capability": "write:orders"
+                    },
+                    "credentialStatus": {
+                      "id": "https://helix.example/status/1#2",
+                      "type": "BitstringStatusListEntry",
+                      "statusPurpose": "revocation",
+                      "statusListIndex": "2",
+                      "statusListCredential": "https://helix.example/status/1"
+                    },
+                    "proof": {
+                      "type": "DataIntegrityProof",
+                      "cryptosuite": "eddsa-jcs-2022",
+                      "created": "2026-01-01T00:00:01Z",
+                      "verificationMethod": "did:key:z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P#z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P",
+                      "proofPurpose": "assertionMethod",
+                      "proofValue": "z4nwMYMoveEVoFthDXhobmW3fZFgkbBVuerRd55WDJNGdhgbVZYwtQ3gdg12aK5k9xhEVNuPDB8LHk515xkNzV32r"
+                    }
+                  }
+                }
+              ]
+            }
+          ],
+          "responsibleParty": "did:key:z6Mkq3Bbq2EiVri4rJQhD8x5NdDpqHKNtuZoBGVhcyRnUTbb",
+          "proofProfile": "org.kya-os/proof.v1"
+        }
+      },
+      "seams": {
+        "resolveDid": "documents",
+        "resolveDidKeys": "documents",
+        "fetchStatusList": "lists",
+        "nonceStore": "fresh",
+        "clock": "fixed",
+        "trustedIssuers": "*",
+        "resolveCard": "missing"
+      },
+      "options": {
+        "expectedAudience": "did:key:z6MkpdiACd8WP1Fo79XkwdWYobFiNQtL9dWxr47zkxfiL6rp",
+        "resource": "did:key:z6MkpdiACd8WP1Fo79XkwdWYobFiNQtL9dWxr47zkxfiL6rp"
+      },
+      "now": 1780272000000,
+      "expected": {
+        "ok": true,
+        "level": "L1",
+        "effectiveScopes": [
+          "write:orders"
+        ],
+        "reasons": [],
+        "chainSummary": {
+          "depth": 2,
+          "responsibleParty": "did:key:z6Mkq3Bbq2EiVri4rJQhD8x5NdDpqHKNtuZoBGVhcyRnUTbb",
+          "leafInvoker": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+          "invocationTarget": "did:key:z6MkpdiACd8WP1Fo79XkwdWYobFiNQtL9dWxr47zkxfiL6rp",
+          "allowedAction": [
+            "read:orders",
+            "write:orders"
+          ],
+          "fresh": true
+        }
+      }
+    },
+    {
+      "name": "cnf_fused_l3",
+      "description": "the token cnf.jkt, the proof cnf.jkt and the key thumbprint fuse",
+      "input": {
+        "proof": {
+          "prf": "org.kya-os/proof.v1",
+          "alg": "EdDSA",
+          "did": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+          "kid": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz#z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+          "audience": "did:key:z6MkpdiACd8WP1Fo79XkwdWYobFiNQtL9dWxr47zkxfiL6rp",
+          "nonce": "Zi0yLW5vbmNlLTAwMTU",
+          "created": 1780272000,
+          "expires": 1780272060,
+          "requestHash": "sha-256=:SLDK1O9OYO9nZhIru+5jNp2Xn4vnFfvEDFNR2EvhPAQ=:",
+          "cnf": {
+            "jkt": "Z2ycZDSYZpAPVs2VYHdRU1vOrnkQQQhoK38mAQFaUnM"
+          },
+          "jws": "eyJhbGciOiJFZERTQSIsImtpZCI6ImRpZDprZXk6ejZNa3RBajZqVXdjMVMzWERpZmFRaXU4ZUF3b1pQWGR3Q0M4cXVXd1hNQ3lwekp6I3o2TWt0QWo2alV3YzFTM1hEaWZhUWl1OGVBd29aUFhkd0NDOHF1V3dYTUN5cHpKeiJ9..NM10atyMWBMeWbffHzLzgCPqWaCRjiTUV_uhTb9ZyRqgv8nHl7zRU5g7SHJPWvNJZJcltnvYlTpxhotsXJoaCQ"
+        },
+        "chain": [
+          {
+            "@context": [
+              "https://www.w3.org/ns/credentials/v2",
+              "https://w3id.org/security/zcap/v1",
+              "https://kya-os.org/ns/delegation/v1"
+            ],
+            "id": "urn:zcap:00000000-0000-4000-8000-00000000f300",
+            "type": [
+              "VerifiableCredential",
+              "DelegationCredential"
+            ],
+            "issuer": "did:key:z6Mkq3Bbq2EiVri4rJQhD8x5NdDpqHKNtuZoBGVhcyRnUTbb",
+            "validFrom": "2026-01-01T00:00:00Z",
+            "validUntil": "2027-01-01T00:00:00Z",
+            "credentialSubject": {
+              "id": "urn:zcap:00000000-0000-4000-8000-00000000f300",
+              "invoker": "did:key:z6MkpagnGTM3Ci2aLdBpE9WgHcBWwtBY8AnwJJpCDFDts2xb",
+              "parentCapability": "did:key:z6MkpdiACd8WP1Fo79XkwdWYobFiNQtL9dWxr47zkxfiL6rp",
+              "invocationTarget": "did:key:z6MkpdiACd8WP1Fo79XkwdWYobFiNQtL9dWxr47zkxfiL6rp",
+              "allowedAction": [
+                "read:orders",
+                "write:orders",
+                "read:catalog"
+              ],
+              "caveats": [
+                {
+                  "type": "MaxAmount",
+                  "limit": "1000.00",
+                  "currency": "USD"
+                },
+                {
+                  "type": "ValidUntil",
+                  "date": "2027-01-01T00:00:00Z"
+                }
+              ]
+            },
+            "credentialStatus": {
+              "id": "https://owner.example/status/1#1",
+              "type": "BitstringStatusListEntry",
+              "statusPurpose": "revocation",
+              "statusListIndex": "1",
+              "statusListCredential": "https://owner.example/status/1"
+            },
+            "proof": {
+              "type": "DataIntegrityProof",
+              "cryptosuite": "eddsa-jcs-2022",
+              "created": "2026-01-01T00:00:01Z",
+              "verificationMethod": "did:key:z6Mkq3Bbq2EiVri4rJQhD8x5NdDpqHKNtuZoBGVhcyRnUTbb#z6Mkq3Bbq2EiVri4rJQhD8x5NdDpqHKNtuZoBGVhcyRnUTbb",
+              "proofPurpose": "assertionMethod",
+              "proofValue": "z5b8u83CaSYMXLyj1CussH6ivLH192WQeVSFthLRyYjmfRU8sjHGQDRFRkH9Gyeu2eLCcVGu2pea1WWLdCNsqJTjr"
+            }
+          },
+          {
+            "@context": [
+              "https://www.w3.org/ns/credentials/v2",
+              "https://w3id.org/security/zcap/v1",
+              "https://kya-os.org/ns/delegation/v1"
+            ],
+            "id": "urn:zcap:00000000-0000-4000-8000-00000000f301",
+            "type": [
+              "VerifiableCredential",
+              "DelegationCredential"
+            ],
+            "issuer": "did:key:z6MkpagnGTM3Ci2aLdBpE9WgHcBWwtBY8AnwJJpCDFDts2xb",
+            "validFrom": "2026-01-01T00:00:00Z",
+            "validUntil": "2026-12-01T00:00:00Z",
+            "credentialSubject": {
+              "id": "urn:zcap:00000000-0000-4000-8000-00000000f301",
+              "invoker": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+              "parentCapability": "urn:zcap:00000000-0000-4000-8000-00000000f300",
+              "invocationTarget": "did:key:z6MkpdiACd8WP1Fo79XkwdWYobFiNQtL9dWxr47zkxfiL6rp",
+              "allowedAction": [
+                "read:orders",
+                "write:orders"
+              ],
+              "caveats": [
+                {
+                  "type": "MaxAmount",
+                  "limit": "500.00",
+                  "currency": "USD"
+                },
+                {
+                  "type": "ValidUntil",
+                  "date": "2026-12-01T00:00:00Z"
+                }
+              ]
+            },
+            "credentialStatus": {
+              "id": "https://parent.example/status/1#1",
+              "type": "BitstringStatusListEntry",
+              "statusPurpose": "revocation",
+              "statusListIndex": "1",
+              "statusListCredential": "https://parent.example/status/1"
+            },
+            "proof": {
+              "type": "DataIntegrityProof",
+              "cryptosuite": "eddsa-jcs-2022",
+              "created": "2026-01-01T00:00:01Z",
+              "verificationMethod": "did:key:z6MkpagnGTM3Ci2aLdBpE9WgHcBWwtBY8AnwJJpCDFDts2xb#z6MkpagnGTM3Ci2aLdBpE9WgHcBWwtBY8AnwJJpCDFDts2xb",
+              "proofPurpose": "assertionMethod",
+              "proofValue": "z5z9idj8Pwr9jC8wT7r9bNaGdZyicWGBvz6UZb5dfLucNBr4DvnnEWSmjgDD92m2xyViGsjFKFChAhCi4gok6Mbkr"
+            }
+          }
+        ],
+        "request": {
+          "method": "tools/call",
+          "params": {
+            "name": "lookup_order",
+            "arguments": {
+              "orderId": "ORD-1001"
+            },
+            "_meta": {
+              "org.kya-os/request-proof": "stripped before hashing"
+            }
+          }
+        },
+        "card": {
+          "id": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+          "entityType": "agent",
+          "name": "orders-agent",
+          "kid": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz#z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+          "capabilities": [
+            {
+              "name": "read:orders",
+              "attestations": [
+                {
+                  "vc": {
+                    "@context": [
+                      "https://www.w3.org/ns/credentials/v2",
+                      "https://helixid.io/contexts/v1"
+                    ],
+                    "id": "urn:uuid:00000000-0000-4000-8000-0000000f2001",
+                    "type": [
+                      "VerifiableCredential",
+                      "CapabilityAttestationCredential"
+                    ],
+                    "issuer": "did:key:z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P",
+                    "validFrom": "2026-01-01T00:00:00Z",
+                    "validUntil": "2026-12-31T00:00:00Z",
+                    "credentialSubject": {
+                      "id": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+                      "capability": "read:orders"
+                    },
+                    "credentialStatus": {
+                      "id": "https://helix.example/status/1#1",
+                      "type": "BitstringStatusListEntry",
+                      "statusPurpose": "revocation",
+                      "statusListIndex": "1",
+                      "statusListCredential": "https://helix.example/status/1"
+                    },
+                    "proof": {
+                      "type": "DataIntegrityProof",
+                      "cryptosuite": "eddsa-jcs-2022",
+                      "created": "2026-01-01T00:00:01Z",
+                      "verificationMethod": "did:key:z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P#z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P",
+                      "proofPurpose": "assertionMethod",
+                      "proofValue": "zhtkQ8KW69miAa2ys4sJYhq46Z4JJyq3fUHRcbvke85PmxgqAR5WKbQunzZc7JeC3CrqHDi5Ct9syQHccP2ZDEjs"
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "name": "write:orders",
+              "attestations": [
+                {
+                  "vc": {
+                    "@context": [
+                      "https://www.w3.org/ns/credentials/v2",
+                      "https://helixid.io/contexts/v1"
+                    ],
+                    "id": "urn:uuid:00000000-0000-4000-8000-0000000f2002",
+                    "type": [
+                      "VerifiableCredential",
+                      "CapabilityAttestationCredential"
+                    ],
+                    "issuer": "did:key:z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P",
+                    "validFrom": "2026-01-01T00:00:00Z",
+                    "validUntil": "2026-12-31T00:00:00Z",
+                    "credentialSubject": {
+                      "id": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+                      "capability": "write:orders"
+                    },
+                    "credentialStatus": {
+                      "id": "https://helix.example/status/1#2",
+                      "type": "BitstringStatusListEntry",
+                      "statusPurpose": "revocation",
+                      "statusListIndex": "2",
+                      "statusListCredential": "https://helix.example/status/1"
+                    },
+                    "proof": {
+                      "type": "DataIntegrityProof",
+                      "cryptosuite": "eddsa-jcs-2022",
+                      "created": "2026-01-01T00:00:01Z",
+                      "verificationMethod": "did:key:z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P#z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P",
+                      "proofPurpose": "assertionMethod",
+                      "proofValue": "z4nwMYMoveEVoFthDXhobmW3fZFgkbBVuerRd55WDJNGdhgbVZYwtQ3gdg12aK5k9xhEVNuPDB8LHk515xkNzV32r"
+                    }
+                  }
+                }
+              ]
+            }
+          ],
+          "responsibleParty": "did:key:z6Mkq3Bbq2EiVri4rJQhD8x5NdDpqHKNtuZoBGVhcyRnUTbb",
+          "proofProfile": "org.kya-os/proof.v1"
+        }
+      },
+      "seams": {
+        "resolveDid": "documents",
+        "resolveDidKeys": "documents",
+        "fetchStatusList": "lists",
+        "nonceStore": "fresh",
+        "clock": "fixed",
+        "trustedIssuers": "*",
+        "resolveCard": "missing"
+      },
+      "options": {
+        "expectedAudience": "did:key:z6MkpdiACd8WP1Fo79XkwdWYobFiNQtL9dWxr47zkxfiL6rp",
+        "resource": "did:key:z6MkpdiACd8WP1Fo79XkwdWYobFiNQtL9dWxr47zkxfiL6rp",
+        "tokenCnfJkt": "Z2ycZDSYZpAPVs2VYHdRU1vOrnkQQQhoK38mAQFaUnM"
+      },
+      "now": 1780272000000,
+      "expected": {
+        "ok": true,
+        "level": "L3",
+        "effectiveScopes": [
+          "read:orders",
+          "write:orders"
+        ],
+        "reasons": [],
+        "chainSummary": {
+          "depth": 2,
+          "responsibleParty": "did:key:z6Mkq3Bbq2EiVri4rJQhD8x5NdDpqHKNtuZoBGVhcyRnUTbb",
+          "leafInvoker": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+          "invocationTarget": "did:key:z6MkpdiACd8WP1Fo79XkwdWYobFiNQtL9dWxr47zkxfiL6rp",
+          "allowedAction": [
+            "read:orders",
+            "write:orders"
+          ],
+          "fresh": true
+        }
+      }
+    },
+    {
+      "name": "revoked_attestation_demotes",
+      "description": "a revoked attestation collapses its capability to unverified: L1, that scope gone",
+      "input": {
+        "proof": {
+          "prf": "org.kya-os/proof.v1",
+          "alg": "EdDSA",
+          "did": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+          "kid": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz#z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+          "audience": "did:key:z6MkpdiACd8WP1Fo79XkwdWYobFiNQtL9dWxr47zkxfiL6rp",
+          "nonce": "Zi0yLW5vbmNlLTAwMTY",
+          "created": 1780272000,
+          "expires": 1780272060,
+          "requestHash": "sha-256=:SLDK1O9OYO9nZhIru+5jNp2Xn4vnFfvEDFNR2EvhPAQ=:",
+          "jws": "eyJhbGciOiJFZERTQSIsImtpZCI6ImRpZDprZXk6ejZNa3RBajZqVXdjMVMzWERpZmFRaXU4ZUF3b1pQWGR3Q0M4cXVXd1hNQ3lwekp6I3o2TWt0QWo2alV3YzFTM1hEaWZhUWl1OGVBd29aUFhkd0NDOHF1V3dYTUN5cHpKeiJ9..8dBr5Eu9Im_TJ2SXfE4WjXrEpNAfwD8G9wzb_9tFurT1UbhIoeXpTNZ5LIWL0mFqnsgAWytctRspPolwuaD7CA"
+        },
+        "chain": [
+          {
+            "@context": [
+              "https://www.w3.org/ns/credentials/v2",
+              "https://w3id.org/security/zcap/v1",
+              "https://kya-os.org/ns/delegation/v1"
+            ],
+            "id": "urn:zcap:00000000-0000-4000-8000-00000000f300",
+            "type": [
+              "VerifiableCredential",
+              "DelegationCredential"
+            ],
+            "issuer": "did:key:z6Mkq3Bbq2EiVri4rJQhD8x5NdDpqHKNtuZoBGVhcyRnUTbb",
+            "validFrom": "2026-01-01T00:00:00Z",
+            "validUntil": "2027-01-01T00:00:00Z",
+            "credentialSubject": {
+              "id": "urn:zcap:00000000-0000-4000-8000-00000000f300",
+              "invoker": "did:key:z6MkpagnGTM3Ci2aLdBpE9WgHcBWwtBY8AnwJJpCDFDts2xb",
+              "parentCapability": "did:key:z6MkpdiACd8WP1Fo79XkwdWYobFiNQtL9dWxr47zkxfiL6rp",
+              "invocationTarget": "did:key:z6MkpdiACd8WP1Fo79XkwdWYobFiNQtL9dWxr47zkxfiL6rp",
+              "allowedAction": [
+                "read:orders",
+                "write:orders",
+                "read:catalog"
+              ],
+              "caveats": [
+                {
+                  "type": "MaxAmount",
+                  "limit": "1000.00",
+                  "currency": "USD"
+                },
+                {
+                  "type": "ValidUntil",
+                  "date": "2027-01-01T00:00:00Z"
+                }
+              ]
+            },
+            "credentialStatus": {
+              "id": "https://owner.example/status/1#1",
+              "type": "BitstringStatusListEntry",
+              "statusPurpose": "revocation",
+              "statusListIndex": "1",
+              "statusListCredential": "https://owner.example/status/1"
+            },
+            "proof": {
+              "type": "DataIntegrityProof",
+              "cryptosuite": "eddsa-jcs-2022",
+              "created": "2026-01-01T00:00:01Z",
+              "verificationMethod": "did:key:z6Mkq3Bbq2EiVri4rJQhD8x5NdDpqHKNtuZoBGVhcyRnUTbb#z6Mkq3Bbq2EiVri4rJQhD8x5NdDpqHKNtuZoBGVhcyRnUTbb",
+              "proofPurpose": "assertionMethod",
+              "proofValue": "z5b8u83CaSYMXLyj1CussH6ivLH192WQeVSFthLRyYjmfRU8sjHGQDRFRkH9Gyeu2eLCcVGu2pea1WWLdCNsqJTjr"
+            }
+          },
+          {
+            "@context": [
+              "https://www.w3.org/ns/credentials/v2",
+              "https://w3id.org/security/zcap/v1",
+              "https://kya-os.org/ns/delegation/v1"
+            ],
+            "id": "urn:zcap:00000000-0000-4000-8000-00000000f301",
+            "type": [
+              "VerifiableCredential",
+              "DelegationCredential"
+            ],
+            "issuer": "did:key:z6MkpagnGTM3Ci2aLdBpE9WgHcBWwtBY8AnwJJpCDFDts2xb",
+            "validFrom": "2026-01-01T00:00:00Z",
+            "validUntil": "2026-12-01T00:00:00Z",
+            "credentialSubject": {
+              "id": "urn:zcap:00000000-0000-4000-8000-00000000f301",
+              "invoker": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+              "parentCapability": "urn:zcap:00000000-0000-4000-8000-00000000f300",
+              "invocationTarget": "did:key:z6MkpdiACd8WP1Fo79XkwdWYobFiNQtL9dWxr47zkxfiL6rp",
+              "allowedAction": [
+                "read:orders",
+                "write:orders"
+              ],
+              "caveats": [
+                {
+                  "type": "MaxAmount",
+                  "limit": "500.00",
+                  "currency": "USD"
+                },
+                {
+                  "type": "ValidUntil",
+                  "date": "2026-12-01T00:00:00Z"
+                }
+              ]
+            },
+            "credentialStatus": {
+              "id": "https://parent.example/status/1#1",
+              "type": "BitstringStatusListEntry",
+              "statusPurpose": "revocation",
+              "statusListIndex": "1",
+              "statusListCredential": "https://parent.example/status/1"
+            },
+            "proof": {
+              "type": "DataIntegrityProof",
+              "cryptosuite": "eddsa-jcs-2022",
+              "created": "2026-01-01T00:00:01Z",
+              "verificationMethod": "did:key:z6MkpagnGTM3Ci2aLdBpE9WgHcBWwtBY8AnwJJpCDFDts2xb#z6MkpagnGTM3Ci2aLdBpE9WgHcBWwtBY8AnwJJpCDFDts2xb",
+              "proofPurpose": "assertionMethod",
+              "proofValue": "z5z9idj8Pwr9jC8wT7r9bNaGdZyicWGBvz6UZb5dfLucNBr4DvnnEWSmjgDD92m2xyViGsjFKFChAhCi4gok6Mbkr"
+            }
+          }
+        ],
+        "request": {
+          "method": "tools/call",
+          "params": {
+            "name": "lookup_order",
+            "arguments": {
+              "orderId": "ORD-1001"
+            },
+            "_meta": {
+              "org.kya-os/request-proof": "stripped before hashing"
+            }
+          }
+        },
+        "card": {
+          "id": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+          "entityType": "agent",
+          "name": "orders-agent",
+          "kid": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz#z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+          "capabilities": [
+            {
+              "name": "read:orders",
+              "attestations": [
+                {
+                  "vc": {
+                    "@context": [
+                      "https://www.w3.org/ns/credentials/v2",
+                      "https://helixid.io/contexts/v1"
+                    ],
+                    "id": "urn:uuid:00000000-0000-4000-8000-0000000f2008",
+                    "type": [
+                      "VerifiableCredential",
+                      "CapabilityAttestationCredential"
+                    ],
+                    "issuer": "did:key:z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P",
+                    "validFrom": "2026-01-01T00:00:00Z",
+                    "validUntil": "2026-12-31T00:00:00Z",
+                    "credentialSubject": {
+                      "id": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+                      "capability": "read:orders"
+                    },
+                    "credentialStatus": {
+                      "id": "https://helix.example/status/1#8",
+                      "type": "BitstringStatusListEntry",
+                      "statusPurpose": "revocation",
+                      "statusListIndex": "8",
+                      "statusListCredential": "https://helix.example/status/1"
+                    },
+                    "proof": {
+                      "type": "DataIntegrityProof",
+                      "cryptosuite": "eddsa-jcs-2022",
+                      "created": "2026-01-01T00:00:01Z",
+                      "verificationMethod": "did:key:z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P#z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P",
+                      "proofPurpose": "assertionMethod",
+                      "proofValue": "z5EsaNaT8kRzACFNQmGcXZ8brE5Q4kKkgmUTFHRKcp1waTWgWxiWM5W7cWyeT4fNsJZ8y7P8SNP6KE8fmRBXu9oSn"
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "name": "write:orders",
+              "attestations": [
+                {
+                  "vc": {
+                    "@context": [
+                      "https://www.w3.org/ns/credentials/v2",
+                      "https://helixid.io/contexts/v1"
+                    ],
+                    "id": "urn:uuid:00000000-0000-4000-8000-0000000f2002",
+                    "type": [
+                      "VerifiableCredential",
+                      "CapabilityAttestationCredential"
+                    ],
+                    "issuer": "did:key:z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P",
+                    "validFrom": "2026-01-01T00:00:00Z",
+                    "validUntil": "2026-12-31T00:00:00Z",
+                    "credentialSubject": {
+                      "id": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+                      "capability": "write:orders"
+                    },
+                    "credentialStatus": {
+                      "id": "https://helix.example/status/1#2",
+                      "type": "BitstringStatusListEntry",
+                      "statusPurpose": "revocation",
+                      "statusListIndex": "2",
+                      "statusListCredential": "https://helix.example/status/1"
+                    },
+                    "proof": {
+                      "type": "DataIntegrityProof",
+                      "cryptosuite": "eddsa-jcs-2022",
+                      "created": "2026-01-01T00:00:01Z",
+                      "verificationMethod": "did:key:z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P#z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P",
+                      "proofPurpose": "assertionMethod",
+                      "proofValue": "z4nwMYMoveEVoFthDXhobmW3fZFgkbBVuerRd55WDJNGdhgbVZYwtQ3gdg12aK5k9xhEVNuPDB8LHk515xkNzV32r"
+                    }
+                  }
+                }
+              ]
+            }
+          ],
+          "responsibleParty": "did:key:z6Mkq3Bbq2EiVri4rJQhD8x5NdDpqHKNtuZoBGVhcyRnUTbb",
+          "proofProfile": "org.kya-os/proof.v1"
+        }
+      },
+      "seams": {
+        "resolveDid": "documents",
+        "resolveDidKeys": "documents",
+        "fetchStatusList": "lists",
+        "nonceStore": "fresh",
+        "clock": "fixed",
+        "trustedIssuers": "*",
+        "resolveCard": "missing"
+      },
+      "options": {
+        "expectedAudience": "did:key:z6MkpdiACd8WP1Fo79XkwdWYobFiNQtL9dWxr47zkxfiL6rp",
+        "resource": "did:key:z6MkpdiACd8WP1Fo79XkwdWYobFiNQtL9dWxr47zkxfiL6rp"
+      },
+      "now": 1780272000000,
+      "expected": {
+        "ok": true,
+        "level": "L1",
+        "effectiveScopes": [
+          "write:orders"
+        ],
+        "reasons": [],
+        "chainSummary": {
+          "depth": 2,
+          "responsibleParty": "did:key:z6Mkq3Bbq2EiVri4rJQhD8x5NdDpqHKNtuZoBGVhcyRnUTbb",
+          "leafInvoker": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+          "invocationTarget": "did:key:z6MkpdiACd8WP1Fo79XkwdWYobFiNQtL9dWxr47zkxfiL6rp",
+          "allowedAction": [
+            "read:orders",
+            "write:orders"
+          ],
+          "fresh": true
+        }
+      }
+    },
+    {
+      "name": "no_responsible_party_on_card",
+      "description": "a card without responsibleParty is not gated on the root issuer",
+      "input": {
+        "proof": {
+          "prf": "org.kya-os/proof.v1",
+          "alg": "EdDSA",
+          "did": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+          "kid": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz#z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+          "audience": "did:key:z6MkpdiACd8WP1Fo79XkwdWYobFiNQtL9dWxr47zkxfiL6rp",
+          "nonce": "Zi0yLW5vbmNlLTAwMTc",
+          "created": 1780272000,
+          "expires": 1780272060,
+          "requestHash": "sha-256=:SLDK1O9OYO9nZhIru+5jNp2Xn4vnFfvEDFNR2EvhPAQ=:",
+          "jws": "eyJhbGciOiJFZERTQSIsImtpZCI6ImRpZDprZXk6ejZNa3RBajZqVXdjMVMzWERpZmFRaXU4ZUF3b1pQWGR3Q0M4cXVXd1hNQ3lwekp6I3o2TWt0QWo2alV3YzFTM1hEaWZhUWl1OGVBd29aUFhkd0NDOHF1V3dYTUN5cHpKeiJ9..XYB2FoQpT_YkANCnyB9jfYlaFTNzW0AZzPwak7iYwpC2tRKRbFcGw38X4TQuZVdufFgrr7cyHeVhAjRwDcOGBw"
+        },
+        "chain": [
+          {
+            "@context": [
+              "https://www.w3.org/ns/credentials/v2",
+              "https://w3id.org/security/zcap/v1",
+              "https://kya-os.org/ns/delegation/v1"
+            ],
+            "id": "urn:zcap:00000000-0000-4000-8000-00000000f300",
+            "type": [
+              "VerifiableCredential",
+              "DelegationCredential"
+            ],
+            "issuer": "did:key:z6Mkq3Bbq2EiVri4rJQhD8x5NdDpqHKNtuZoBGVhcyRnUTbb",
+            "validFrom": "2026-01-01T00:00:00Z",
+            "validUntil": "2027-01-01T00:00:00Z",
+            "credentialSubject": {
+              "id": "urn:zcap:00000000-0000-4000-8000-00000000f300",
+              "invoker": "did:key:z6MkpagnGTM3Ci2aLdBpE9WgHcBWwtBY8AnwJJpCDFDts2xb",
+              "parentCapability": "did:key:z6MkpdiACd8WP1Fo79XkwdWYobFiNQtL9dWxr47zkxfiL6rp",
+              "invocationTarget": "did:key:z6MkpdiACd8WP1Fo79XkwdWYobFiNQtL9dWxr47zkxfiL6rp",
+              "allowedAction": [
+                "read:orders",
+                "write:orders",
+                "read:catalog"
+              ],
+              "caveats": [
+                {
+                  "type": "MaxAmount",
+                  "limit": "1000.00",
+                  "currency": "USD"
+                },
+                {
+                  "type": "ValidUntil",
+                  "date": "2027-01-01T00:00:00Z"
+                }
+              ]
+            },
+            "credentialStatus": {
+              "id": "https://owner.example/status/1#1",
+              "type": "BitstringStatusListEntry",
+              "statusPurpose": "revocation",
+              "statusListIndex": "1",
+              "statusListCredential": "https://owner.example/status/1"
+            },
+            "proof": {
+              "type": "DataIntegrityProof",
+              "cryptosuite": "eddsa-jcs-2022",
+              "created": "2026-01-01T00:00:01Z",
+              "verificationMethod": "did:key:z6Mkq3Bbq2EiVri4rJQhD8x5NdDpqHKNtuZoBGVhcyRnUTbb#z6Mkq3Bbq2EiVri4rJQhD8x5NdDpqHKNtuZoBGVhcyRnUTbb",
+              "proofPurpose": "assertionMethod",
+              "proofValue": "z5b8u83CaSYMXLyj1CussH6ivLH192WQeVSFthLRyYjmfRU8sjHGQDRFRkH9Gyeu2eLCcVGu2pea1WWLdCNsqJTjr"
+            }
+          },
+          {
+            "@context": [
+              "https://www.w3.org/ns/credentials/v2",
+              "https://w3id.org/security/zcap/v1",
+              "https://kya-os.org/ns/delegation/v1"
+            ],
+            "id": "urn:zcap:00000000-0000-4000-8000-00000000f301",
+            "type": [
+              "VerifiableCredential",
+              "DelegationCredential"
+            ],
+            "issuer": "did:key:z6MkpagnGTM3Ci2aLdBpE9WgHcBWwtBY8AnwJJpCDFDts2xb",
+            "validFrom": "2026-01-01T00:00:00Z",
+            "validUntil": "2026-12-01T00:00:00Z",
+            "credentialSubject": {
+              "id": "urn:zcap:00000000-0000-4000-8000-00000000f301",
+              "invoker": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+              "parentCapability": "urn:zcap:00000000-0000-4000-8000-00000000f300",
+              "invocationTarget": "did:key:z6MkpdiACd8WP1Fo79XkwdWYobFiNQtL9dWxr47zkxfiL6rp",
+              "allowedAction": [
+                "read:orders",
+                "write:orders"
+              ],
+              "caveats": [
+                {
+                  "type": "MaxAmount",
+                  "limit": "500.00",
+                  "currency": "USD"
+                },
+                {
+                  "type": "ValidUntil",
+                  "date": "2026-12-01T00:00:00Z"
+                }
+              ]
+            },
+            "credentialStatus": {
+              "id": "https://parent.example/status/1#1",
+              "type": "BitstringStatusListEntry",
+              "statusPurpose": "revocation",
+              "statusListIndex": "1",
+              "statusListCredential": "https://parent.example/status/1"
+            },
+            "proof": {
+              "type": "DataIntegrityProof",
+              "cryptosuite": "eddsa-jcs-2022",
+              "created": "2026-01-01T00:00:01Z",
+              "verificationMethod": "did:key:z6MkpagnGTM3Ci2aLdBpE9WgHcBWwtBY8AnwJJpCDFDts2xb#z6MkpagnGTM3Ci2aLdBpE9WgHcBWwtBY8AnwJJpCDFDts2xb",
+              "proofPurpose": "assertionMethod",
+              "proofValue": "z5z9idj8Pwr9jC8wT7r9bNaGdZyicWGBvz6UZb5dfLucNBr4DvnnEWSmjgDD92m2xyViGsjFKFChAhCi4gok6Mbkr"
+            }
+          }
+        ],
+        "request": {
+          "method": "tools/call",
+          "params": {
+            "name": "lookup_order",
+            "arguments": {
+              "orderId": "ORD-1001"
+            },
+            "_meta": {
+              "org.kya-os/request-proof": "stripped before hashing"
+            }
+          }
+        },
+        "card": {
+          "id": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+          "entityType": "agent",
+          "name": "orders-agent",
+          "kid": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz#z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+          "capabilities": [
+            {
+              "name": "read:orders",
+              "attestations": [
+                {
+                  "vc": {
+                    "@context": [
+                      "https://www.w3.org/ns/credentials/v2",
+                      "https://helixid.io/contexts/v1"
+                    ],
+                    "id": "urn:uuid:00000000-0000-4000-8000-0000000f2001",
+                    "type": [
+                      "VerifiableCredential",
+                      "CapabilityAttestationCredential"
+                    ],
+                    "issuer": "did:key:z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P",
+                    "validFrom": "2026-01-01T00:00:00Z",
+                    "validUntil": "2026-12-31T00:00:00Z",
+                    "credentialSubject": {
+                      "id": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+                      "capability": "read:orders"
+                    },
+                    "credentialStatus": {
+                      "id": "https://helix.example/status/1#1",
+                      "type": "BitstringStatusListEntry",
+                      "statusPurpose": "revocation",
+                      "statusListIndex": "1",
+                      "statusListCredential": "https://helix.example/status/1"
+                    },
+                    "proof": {
+                      "type": "DataIntegrityProof",
+                      "cryptosuite": "eddsa-jcs-2022",
+                      "created": "2026-01-01T00:00:01Z",
+                      "verificationMethod": "did:key:z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P#z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P",
+                      "proofPurpose": "assertionMethod",
+                      "proofValue": "zhtkQ8KW69miAa2ys4sJYhq46Z4JJyq3fUHRcbvke85PmxgqAR5WKbQunzZc7JeC3CrqHDi5Ct9syQHccP2ZDEjs"
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "name": "write:orders",
+              "attestations": [
+                {
+                  "vc": {
+                    "@context": [
+                      "https://www.w3.org/ns/credentials/v2",
+                      "https://helixid.io/contexts/v1"
+                    ],
+                    "id": "urn:uuid:00000000-0000-4000-8000-0000000f2002",
+                    "type": [
+                      "VerifiableCredential",
+                      "CapabilityAttestationCredential"
+                    ],
+                    "issuer": "did:key:z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P",
+                    "validFrom": "2026-01-01T00:00:00Z",
+                    "validUntil": "2026-12-31T00:00:00Z",
+                    "credentialSubject": {
+                      "id": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+                      "capability": "write:orders"
+                    },
+                    "credentialStatus": {
+                      "id": "https://helix.example/status/1#2",
+                      "type": "BitstringStatusListEntry",
+                      "statusPurpose": "revocation",
+                      "statusListIndex": "2",
+                      "statusListCredential": "https://helix.example/status/1"
+                    },
+                    "proof": {
+                      "type": "DataIntegrityProof",
+                      "cryptosuite": "eddsa-jcs-2022",
+                      "created": "2026-01-01T00:00:01Z",
+                      "verificationMethod": "did:key:z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P#z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P",
+                      "proofPurpose": "assertionMethod",
+                      "proofValue": "z4nwMYMoveEVoFthDXhobmW3fZFgkbBVuerRd55WDJNGdhgbVZYwtQ3gdg12aK5k9xhEVNuPDB8LHk515xkNzV32r"
+                    }
+                  }
+                }
+              ]
+            }
+          ],
+          "responsibleParty": "did:key:z6Mkq3Bbq2EiVri4rJQhD8x5NdDpqHKNtuZoBGVhcyRnUTbb",
+          "proofProfile": "org.kya-os/proof.v1"
+        }
+      },
+      "seams": {
+        "resolveDid": "documents",
+        "resolveDidKeys": "documents",
+        "fetchStatusList": "lists",
+        "nonceStore": "fresh",
+        "clock": "fixed",
+        "trustedIssuers": "*",
+        "resolveCard": "missing"
+      },
+      "options": {
+        "expectedAudience": "did:key:z6MkpdiACd8WP1Fo79XkwdWYobFiNQtL9dWxr47zkxfiL6rp",
+        "resource": "did:key:z6MkpdiACd8WP1Fo79XkwdWYobFiNQtL9dWxr47zkxfiL6rp"
+      },
+      "now": 1780272000000,
+      "expected": {
+        "ok": true,
+        "level": "L3",
+        "effectiveScopes": [
+          "read:orders",
+          "write:orders"
+        ],
+        "reasons": [],
+        "chainSummary": {
+          "depth": 2,
+          "responsibleParty": "did:key:z6Mkq3Bbq2EiVri4rJQhD8x5NdDpqHKNtuZoBGVhcyRnUTbb",
+          "leafInvoker": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+          "invocationTarget": "did:key:z6MkpdiACd8WP1Fo79XkwdWYobFiNQtL9dWxr47zkxfiL6rp",
+          "allowedAction": [
+            "read:orders",
+            "write:orders"
+          ],
+          "fresh": true
+        }
+      }
+    },
+    {
+      "name": "resource_owner_pinned",
+      "description": "the verifier pins the owner as the resource owner",
+      "input": {
+        "proof": {
+          "prf": "org.kya-os/proof.v1",
+          "alg": "EdDSA",
+          "did": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+          "kid": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz#z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+          "audience": "did:key:z6MkpdiACd8WP1Fo79XkwdWYobFiNQtL9dWxr47zkxfiL6rp",
+          "nonce": "Zi0yLW5vbmNlLTAwMTg",
+          "created": 1780272000,
+          "expires": 1780272060,
+          "requestHash": "sha-256=:SLDK1O9OYO9nZhIru+5jNp2Xn4vnFfvEDFNR2EvhPAQ=:",
+          "jws": "eyJhbGciOiJFZERTQSIsImtpZCI6ImRpZDprZXk6ejZNa3RBajZqVXdjMVMzWERpZmFRaXU4ZUF3b1pQWGR3Q0M4cXVXd1hNQ3lwekp6I3o2TWt0QWo2alV3YzFTM1hEaWZhUWl1OGVBd29aUFhkd0NDOHF1V3dYTUN5cHpKeiJ9..nfmzEZ7OAXw40uEgT-j-nkn5IhsRc3b-M5580WpIlGgGE3MA-dccg2FLfo5K7A1J93ZRfMd_EGAfGv8VmSpCCQ"
+        },
+        "chain": [
+          {
+            "@context": [
+              "https://www.w3.org/ns/credentials/v2",
+              "https://w3id.org/security/zcap/v1",
+              "https://kya-os.org/ns/delegation/v1"
+            ],
+            "id": "urn:zcap:00000000-0000-4000-8000-00000000f300",
+            "type": [
+              "VerifiableCredential",
+              "DelegationCredential"
+            ],
+            "issuer": "did:key:z6Mkq3Bbq2EiVri4rJQhD8x5NdDpqHKNtuZoBGVhcyRnUTbb",
+            "validFrom": "2026-01-01T00:00:00Z",
+            "validUntil": "2027-01-01T00:00:00Z",
+            "credentialSubject": {
+              "id": "urn:zcap:00000000-0000-4000-8000-00000000f300",
+              "invoker": "did:key:z6MkpagnGTM3Ci2aLdBpE9WgHcBWwtBY8AnwJJpCDFDts2xb",
+              "parentCapability": "did:key:z6MkpdiACd8WP1Fo79XkwdWYobFiNQtL9dWxr47zkxfiL6rp",
+              "invocationTarget": "did:key:z6MkpdiACd8WP1Fo79XkwdWYobFiNQtL9dWxr47zkxfiL6rp",
+              "allowedAction": [
+                "read:orders",
+                "write:orders",
+                "read:catalog"
+              ],
+              "caveats": [
+                {
+                  "type": "MaxAmount",
+                  "limit": "1000.00",
+                  "currency": "USD"
+                },
+                {
+                  "type": "ValidUntil",
+                  "date": "2027-01-01T00:00:00Z"
+                }
+              ]
+            },
+            "credentialStatus": {
+              "id": "https://owner.example/status/1#1",
+              "type": "BitstringStatusListEntry",
+              "statusPurpose": "revocation",
+              "statusListIndex": "1",
+              "statusListCredential": "https://owner.example/status/1"
+            },
+            "proof": {
+              "type": "DataIntegrityProof",
+              "cryptosuite": "eddsa-jcs-2022",
+              "created": "2026-01-01T00:00:01Z",
+              "verificationMethod": "did:key:z6Mkq3Bbq2EiVri4rJQhD8x5NdDpqHKNtuZoBGVhcyRnUTbb#z6Mkq3Bbq2EiVri4rJQhD8x5NdDpqHKNtuZoBGVhcyRnUTbb",
+              "proofPurpose": "assertionMethod",
+              "proofValue": "z5b8u83CaSYMXLyj1CussH6ivLH192WQeVSFthLRyYjmfRU8sjHGQDRFRkH9Gyeu2eLCcVGu2pea1WWLdCNsqJTjr"
+            }
+          },
+          {
+            "@context": [
+              "https://www.w3.org/ns/credentials/v2",
+              "https://w3id.org/security/zcap/v1",
+              "https://kya-os.org/ns/delegation/v1"
+            ],
+            "id": "urn:zcap:00000000-0000-4000-8000-00000000f301",
+            "type": [
+              "VerifiableCredential",
+              "DelegationCredential"
+            ],
+            "issuer": "did:key:z6MkpagnGTM3Ci2aLdBpE9WgHcBWwtBY8AnwJJpCDFDts2xb",
+            "validFrom": "2026-01-01T00:00:00Z",
+            "validUntil": "2026-12-01T00:00:00Z",
+            "credentialSubject": {
+              "id": "urn:zcap:00000000-0000-4000-8000-00000000f301",
+              "invoker": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+              "parentCapability": "urn:zcap:00000000-0000-4000-8000-00000000f300",
+              "invocationTarget": "did:key:z6MkpdiACd8WP1Fo79XkwdWYobFiNQtL9dWxr47zkxfiL6rp",
+              "allowedAction": [
+                "read:orders",
+                "write:orders"
+              ],
+              "caveats": [
+                {
+                  "type": "MaxAmount",
+                  "limit": "500.00",
+                  "currency": "USD"
+                },
+                {
+                  "type": "ValidUntil",
+                  "date": "2026-12-01T00:00:00Z"
+                }
+              ]
+            },
+            "credentialStatus": {
+              "id": "https://parent.example/status/1#1",
+              "type": "BitstringStatusListEntry",
+              "statusPurpose": "revocation",
+              "statusListIndex": "1",
+              "statusListCredential": "https://parent.example/status/1"
+            },
+            "proof": {
+              "type": "DataIntegrityProof",
+              "cryptosuite": "eddsa-jcs-2022",
+              "created": "2026-01-01T00:00:01Z",
+              "verificationMethod": "did:key:z6MkpagnGTM3Ci2aLdBpE9WgHcBWwtBY8AnwJJpCDFDts2xb#z6MkpagnGTM3Ci2aLdBpE9WgHcBWwtBY8AnwJJpCDFDts2xb",
+              "proofPurpose": "assertionMethod",
+              "proofValue": "z5z9idj8Pwr9jC8wT7r9bNaGdZyicWGBvz6UZb5dfLucNBr4DvnnEWSmjgDD92m2xyViGsjFKFChAhCi4gok6Mbkr"
+            }
+          }
+        ],
+        "request": {
+          "method": "tools/call",
+          "params": {
+            "name": "lookup_order",
+            "arguments": {
+              "orderId": "ORD-1001"
+            },
+            "_meta": {
+              "org.kya-os/request-proof": "stripped before hashing"
+            }
+          }
+        },
+        "card": {
+          "id": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+          "entityType": "agent",
+          "name": "orders-agent",
+          "kid": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz#z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+          "capabilities": [
+            {
+              "name": "read:orders",
+              "attestations": [
+                {
+                  "vc": {
+                    "@context": [
+                      "https://www.w3.org/ns/credentials/v2",
+                      "https://helixid.io/contexts/v1"
+                    ],
+                    "id": "urn:uuid:00000000-0000-4000-8000-0000000f2001",
+                    "type": [
+                      "VerifiableCredential",
+                      "CapabilityAttestationCredential"
+                    ],
+                    "issuer": "did:key:z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P",
+                    "validFrom": "2026-01-01T00:00:00Z",
+                    "validUntil": "2026-12-31T00:00:00Z",
+                    "credentialSubject": {
+                      "id": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+                      "capability": "read:orders"
+                    },
+                    "credentialStatus": {
+                      "id": "https://helix.example/status/1#1",
+                      "type": "BitstringStatusListEntry",
+                      "statusPurpose": "revocation",
+                      "statusListIndex": "1",
+                      "statusListCredential": "https://helix.example/status/1"
+                    },
+                    "proof": {
+                      "type": "DataIntegrityProof",
+                      "cryptosuite": "eddsa-jcs-2022",
+                      "created": "2026-01-01T00:00:01Z",
+                      "verificationMethod": "did:key:z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P#z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P",
+                      "proofPurpose": "assertionMethod",
+                      "proofValue": "zhtkQ8KW69miAa2ys4sJYhq46Z4JJyq3fUHRcbvke85PmxgqAR5WKbQunzZc7JeC3CrqHDi5Ct9syQHccP2ZDEjs"
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "name": "write:orders",
+              "attestations": [
+                {
+                  "vc": {
+                    "@context": [
+                      "https://www.w3.org/ns/credentials/v2",
+                      "https://helixid.io/contexts/v1"
+                    ],
+                    "id": "urn:uuid:00000000-0000-4000-8000-0000000f2002",
+                    "type": [
+                      "VerifiableCredential",
+                      "CapabilityAttestationCredential"
+                    ],
+                    "issuer": "did:key:z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P",
+                    "validFrom": "2026-01-01T00:00:00Z",
+                    "validUntil": "2026-12-31T00:00:00Z",
+                    "credentialSubject": {
+                      "id": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+                      "capability": "write:orders"
+                    },
+                    "credentialStatus": {
+                      "id": "https://helix.example/status/1#2",
+                      "type": "BitstringStatusListEntry",
+                      "statusPurpose": "revocation",
+                      "statusListIndex": "2",
+                      "statusListCredential": "https://helix.example/status/1"
+                    },
+                    "proof": {
+                      "type": "DataIntegrityProof",
+                      "cryptosuite": "eddsa-jcs-2022",
+                      "created": "2026-01-01T00:00:01Z",
+                      "verificationMethod": "did:key:z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P#z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P",
+                      "proofPurpose": "assertionMethod",
+                      "proofValue": "z4nwMYMoveEVoFthDXhobmW3fZFgkbBVuerRd55WDJNGdhgbVZYwtQ3gdg12aK5k9xhEVNuPDB8LHk515xkNzV32r"
+                    }
+                  }
+                }
+              ]
+            }
+          ],
+          "responsibleParty": "did:key:z6Mkq3Bbq2EiVri4rJQhD8x5NdDpqHKNtuZoBGVhcyRnUTbb",
+          "proofProfile": "org.kya-os/proof.v1"
+        }
+      },
+      "seams": {
+        "resolveDid": "documents",
+        "resolveDidKeys": "documents",
+        "fetchStatusList": "lists",
+        "nonceStore": "fresh",
+        "clock": "fixed",
+        "trustedIssuers": "*",
+        "resolveCard": "missing"
+      },
+      "options": {
+        "expectedAudience": "did:key:z6MkpdiACd8WP1Fo79XkwdWYobFiNQtL9dWxr47zkxfiL6rp",
+        "resource": "did:key:z6MkpdiACd8WP1Fo79XkwdWYobFiNQtL9dWxr47zkxfiL6rp",
+        "resourceOwner": "did:key:z6Mkq3Bbq2EiVri4rJQhD8x5NdDpqHKNtuZoBGVhcyRnUTbb"
+      },
+      "now": 1780272000000,
+      "expected": {
+        "ok": true,
+        "level": "L3",
+        "effectiveScopes": [
+          "read:orders",
+          "write:orders"
+        ],
+        "reasons": [],
+        "chainSummary": {
+          "depth": 2,
+          "responsibleParty": "did:key:z6Mkq3Bbq2EiVri4rJQhD8x5NdDpqHKNtuZoBGVhcyRnUTbb",
+          "leafInvoker": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+          "invocationTarget": "did:key:z6MkpdiACd8WP1Fo79XkwdWYobFiNQtL9dWxr47zkxfiL6rp",
+          "allowedAction": [
+            "read:orders",
+            "write:orders"
+          ],
+          "fresh": true
+        }
+      }
+    },
+    {
+      "name": "trusted_root_listed",
+      "description": "the root issuer is among the trusted root issuers",
+      "input": {
+        "proof": {
+          "prf": "org.kya-os/proof.v1",
+          "alg": "EdDSA",
+          "did": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+          "kid": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz#z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+          "audience": "did:key:z6MkpdiACd8WP1Fo79XkwdWYobFiNQtL9dWxr47zkxfiL6rp",
+          "nonce": "Zi0yLW5vbmNlLTAwMTk",
+          "created": 1780272000,
+          "expires": 1780272060,
+          "requestHash": "sha-256=:SLDK1O9OYO9nZhIru+5jNp2Xn4vnFfvEDFNR2EvhPAQ=:",
+          "jws": "eyJhbGciOiJFZERTQSIsImtpZCI6ImRpZDprZXk6ejZNa3RBajZqVXdjMVMzWERpZmFRaXU4ZUF3b1pQWGR3Q0M4cXVXd1hNQ3lwekp6I3o2TWt0QWo2alV3YzFTM1hEaWZhUWl1OGVBd29aUFhkd0NDOHF1V3dYTUN5cHpKeiJ9..bVhW0j_zHMQnUtq0DCPU4ZJbnuo4Y7z1cySY-G0NV2wRy9_89gYDAHwmXiReOcnhS0U3HVODqVHmxfSOstpWDg"
+        },
+        "chain": [
+          {
+            "@context": [
+              "https://www.w3.org/ns/credentials/v2",
+              "https://w3id.org/security/zcap/v1",
+              "https://kya-os.org/ns/delegation/v1"
+            ],
+            "id": "urn:zcap:00000000-0000-4000-8000-00000000f300",
+            "type": [
+              "VerifiableCredential",
+              "DelegationCredential"
+            ],
+            "issuer": "did:key:z6Mkq3Bbq2EiVri4rJQhD8x5NdDpqHKNtuZoBGVhcyRnUTbb",
+            "validFrom": "2026-01-01T00:00:00Z",
+            "validUntil": "2027-01-01T00:00:00Z",
+            "credentialSubject": {
+              "id": "urn:zcap:00000000-0000-4000-8000-00000000f300",
+              "invoker": "did:key:z6MkpagnGTM3Ci2aLdBpE9WgHcBWwtBY8AnwJJpCDFDts2xb",
+              "parentCapability": "did:key:z6MkpdiACd8WP1Fo79XkwdWYobFiNQtL9dWxr47zkxfiL6rp",
+              "invocationTarget": "did:key:z6MkpdiACd8WP1Fo79XkwdWYobFiNQtL9dWxr47zkxfiL6rp",
+              "allowedAction": [
+                "read:orders",
+                "write:orders",
+                "read:catalog"
+              ],
+              "caveats": [
+                {
+                  "type": "MaxAmount",
+                  "limit": "1000.00",
+                  "currency": "USD"
+                },
+                {
+                  "type": "ValidUntil",
+                  "date": "2027-01-01T00:00:00Z"
+                }
+              ]
+            },
+            "credentialStatus": {
+              "id": "https://owner.example/status/1#1",
+              "type": "BitstringStatusListEntry",
+              "statusPurpose": "revocation",
+              "statusListIndex": "1",
+              "statusListCredential": "https://owner.example/status/1"
+            },
+            "proof": {
+              "type": "DataIntegrityProof",
+              "cryptosuite": "eddsa-jcs-2022",
+              "created": "2026-01-01T00:00:01Z",
+              "verificationMethod": "did:key:z6Mkq3Bbq2EiVri4rJQhD8x5NdDpqHKNtuZoBGVhcyRnUTbb#z6Mkq3Bbq2EiVri4rJQhD8x5NdDpqHKNtuZoBGVhcyRnUTbb",
+              "proofPurpose": "assertionMethod",
+              "proofValue": "z5b8u83CaSYMXLyj1CussH6ivLH192WQeVSFthLRyYjmfRU8sjHGQDRFRkH9Gyeu2eLCcVGu2pea1WWLdCNsqJTjr"
+            }
+          },
+          {
+            "@context": [
+              "https://www.w3.org/ns/credentials/v2",
+              "https://w3id.org/security/zcap/v1",
+              "https://kya-os.org/ns/delegation/v1"
+            ],
+            "id": "urn:zcap:00000000-0000-4000-8000-00000000f301",
+            "type": [
+              "VerifiableCredential",
+              "DelegationCredential"
+            ],
+            "issuer": "did:key:z6MkpagnGTM3Ci2aLdBpE9WgHcBWwtBY8AnwJJpCDFDts2xb",
+            "validFrom": "2026-01-01T00:00:00Z",
+            "validUntil": "2026-12-01T00:00:00Z",
+            "credentialSubject": {
+              "id": "urn:zcap:00000000-0000-4000-8000-00000000f301",
+              "invoker": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+              "parentCapability": "urn:zcap:00000000-0000-4000-8000-00000000f300",
+              "invocationTarget": "did:key:z6MkpdiACd8WP1Fo79XkwdWYobFiNQtL9dWxr47zkxfiL6rp",
+              "allowedAction": [
+                "read:orders",
+                "write:orders"
+              ],
+              "caveats": [
+                {
+                  "type": "MaxAmount",
+                  "limit": "500.00",
+                  "currency": "USD"
+                },
+                {
+                  "type": "ValidUntil",
+                  "date": "2026-12-01T00:00:00Z"
+                }
+              ]
+            },
+            "credentialStatus": {
+              "id": "https://parent.example/status/1#1",
+              "type": "BitstringStatusListEntry",
+              "statusPurpose": "revocation",
+              "statusListIndex": "1",
+              "statusListCredential": "https://parent.example/status/1"
+            },
+            "proof": {
+              "type": "DataIntegrityProof",
+              "cryptosuite": "eddsa-jcs-2022",
+              "created": "2026-01-01T00:00:01Z",
+              "verificationMethod": "did:key:z6MkpagnGTM3Ci2aLdBpE9WgHcBWwtBY8AnwJJpCDFDts2xb#z6MkpagnGTM3Ci2aLdBpE9WgHcBWwtBY8AnwJJpCDFDts2xb",
+              "proofPurpose": "assertionMethod",
+              "proofValue": "z5z9idj8Pwr9jC8wT7r9bNaGdZyicWGBvz6UZb5dfLucNBr4DvnnEWSmjgDD92m2xyViGsjFKFChAhCi4gok6Mbkr"
+            }
+          }
+        ],
+        "request": {
+          "method": "tools/call",
+          "params": {
+            "name": "lookup_order",
+            "arguments": {
+              "orderId": "ORD-1001"
+            },
+            "_meta": {
+              "org.kya-os/request-proof": "stripped before hashing"
+            }
+          }
+        },
+        "card": {
+          "id": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+          "entityType": "agent",
+          "name": "orders-agent",
+          "kid": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz#z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+          "capabilities": [
+            {
+              "name": "read:orders",
+              "attestations": [
+                {
+                  "vc": {
+                    "@context": [
+                      "https://www.w3.org/ns/credentials/v2",
+                      "https://helixid.io/contexts/v1"
+                    ],
+                    "id": "urn:uuid:00000000-0000-4000-8000-0000000f2001",
+                    "type": [
+                      "VerifiableCredential",
+                      "CapabilityAttestationCredential"
+                    ],
+                    "issuer": "did:key:z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P",
+                    "validFrom": "2026-01-01T00:00:00Z",
+                    "validUntil": "2026-12-31T00:00:00Z",
+                    "credentialSubject": {
+                      "id": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+                      "capability": "read:orders"
+                    },
+                    "credentialStatus": {
+                      "id": "https://helix.example/status/1#1",
+                      "type": "BitstringStatusListEntry",
+                      "statusPurpose": "revocation",
+                      "statusListIndex": "1",
+                      "statusListCredential": "https://helix.example/status/1"
+                    },
+                    "proof": {
+                      "type": "DataIntegrityProof",
+                      "cryptosuite": "eddsa-jcs-2022",
+                      "created": "2026-01-01T00:00:01Z",
+                      "verificationMethod": "did:key:z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P#z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P",
+                      "proofPurpose": "assertionMethod",
+                      "proofValue": "zhtkQ8KW69miAa2ys4sJYhq46Z4JJyq3fUHRcbvke85PmxgqAR5WKbQunzZc7JeC3CrqHDi5Ct9syQHccP2ZDEjs"
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "name": "write:orders",
+              "attestations": [
+                {
+                  "vc": {
+                    "@context": [
+                      "https://www.w3.org/ns/credentials/v2",
+                      "https://helixid.io/contexts/v1"
+                    ],
+                    "id": "urn:uuid:00000000-0000-4000-8000-0000000f2002",
+                    "type": [
+                      "VerifiableCredential",
+                      "CapabilityAttestationCredential"
+                    ],
+                    "issuer": "did:key:z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P",
+                    "validFrom": "2026-01-01T00:00:00Z",
+                    "validUntil": "2026-12-31T00:00:00Z",
+                    "credentialSubject": {
+                      "id": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+                      "capability": "write:orders"
+                    },
+                    "credentialStatus": {
+                      "id": "https://helix.example/status/1#2",
+                      "type": "BitstringStatusListEntry",
+                      "statusPurpose": "revocation",
+                      "statusListIndex": "2",
+                      "statusListCredential": "https://helix.example/status/1"
+                    },
+                    "proof": {
+                      "type": "DataIntegrityProof",
+                      "cryptosuite": "eddsa-jcs-2022",
+                      "created": "2026-01-01T00:00:01Z",
+                      "verificationMethod": "did:key:z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P#z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P",
+                      "proofPurpose": "assertionMethod",
+                      "proofValue": "z4nwMYMoveEVoFthDXhobmW3fZFgkbBVuerRd55WDJNGdhgbVZYwtQ3gdg12aK5k9xhEVNuPDB8LHk515xkNzV32r"
+                    }
+                  }
+                }
+              ]
+            }
+          ],
+          "responsibleParty": "did:key:z6Mkq3Bbq2EiVri4rJQhD8x5NdDpqHKNtuZoBGVhcyRnUTbb",
+          "proofProfile": "org.kya-os/proof.v1"
+        }
+      },
+      "seams": {
+        "resolveDid": "documents",
+        "resolveDidKeys": "documents",
+        "fetchStatusList": "lists",
+        "nonceStore": "fresh",
+        "clock": "fixed",
+        "trustedIssuers": "*",
+        "resolveCard": "missing"
+      },
+      "options": {
+        "expectedAudience": "did:key:z6MkpdiACd8WP1Fo79XkwdWYobFiNQtL9dWxr47zkxfiL6rp",
+        "resource": "did:key:z6MkpdiACd8WP1Fo79XkwdWYobFiNQtL9dWxr47zkxfiL6rp",
+        "trustedRootIssuers": [
+          "did:key:z6Mkq3Bbq2EiVri4rJQhD8x5NdDpqHKNtuZoBGVhcyRnUTbb"
+        ]
+      },
+      "now": 1780272000000,
+      "expected": {
+        "ok": true,
+        "level": "L3",
+        "effectiveScopes": [
+          "read:orders",
+          "write:orders"
+        ],
+        "reasons": [],
+        "chainSummary": {
+          "depth": 2,
+          "responsibleParty": "did:key:z6Mkq3Bbq2EiVri4rJQhD8x5NdDpqHKNtuZoBGVhcyRnUTbb",
+          "leafInvoker": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+          "invocationTarget": "did:key:z6MkpdiACd8WP1Fo79XkwdWYobFiNQtL9dWxr47zkxfiL6rp",
+          "allowedAction": [
+            "read:orders",
+            "write:orders"
+          ],
+          "fresh": true
+        }
+      }
+    }
+  ]
+}

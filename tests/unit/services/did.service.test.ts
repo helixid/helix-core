@@ -1,12 +1,13 @@
 // Copyright 2026 DgVerse LLP
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { DIDService } from '../../../src/services/did/did.service.js';
-import { ErrorCode, HelixError } from '../../../src/core/index.js';
+import { ErrorCode, HelixError, buildDIDDocument, generateKeyPair, hashJson } from '../../../src/core/index.js';
+import { TestAuditTrail } from '../../utils/TestAuditTrail.js';
 
 describe('DIDService Branch Coverage', () => {
   let repository: any;
   let hedera: any;
-  let audit: any;
+  let audit: TestAuditTrail;
   let service: DIDService;
 
   beforeEach(() => {
@@ -23,7 +24,7 @@ describe('DIDService Branch Coverage', () => {
       prepareDIDCreation: vi.fn(),
       submitDIDCreation: vi.fn(),
     };
-    audit = { log: vi.fn() };
+    audit = new TestAuditTrail();
     service = new DIDService(repository, hedera, audit);
   });
 
@@ -104,6 +105,27 @@ describe('DIDService Branch Coverage', () => {
     });
   });
 
+  describe('createDID with DID_METHOD=web: did:web:<domain>:<kind>:<hex>', () => {
+    it('mints agents and services under their kind with a random hex id, the port encoded once', async () => {
+      const web = new DIDService(repository, hedera, audit, undefined, 300, 'web', 'localhost:3680');
+      repository.findDidByPublicKey.mockResolvedValue(null);
+      repository.createDid.mockImplementation(async (input: { id: string; didDocument: unknown }) => ({ ...input, createdAt: new Date() }));
+      const agent = await web.createDID('a'.repeat(64), 'agent', [], 'req-a');
+      const service = await web.createDID('b'.repeat(64), 'service', [], 'req-s');
+      expect(agent.did).toMatch(/^did:web:localhost%3A3680:agents:[0-9a-f]{32}$/);
+      expect(service.did).toMatch(/^did:web:localhost%3A3680:services:[0-9a-f]{32}$/);
+      expect(agent.did.split(':').pop(), 'never derived from the key').not.toBe(service.did.split(':').pop());
+      expect(hedera.anchorDocument).not.toHaveBeenCalled();
+    });
+
+    it('refuses a user did:web: users are did:key only', async () => {
+      const web = new DIDService(repository, hedera, audit, undefined, 300, 'web', 'helix.test');
+      repository.findDidByPublicKey.mockResolvedValue(null);
+      await expect(web.createDID('c'.repeat(64), 'user', [], 'req-u')).rejects.toMatchObject({ code: ErrorCode.VALIDATION_ERROR, httpStatus: 400 });
+      expect(repository.createDid).not.toHaveBeenCalled();
+    });
+  });
+
   describe('resolveDID branches', () => {
     it('throws if not found', async () => {
         repository.findDidById.mockResolvedValue(null);
@@ -159,10 +181,15 @@ describe('DIDService Branch Coverage', () => {
           updateType: 'add_service_endpoint',
           hederaTransactionId: 'tx-add',
         }));
-        expect(audit.log).toHaveBeenCalledWith(expect.objectContaining({
-          event: 'DID_UPDATED',
-          updateType: 'add_service_endpoint',
-        }));
+        await audit.flush();
+        expect(audit.ofType('configuration.changed')).toHaveLength(1);
+        expect(audit.ofType('configuration.changed')[0]).toMatchObject({
+          action: { category: 'did', name: 'add_service_endpoint' },
+          outcome: 'succeeded',
+          correlationId: 'req-1',
+          resource: { kind: 'public_did', did: 'did:1' },
+          details: { family: 'key', phase: 'configuration_changed', configurationDigest: hashJson(result) },
+        });
     });
   });
 
@@ -185,6 +212,21 @@ describe('DIDService Branch Coverage', () => {
         hedera.anchorDocument.mockRejectedValue(new Error('fail'));
         await service.deactivateDID('did:1', 'req-1');
         expect(repository.deactivateDid).toHaveBeenCalled();
+    });
+  });
+
+  describe('registerResolvedDID', () => {
+    it('stores the top-level controller as the document has it, and none when it has none', async () => {
+      const did = 'did:web:127.0.0.1%3A3880:agents:b';
+      const keys = generateKeyPair();
+      const { controller: _dropped, ...document } = buildDIDDocument(did, keys.publicKey) as unknown as Record<string, unknown>;
+      repository.findDidById.mockResolvedValue(null);
+      repository.createDid.mockResolvedValue({});
+      await service.registerResolvedDID(did, document as never, 'agent', 'req-1');
+      expect(repository.createDid).toHaveBeenLastCalledWith(expect.objectContaining({ id: did, controller: undefined, publicKey: keys.publicKey }));
+      const ACCOUNT = 'did:web:127.0.0.1%3A3880:accounts:a0';
+      await service.registerResolvedDID(did, { ...document, controller: ACCOUNT } as never, 'agent', 'req-2');
+      expect(repository.createDid).toHaveBeenLastCalledWith(expect.objectContaining({ id: did, controller: ACCOUNT }));
     });
   });
 });

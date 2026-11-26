@@ -11,6 +11,9 @@
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "bin": {
+    "helix-audit": "./dist/cli/audit-bin.js"
+  },
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -53,6 +56,16 @@
     "workspace:test:non-live": "pnpm run test:non-live && pnpm -r --if-present run test:non-live",
     "format": "prettier --write \"**/*.{ts,json,md}\" --ignore-path .gitignore",
     "generate:golden-vectors": "tsx scripts/generate-golden-vectors.ts",
+    "generate:kya-os-helix": "tsx scripts/generate-kya-os-helix-fixtures.ts",
+    "generate:jws-fixtures": "tsx scripts/generate-jws-fixtures.ts",
+    "generate:audit-fixtures": "tsx scripts/generate-audit-fixtures.ts",
+    "generate:did-fixtures": "tsx scripts/generate-did-fixtures.ts",
+    "generate:credential-fixtures": "tsx scripts/generate-credential-fixtures.ts",
+    "generate:entity-card-fixtures": "tsx scripts/generate-entity-card-fixtures.ts",
+    "generate:custody-fixtures": "tsx scripts/generate-custody-fixtures.ts",
+    "generate:verifier-fixtures": "tsx scripts/gen-fixtures.ts",
+    "audit": "tsx src/cli/audit-bin.ts",
+    "audit:verify": "tsx src/cli/audit-bin.ts verify",
     "setup": "tsx scripts/setup.ts",
     "setup:hedera": "tsx scripts/setup-hedera.ts",
     "changeset": "changeset",
@@ -63,6 +76,7 @@
     "@fastify/sensible": "^6.0.5",
     "@fastify/swagger": "^9.8.1",
     "@fastify/swagger-ui": "^5.2.6",
+    "@helixid/sdk-js": "^1.0.0",
     "@noble/curves": "^1.9.7",
     "@noble/ed25519": "^2.3.0",
     "@noble/hashes": "^1.8.0",
@@ -98,7 +112,6 @@
   "devDependencies": {
     "@changesets/cli": "^3.0.2",
     "@helixid/did-hedera": "^0.1.2",
-    "@helixid/sdk-js": "^0.2.0",
     "@types/better-sqlite3": "^7.6.13",
     "@types/bs58": "^5.0.0",
     "@types/node": "^20.19.43",

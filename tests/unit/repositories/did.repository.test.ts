@@ -27,6 +27,11 @@ describe('DidRepository Unit Tests', () => {
     expect(mockPrisma.did.create).toHaveBeenCalled();
   });
 
+  it('creates a DID with no controller (the column is nullable): nothing is sent for it', async () => {
+    await repository.create({ id: 'did:2', subjectType: 'agent', publicKey: 'p', hederaTransactionId: 'tx', didDocument: {} });
+    expect(mockPrisma.did.create.mock.lastCall[0].data).not.toHaveProperty('controller');
+  });
+
   it('finds DID by ID', async () => {
     await repository.findDidById('did:1');
     expect(mockPrisma.did.findUnique).toHaveBeenCalled();

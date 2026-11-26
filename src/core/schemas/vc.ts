@@ -11,10 +11,7 @@
 // limitations under the License.
 
 import { z } from 'zod';
-import {
-  DelegationChainInvalidError,
-  ScopeEscalationDeniedError,
-} from '../errors/HelixError.js';
+import { ScopeEscalationDeniedError } from '../errors/HelixError.js';
 import type { DelegationGrantVC } from './delegation-grant.js';
 
 /**
@@ -50,20 +47,6 @@ export const VCCredentialStatusSchema = z.object({
 });
 
 /**
- * Helix Agent Credential Subject
- */
-export const AgentCredentialSubjectSchema = z.object({
-  id: z.string(), // Agent DID
-  type: z.literal('HelixAgent'),
-  privilegeScopes: z.array(z.string()),
-  agentName: z.string(),
-  delegatedFrom: z.string().optional(),
-  delegationDepth: z.number().int().min(0).optional(),
-  maxDelegationDepth: z.number().int().min(0).optional(),
-  parentVcId: z.string().optional(),
-});
-
-/**
  * Helix User Credential Subject
  */
 export const UserCredentialSubjectSchema = z.object({
@@ -86,18 +69,6 @@ export const VCBaseSchema = z.object({
 });
 
 /**
- * Full Agent VC Schema
- */
-export const AgentVCSchema = VCBaseSchema.extend({
-  type: z.array(z.string()).superRefine((val, ctx) => {
-    if (!val.includes('VerifiableCredential') || !val.includes('HelixAgentCredential')) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Invalid Agent VC types' });
-    }
-  }),
-  credentialSubject: AgentCredentialSubjectSchema,
-});
-
-/**
  * Full User VC Schema
  */
 export const UserVCSchema = VCBaseSchema.extend({
@@ -109,9 +80,13 @@ export const UserVCSchema = VCBaseSchema.extend({
   credentialSubject: UserCredentialSubjectSchema,
 });
 
-export type AgentVC = z.infer<typeof AgentVCSchema>;
 export type UserVC = z.infer<typeof UserVCSchema>;
-export type HelixVC = AgentVC | UserVC | DelegationGrantVC;
+/**
+ * What the VC service signs and stores in the legacy envelope: user
+ * credentials and service-issued grants. Agents hold an AgentIdentityCredential
+ * and CapabilityAttestationCredentials instead (story F-1, src/core/credentials).
+ */
+export type HelixVC = UserVC | DelegationGrantVC;
 
 export type SignedVC<T extends HelixVC = HelixVC> = T & {
   proof: VCProof;
@@ -124,55 +99,4 @@ export function validateScopeSubset(parentScopes: string[], childScopes: string[
       throw new ScopeEscalationDeniedError(scope);
     }
   }
-}
-
-export function validateChainIntegrity(chain: AgentVC[]): void {
-  if (chain.length < 2) {
-    throw new DelegationChainInvalidError('chain must contain root and leaf credentials');
-  }
-
-  const root = chain[0];
-  if (!root) {
-    throw new DelegationChainInvalidError('root credential missing');
-  }
-  const rootDepth = root.credentialSubject.delegationDepth ?? 0;
-  if (rootDepth !== 0) {
-    throw new DelegationChainInvalidError('root credential depth must be 0');
-  }
-  const maxDepth = root.credentialSubject.maxDelegationDepth ?? 0;
-
-  for (let index = 1; index < chain.length; index += 1) {
-    const parent = chain[index - 1];
-    const child = chain[index];
-    if (!parent || !child) {
-      throw new DelegationChainInvalidError('chain contains a missing link');
-    }
-
-    if (child.credentialSubject.delegatedFrom !== parent.credentialSubject.id) {
-      throw new DelegationChainInvalidError('delegatedFrom does not match parent subject DID');
-    }
-    if (child.credentialSubject.parentVcId !== parent.id) {
-      throw new DelegationChainInvalidError('parentVcId does not match parent VC id');
-    }
-    if (child.credentialSubject.delegationDepth !== index) {
-      throw new DelegationChainInvalidError('delegationDepth values are not sequential');
-    }
-    if (child.credentialSubject.maxDelegationDepth !== maxDepth) {
-      throw new DelegationChainInvalidError('maxDelegationDepth changed inside the chain');
-    }
-
-    validateScopeSubset(parent.credentialSubject.privilegeScopes, child.credentialSubject.privilegeScopes);
-  }
-
-  const leaf = chain.at(-1);
-  if (!leaf) {
-    throw new DelegationChainInvalidError('leaf credential missing');
-  }
-  if ((leaf.credentialSubject.delegationDepth ?? 0) > maxDepth) {
-    throw new DelegationChainInvalidError('leaf delegationDepth exceeds root maxDelegationDepth');
-  }
-}
-
-export function extractChainFromVC(leafVC: AgentVC): string[] {
-  return leafVC.credentialSubject.parentVcId ? [leafVC.credentialSubject.parentVcId, leafVC.id] : [leafVC.id];
 }

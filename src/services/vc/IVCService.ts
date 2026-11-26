@@ -2,19 +2,21 @@ import type { SignedVC } from '../../core/index.js';
 
 export type VCStatus = 'active' | 'revoked' | 'expired';
 
+/**
+ * A user credential (HelixUserCredential). Agents are not issued credentials
+ * here: onboarding gives them an AgentIdentityCredential and one
+ * CapabilityAttestationCredential per scope (story F-1, CredentialService).
+ */
 export interface IssueVCInput {
   subjectDid: string;
-  subjectType: 'agent' | 'user';
-  privilegeScopes?: string[];
-  agentName?: string;
-  userId?: string;
+  subjectType: 'user';
+  userId: string;
   expiresInSeconds?: number;
   expiresAt?: Date | null;
-  delegatedFrom?: string;
-  delegationDepth?: number;
-  maxDelegationDepth?: number;
-  parentVcId?: string;
   revokeExisting?: boolean;
+  /** KYA-OS story F-3: recorded on the agent's identity credential. */
+  keyCustody?: 'self' | 'helix';
+  didHosting?: 'own' | 'helix';
 }
 
 export interface IssueVCResult extends Partial<ReconcileResult> {
@@ -71,23 +73,8 @@ export interface IVCService {
     status: VCStatus;
   } | null>;
   getVCStatus(vcId: string): Promise<VCStatus>;
-  getStatusList(listId: string): Promise<{ credentialSubject: { encodedList: string } }>;
-  createStatusList(input?: {
-    listId?: string;
-    length?: number;
-  }): Promise<{
-    '@context': string[];
-    id: string;
-    type: string[];
-    issuer: string;
-    validFrom: string;
-    credentialSubject: {
-      id: string;
-      type: 'BitstringStatusList';
-      statusPurpose: 'revocation';
-      encodedList: string;
-    };
-  }>;
+  /** Creates (or resets) a status list row; the StatusListService signs and serves lists (story L3-C). */
+  createStatusList(input?: { listId?: string; length?: number }): Promise<{ listId: string; encodedList: string }>;
   issueVC(input: IssueVCInput, requestId: string): Promise<IssueVCResult>;
   /**
    * Persists an already-signed VC produced outside issueVC()'s own

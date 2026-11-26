@@ -1,4 +1,4 @@
-import { buildStatusListCredential, createStatusList, setBit } from '../../src/core/index.js';
+import { createStatusList } from '../../src/core/index.js';
 import type { SignedVC } from '../../src/core/index.js';
 import type {
   IVCService,
@@ -12,35 +12,40 @@ import { scopeKey } from '../../src/core/vc-lookup.js';
 
 export class MockVCService implements IVCService {
   private status: VCStatus = 'active';
-  private activeVC: Record<string, unknown> | null = {
+  /** The subject's active credentials (any kinds); lookups filter by type like the real service. */
+  private activeVCs: Array<Record<string, unknown>> = [{
     id: 'vc:test:1',
-    type: ['VerifiableCredential', 'HelixAgentCredential'],
+    type: ['VerifiableCredential', 'AgentIdentityCredential'],
     validUntil: new Date(Date.now() + 60_000).toISOString(),
     credentialStatus: {
       statusListCredential: 'http://localhost:3000/v1/status-list/helix-status-list-1',
       statusListIndex: '0',
     },
     credentialSubject: { privilegeScopes: ['read'] },
-  };
+  }];
+
+  private static hasType(vc: Record<string, unknown>, vcType?: string): boolean {
+    return !vcType || ((vc['type'] as string[] | undefined) ?? []).includes(vcType);
+  }
 
   setStatus(status: VCStatus): void {
     this.status = status;
   }
 
   setActiveVC(vc: Record<string, unknown> | null): void {
-    this.activeVC = vc;
+    this.activeVCs = vc ? [vc] : [];
+  }
+
+  /** Several active credentials at once, e.g. an identity plus its capability attestations. */
+  setActiveVCs(vcs: Array<Record<string, unknown>>): void {
+    this.activeVCs = [...vcs];
   }
 
   async findActiveBySubjectDid(
     _subjectDid: string,
     vcType?: string,
   ): Promise<Record<string, unknown> | null> {
-    if (!this.activeVC) return null;
-    if (vcType) {
-      const types = (this.activeVC['type'] as string[]) || [];
-      if (!types.includes(vcType)) return null;
-    }
-    return this.activeVC;
+    return this.activeVCs.filter((vc) => MockVCService.hasType(vc, vcType)).at(-1) ?? null;
   }
 
   async findActiveByVcIdForSubject(
@@ -48,16 +53,11 @@ export class MockVCService implements IVCService {
     _subjectDid: string,
     vcType?: string,
   ): Promise<Record<string, unknown> | null> {
-    if (!this.activeVC || this.activeVC['id'] !== vcId) return null;
-    if (vcType) {
-      const types = (this.activeVC['type'] as string[]) || [];
-      if (!types.includes(vcType)) return null;
-    }
-    return this.activeVC;
+    return this.activeVCs.find((vc) => vc['id'] === vcId && MockVCService.hasType(vc, vcType)) ?? null;
   }
 
   async registerSignedVC(vc: SignedVC, _options?: ReconcileOptions): Promise<ReconcileResult> {
-    this.activeVC = vc as unknown as Record<string, unknown>;
+    this.activeVCs = [vc as unknown as Record<string, unknown>];
     return { replacedVcIds: [], revokedVcIds: [], retainedVcIds: [] };
   }
 
@@ -65,12 +65,7 @@ export class MockVCService implements IVCService {
     _subjectDid: string,
     vcType?: string,
   ): Promise<Array<Record<string, unknown>>> {
-    if (!this.activeVC) return [];
-    if (vcType) {
-      const types = (this.activeVC['type'] as string[]) || [];
-      if (!types.includes(vcType)) return [];
-    }
-    return [this.activeVC];
+    return this.activeVCs.filter((vc) => MockVCService.hasType(vc, vcType));
   }
 
   async getVCStatus(): Promise<VCStatus> {
@@ -98,44 +93,23 @@ export class MockVCService implements IVCService {
     }];
   }
 
-  async getStatusList(): Promise<{ credentialSubject: { encodedList: string } }> {
-    const list = this.status === 'revoked' ? setBit(createStatusList(), 0, 1) : createStatusList();
-    return { credentialSubject: { encodedList: list } };
-  }
-
-  async createStatusList(input?: { listId?: string; length?: number }): Promise<{
-    '@context': string[];
-    id: string;
-    type: string[];
-    issuer: string;
-    validFrom: string;
-    credentialSubject: {
-      id: string;
-      type: 'BitstringStatusList';
-      statusPurpose: 'revocation';
-      encodedList: string;
-    };
-  }> {
-    const listId = input?.listId ?? 'helix-status-list-1';
-    const encodedList = createStatusList(input?.length);
-    return buildStatusListCredential(listId, encodedList, 'did:web:localhost:3000', 'http://localhost:3000');
+  async createStatusList(input?: { listId?: string; length?: number }): Promise<{ listId: string; encodedList: string }> {
+    return { listId: input?.listId ?? 'helix-status-list-1', encodedList: createStatusList(input?.length) };
   }
 
   async findRecordByVcId(
     vcId: string,
   ): Promise<{ vcId: string; vc: Record<string, unknown>; status: VCStatus } | null> {
-    if (!this.activeVC || this.activeVC['id'] !== vcId) return null;
-    return { vcId, vc: this.activeVC, status: this.status };
+    const vc = this.activeVCs.find((candidate) => candidate['id'] === vcId);
+    if (!vc) return null;
+    return { vcId, vc, status: this.status };
   }
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async issueVC(input: IssueVCInput, _requestId: string): Promise<IssueVCResult> {
     const vc = {
       id: 'vc:mock:issued',
-      type: [
-        'VerifiableCredential',
-        input.subjectType === 'agent' ? 'HelixAgentCredential' : 'HelixUserCredential',
-      ],
+      type: ['VerifiableCredential', 'HelixUserCredential'],
       credentialSubject: { id: input.subjectDid },
       validUntil: new Date(Date.now() + (input.expiresInSeconds ?? 7776000) * 1000).toISOString(),
     };

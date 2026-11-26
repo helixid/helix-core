@@ -1,0 +1,414 @@
+{
+  "generated_from": "helix-core",
+  "generator": "scripts/generate-jws-fixtures.ts",
+  "note": "KYA-OS story L1-C. Regenerate (pnpm generate:jws-fixtures) whenever src/core/crypto/jws.ts or signer.ts change; helix-core, helix-sdk-py and e2e-playwright assert byte-for-byte against this file. Test keys only; never real secrets.",
+  "keys": {
+    "signer": {
+      "private_key_hex": "0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20",
+      "public_key_hex": "79b5562e8fe654f94078b112e8a98ba7901f853ae695bed7e0e3910bad049664",
+      "did": "did:web:signer.helix.test",
+      "kid_fragment": "key-1",
+      "kid": "did:web:signer.helix.test#key-1",
+      "public_key_jwk": {
+        "kty": "OKP",
+        "crv": "Ed25519",
+        "x": "ebVWLo_mVPlAeLES6KmLp5AfhTrmlb7X4OORC60ElmQ",
+        "kid": "did:web:signer.helix.test#key-1"
+      },
+      "did_document": {
+        "@context": [
+          "https://www.w3.org/ns/did/v1",
+          "https://w3id.org/security/suites/ed25519-2020/v1"
+        ],
+        "id": "did:web:signer.helix.test",
+        "controller": "did:web:signer.helix.test",
+        "verificationMethod": [
+          {
+            "id": "did:web:signer.helix.test#key-1",
+            "type": "Ed25519VerificationKey2020",
+            "controller": "did:web:signer.helix.test",
+            "publicKeyMultibase": "z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7"
+          }
+        ],
+        "authentication": [
+          "did:web:signer.helix.test#key-1"
+        ],
+        "assertionMethod": [
+          "did:web:signer.helix.test#key-1"
+        ]
+      }
+    },
+    "other": {
+      "private_key_hex": "2122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f40",
+      "public_key_hex": "e7f162a10bec559afea195e4dce84b69568d5d2cb0963eb446c0685e2b17f2f0",
+      "did": "did:web:other.helix.test",
+      "kid_fragment": "key-1",
+      "kid": "did:web:other.helix.test#key-1",
+      "public_key_jwk": {
+        "kty": "OKP",
+        "crv": "Ed25519",
+        "x": "5_FioQvsVZr-oZXk3OhLaVaNXSywlj60RsBoXisX8vA",
+        "kid": "did:web:other.helix.test#key-1"
+      },
+      "did_document": {
+        "@context": [
+          "https://www.w3.org/ns/did/v1",
+          "https://w3id.org/security/suites/ed25519-2020/v1"
+        ],
+        "id": "did:web:other.helix.test",
+        "controller": "did:web:other.helix.test",
+        "verificationMethod": [
+          {
+            "id": "did:web:other.helix.test#key-1",
+            "type": "Ed25519VerificationKey2020",
+            "controller": "did:web:other.helix.test",
+            "publicKeyMultibase": "z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw"
+          }
+        ],
+        "authentication": [
+          "did:web:other.helix.test#key-1"
+        ],
+        "assertionMethod": [
+          "did:web:other.helix.test#key-1"
+        ]
+      }
+    }
+  },
+  "vectors": [
+    {
+      "name": "json_object",
+      "signer": "signer",
+      "payload": {
+        "json": {
+          "iss": "did:web:signer.helix.test",
+          "sub": "agent-1",
+          "n": 42,
+          "ok": true,
+          "nested": {
+            "list": [
+              1,
+              2,
+              3
+            ],
+            "none": null
+          }
+        }
+      },
+      "header": {
+        "alg": "EdDSA",
+        "kid": "did:web:signer.helix.test#key-1"
+      },
+      "jws": "eyJhbGciOiJFZERTQSIsImtpZCI6ImRpZDp3ZWI6c2lnbmVyLmhlbGl4LnRlc3Qja2V5LTEifQ.eyJpc3MiOiJkaWQ6d2ViOnNpZ25lci5oZWxpeC50ZXN0Iiwic3ViIjoiYWdlbnQtMSIsIm4iOjQyLCJvayI6dHJ1ZSwibmVzdGVkIjp7Imxpc3QiOlsxLDIsM10sIm5vbmUiOm51bGx9fQ.zJovM1kC9MdsvZAuc5wv9FbXzlklvVslGHqflsSdsEy6B92DzA-ffRE4YpBCwB_EKhbGd3A_L9nNMvojgpixDg"
+    },
+    {
+      "name": "json_object_unicode",
+      "signer": "signer",
+      "payload": {
+        "json": {
+          "msg": "héllo wörld 你好 🎉",
+          "quote": "say \"hi\"\\now"
+        }
+      },
+      "header": {
+        "alg": "EdDSA",
+        "kid": "did:web:signer.helix.test#key-1"
+      },
+      "jws": "eyJhbGciOiJFZERTQSIsImtpZCI6ImRpZDp3ZWI6c2lnbmVyLmhlbGl4LnRlc3Qja2V5LTEifQ.eyJtc2ciOiJow6lsbG8gd8O2cmxkIOS9oOWlvSDwn46JIiwicXVvdGUiOiJzYXkgXCJoaVwiXFxub3cifQ.t4ZUgbWFC34kWSc7Zd1XrLY_jgQUddhf9_uQk-mzy1LaiKkX5XqJOOmsfd3Yz1tCfPMtT--p6L2nvGpxHi1TDg"
+    },
+    {
+      "name": "json_array",
+      "signer": "signer",
+      "payload": {
+        "json": [
+          "a",
+          1,
+          false
+        ]
+      },
+      "header": {
+        "alg": "EdDSA",
+        "kid": "did:web:signer.helix.test#key-1"
+      },
+      "jws": "eyJhbGciOiJFZERTQSIsImtpZCI6ImRpZDp3ZWI6c2lnbmVyLmhlbGl4LnRlc3Qja2V5LTEifQ.WyJhIiwxLGZhbHNlXQ.InDk8nUTUHhdJehibwXNXPnOBWCxfAo8BJEL-SfMttbZlynaviuUmsQUjOxtprZP6NcBgxUlvJnj10_jXQPvDA"
+    },
+    {
+      "name": "text",
+      "signer": "signer",
+      "payload": {
+        "text": "plain text payload"
+      },
+      "header": {
+        "alg": "EdDSA",
+        "kid": "did:web:signer.helix.test#key-1"
+      },
+      "jws": "eyJhbGciOiJFZERTQSIsImtpZCI6ImRpZDp3ZWI6c2lnbmVyLmhlbGl4LnRlc3Qja2V5LTEifQ.cGxhaW4gdGV4dCBwYXlsb2Fk.Clwt1lz9TS--7-9kDzsumG5woWAyRDdqirRVnVZNeR6iYIYL8NwsMK4cnKXlZ9kFebFjJUprpVYZ7dwLXtFVAA"
+    },
+    {
+      "name": "empty_json_object",
+      "signer": "signer",
+      "payload": {
+        "json": {}
+      },
+      "header": {
+        "alg": "EdDSA",
+        "kid": "did:web:signer.helix.test#key-1"
+      },
+      "jws": "eyJhbGciOiJFZERTQSIsImtpZCI6ImRpZDp3ZWI6c2lnbmVyLmhlbGl4LnRlc3Qja2V5LTEifQ.e30.Kk4ZgdGdL6AGiy7eKYYIm0in1bOI2Q6NHKHXb6zP5kYhmtrd2-quBisUs5g02kbfnoPRCVzAJ-4oxy0YEjMFAg"
+    },
+    {
+      "name": "bytes",
+      "signer": "signer",
+      "payload": {
+        "bytes_hex": "00ff10203040"
+      },
+      "header": {
+        "alg": "EdDSA",
+        "kid": "did:web:signer.helix.test#key-1"
+      },
+      "jws": "eyJhbGciOiJFZERTQSIsImtpZCI6ImRpZDp3ZWI6c2lnbmVyLmhlbGl4LnRlc3Qja2V5LTEifQ.AP8QIDBA.2V2uiCX3LX6I17fUm2g_1kJ7sMOJHfyPyrE2fmgr_WTtvvdXFQ5oc0kQ1-DI2XGmk4HLCx5YntIJz6WcpzmxAw"
+    },
+    {
+      "name": "other_key",
+      "signer": "other",
+      "payload": {
+        "json": {
+          "iss": "did:web:other.helix.test",
+          "purpose": "second key"
+        }
+      },
+      "header": {
+        "alg": "EdDSA",
+        "kid": "did:web:other.helix.test#key-1"
+      },
+      "jws": "eyJhbGciOiJFZERTQSIsImtpZCI6ImRpZDp3ZWI6b3RoZXIuaGVsaXgudGVzdCNrZXktMSJ9.eyJpc3MiOiJkaWQ6d2ViOm90aGVyLmhlbGl4LnRlc3QiLCJwdXJwb3NlIjoic2Vjb25kIGtleSJ9.--_3JjaGO24N0MpEK3IvEYBLwn7ks09Rs509eHVyno2Fx1G0spzRbgSFHYx_BcdPqJJBcuz5FULrDEMkvIcPDQ"
+    },
+    {
+      "name": "extra_header_typ",
+      "signer": "signer",
+      "payload": {
+        "json": {
+          "iss": "did:web:signer.helix.test",
+          "jti": "session-1"
+        }
+      },
+      "header_extra": {
+        "typ": "JWT",
+        "crv": "Ed25519"
+      },
+      "header": {
+        "alg": "EdDSA",
+        "kid": "did:web:signer.helix.test#key-1",
+        "typ": "JWT",
+        "crv": "Ed25519"
+      },
+      "jws": "eyJhbGciOiJFZERTQSIsImtpZCI6ImRpZDp3ZWI6c2lnbmVyLmhlbGl4LnRlc3Qja2V5LTEiLCJ0eXAiOiJKV1QiLCJjcnYiOiJFZDI1NTE5In0.eyJpc3MiOiJkaWQ6d2ViOnNpZ25lci5oZWxpeC50ZXN0IiwianRpIjoic2Vzc2lvbi0xIn0.C3LNrZNCs2CPRbQ2zO0h6w1dCAYw-7iRkD0tIM4jlb2Ubm1ICksLBeAwGRylYoJa4KVx1iQvstTr209X0CxICw"
+    },
+    {
+      "name": "kya_os_proof_shape",
+      "signer": "signer",
+      "payload": {
+        "json": {
+          "aud": "did:web:server.example.com",
+          "iss": "did:web:signer.helix.test",
+          "nonce": "b6VZmm9hXn-otOETBkvlvQ",
+          "requestHash": "sha256:c8f3d59959c9247211de8c76b94ef17f0c279f09362350ced67f69ecdb89d6c7",
+          "sessionId": "sess_fixture",
+          "sub": "did:web:signer.helix.test",
+          "ts": 1750000000
+        }
+      },
+      "header": {
+        "alg": "EdDSA",
+        "kid": "did:web:signer.helix.test#key-1"
+      },
+      "jws": "eyJhbGciOiJFZERTQSIsImtpZCI6ImRpZDp3ZWI6c2lnbmVyLmhlbGl4LnRlc3Qja2V5LTEifQ.eyJhdWQiOiJkaWQ6d2ViOnNlcnZlci5leGFtcGxlLmNvbSIsImlzcyI6ImRpZDp3ZWI6c2lnbmVyLmhlbGl4LnRlc3QiLCJub25jZSI6ImI2VlptbTloWG4tb3RPRVRCa3ZsdlEiLCJyZXF1ZXN0SGFzaCI6InNoYTI1NjpjOGYzZDU5OTU5YzkyNDcyMTFkZThjNzZiOTRlZjE3ZjBjMjc5ZjA5MzYyMzUwY2VkNjdmNjllY2RiODlkNmM3Iiwic2Vzc2lvbklkIjoic2Vzc19maXh0dXJlIiwic3ViIjoiZGlkOndlYjpzaWduZXIuaGVsaXgudGVzdCIsInRzIjoxNzUwMDAwMDAwfQ.xYRCPAYRFCIbew8qFUAMFHwRJp0uKMUbdxH3hc3PSa8AA70RHo1KEPgVUkJfbJPXyKlbj1MrwahWMfD1uyE1Aw"
+    }
+  ],
+  "rejections": [
+    {
+      "name": "alg_rs256",
+      "jws": "eyJhbGciOiJSUzI1NiIsImtpZCI6ImRpZDp3ZWI6c2lnbmVyLmhlbGl4LnRlc3Qja2V5LTEifQ.eyJpc3MiOiJkaWQ6d2ViOnNpZ25lci5oZWxpeC50ZXN0Iiwic3ViIjoiYWdlbnQtMSJ9.FGurh6ET2ZTtN8OKFJvT8_w90-62q-VvR7MkNli9Vafb7YTNN5Dn5V0f_ePBX46X4RZQumVU9UbRPVLTqe-jDQ",
+      "verify_with": {
+        "key": "signer",
+        "kid": true
+      },
+      "reason": "jws_alg_unsupported"
+    },
+    {
+      "name": "alg_none",
+      "jws": "eyJhbGciOiJub25lIiwia2lkIjoiZGlkOndlYjpzaWduZXIuaGVsaXgudGVzdCNrZXktMSJ9.eyJpc3MiOiJkaWQ6d2ViOnNpZ25lci5oZWxpeC50ZXN0Iiwic3ViIjoiYWdlbnQtMSJ9.HijEk21VswCicQoJ_4l0TddK1ds_mmNzNKx5oC217B9_01MVPYMtVUV5ygjes0LRp9TXKq1SRW7J2tS6gv4-Cg",
+      "verify_with": {
+        "key": "signer",
+        "kid": true
+      },
+      "reason": "jws_alg_unsupported"
+    },
+    {
+      "name": "alg_missing",
+      "jws": "eyJraWQiOiJkaWQ6d2ViOnNpZ25lci5oZWxpeC50ZXN0I2tleS0xIn0.eyJpc3MiOiJkaWQ6d2ViOnNpZ25lci5oZWxpeC50ZXN0Iiwic3ViIjoiYWdlbnQtMSJ9.r4hEh2kvBCo_KeWUqg0_G7URiRyIye0MFjjY5M11VuASEnu1yzRF21HcS_K3TtQJD0sUtS4H648zoKREw8TXBw",
+      "verify_with": {
+        "key": "signer",
+        "kid": true
+      },
+      "reason": "jws_alg_unsupported"
+    },
+    {
+      "name": "kid_missing",
+      "jws": "eyJhbGciOiJFZERTQSJ9.eyJpc3MiOiJkaWQ6d2ViOnNpZ25lci5oZWxpeC50ZXN0Iiwic3ViIjoiYWdlbnQtMSJ9.gIBSSeNqDxuPq7-wOg0SeAa-g4Y8oL2GpNXaACwhLKXnX1RYg86bfTmT8D5nMGWCUTCX3tyD8XeZNd9FM90zAg",
+      "verify_with": {
+        "key": "signer",
+        "kid": false
+      },
+      "reason": "jws_kid_missing"
+    },
+    {
+      "name": "kid_not_a_did",
+      "jws": "eyJhbGciOiJFZERTQSIsImtpZCI6ImtleS0xIn0.eyJpc3MiOiJkaWQ6d2ViOnNpZ25lci5oZWxpeC50ZXN0Iiwic3ViIjoiYWdlbnQtMSJ9.uffwqvD9nvdv3PAvdIWiGDOOCxF62eE4j5yI12807T3W-lR_f267jusAQ1EqCcFd0mKBYIurm0OgrqKb0oFQDA",
+      "verify_with": {
+        "key": "signer",
+        "kid": false
+      },
+      "reason": "jws_kid_malformed"
+    },
+    {
+      "name": "kid_without_fragment",
+      "jws": "eyJhbGciOiJFZERTQSIsImtpZCI6ImRpZDp3ZWI6c2lnbmVyLmhlbGl4LnRlc3QifQ.eyJpc3MiOiJkaWQ6d2ViOnNpZ25lci5oZWxpeC50ZXN0Iiwic3ViIjoiYWdlbnQtMSJ9.qLt0LhQ1KKT_HUNHE_URDu4NHOhu5gHVxbUkoIrANHWmKsn67Xw8SvwhDalgaEMHcISL9faLbXH9n8GWR9WeAQ",
+      "verify_with": {
+        "key": "signer",
+        "kid": false
+      },
+      "reason": "jws_kid_malformed"
+    },
+    {
+      "name": "kid_of_other_did_than_iss",
+      "jws": "eyJhbGciOiJFZERTQSIsImtpZCI6ImRpZDp3ZWI6b3RoZXIuaGVsaXgudGVzdCNrZXktMSJ9.eyJpc3MiOiJkaWQ6d2ViOnNpZ25lci5oZWxpeC50ZXN0Iiwic3ViIjoiYWdlbnQtMSJ9.mkRJewLiwpCReUvBC1NlBoEmaKUcTLxvk8f-t89dOtMf8omU6k3F-mCNh9tpvuUfHb3pXl-ZGmfX-II0WdeWAQ",
+      "verify_with": {
+        "key": "signer",
+        "kid": false
+      },
+      "reason": "jws_kid_did_mismatch",
+      "by_kid_reason": "jws_kid_did_mismatch"
+    },
+    {
+      "name": "kid_of_other_did_than_expected",
+      "jws": "eyJhbGciOiJFZERTQSIsImtpZCI6ImRpZDp3ZWI6b3RoZXIuaGVsaXgudGVzdCNrZXktMSJ9.eyJzdWIiOiJubyBpc3MifQ.D1X7fHvyX8BwVzRkikbX1uKKRhMCcYzx2Px5TbCUsE_4qC2TF6AXJrMR-J5U33Gdw89hZfuQkPscAx8qAw8CAQ",
+      "verify_with": {
+        "key": "other",
+        "kid": false
+      },
+      "expected_did": "did:web:signer.helix.test",
+      "reason": "jws_kid_did_mismatch",
+      "by_kid_reason": "jws_kid_did_mismatch"
+    },
+    {
+      "name": "kid_not_the_given_key",
+      "jws": "eyJhbGciOiJFZERTQSIsImtpZCI6ImRpZDp3ZWI6c2lnbmVyLmhlbGl4LnRlc3Qja2V5LTIifQ.eyJpc3MiOiJkaWQ6d2ViOnNpZ25lci5oZWxpeC50ZXN0Iiwic3ViIjoiYWdlbnQtMSJ9.qoDYBELCtAftGPaypEs8daVyf3H6kUydYxyqQNyYJyC3WSvfIAf8K9t0Sl8Qy4U9zxEZ9w24saPaJ48YPGN5DQ",
+      "verify_with": {
+        "key": "signer",
+        "kid": true
+      },
+      "reason": "jws_kid_mismatch",
+      "by_kid_reason": "jws_key_not_found"
+    },
+    {
+      "name": "wrong_key",
+      "jws": "eyJhbGciOiJFZERTQSIsImtpZCI6ImRpZDp3ZWI6c2lnbmVyLmhlbGl4LnRlc3Qja2V5LTEifQ.eyJpc3MiOiJkaWQ6d2ViOnNpZ25lci5oZWxpeC50ZXN0Iiwic3ViIjoiYWdlbnQtMSJ9.mU8LNaqR3iVRmtuJa9qm5u8NkprS3XrDZu9A-SVLkszLfmpaNurCNesCDtVny2VLaJHlHza4fRxKVTMTqugIAw",
+      "verify_with": {
+        "key": "other",
+        "kid": false
+      },
+      "reason": "jws_signature_invalid",
+      "by_kid_reason": null
+    },
+    {
+      "name": "signature_tampered",
+      "jws": "eyJhbGciOiJFZERTQSIsImtpZCI6ImRpZDp3ZWI6c2lnbmVyLmhlbGl4LnRlc3Qja2V5LTEifQ.eyJpc3MiOiJkaWQ6d2ViOnNpZ25lci5oZWxpeC50ZXN0Iiwic3ViIjoiYWdlbnQtMSJ9.mU8LNaqR3iVRmtuJa9qm5u8NkprS3XrDZu9A-SVLkszLfmpaNurCNesCDtVny2VLaJHlHza4fRxKVTMTqugIAA",
+      "verify_with": {
+        "key": "signer",
+        "kid": true
+      },
+      "reason": "jws_signature_invalid"
+    },
+    {
+      "name": "payload_tampered",
+      "jws": "eyJhbGciOiJFZERTQSIsImtpZCI6ImRpZDp3ZWI6c2lnbmVyLmhlbGl4LnRlc3Qja2V5LTEifQ.eyJpc3MiOiJkaWQ6d2ViOnNpZ25lci5oZWxpeC50ZXN0Iiwic3ViIjoiYWdlbnQtMiJ9.mU8LNaqR3iVRmtuJa9qm5u8NkprS3XrDZu9A-SVLkszLfmpaNurCNesCDtVny2VLaJHlHza4fRxKVTMTqugIAw",
+      "verify_with": {
+        "key": "signer",
+        "kid": true
+      },
+      "reason": "jws_signature_invalid"
+    },
+    {
+      "name": "signature_padded",
+      "jws": "eyJhbGciOiJFZERTQSIsImtpZCI6ImRpZDp3ZWI6c2lnbmVyLmhlbGl4LnRlc3Qja2V5LTEifQ.eyJpc3MiOiJkaWQ6d2ViOnNpZ25lci5oZWxpeC50ZXN0Iiwic3ViIjoiYWdlbnQtMSJ9.mU8LNaqR3iVRmtuJa9qm5u8NkprS3XrDZu9A-SVLkszLfmpaNurCNesCDtVny2VLaJHlHza4fRxKVTMTqugIAw=",
+      "verify_with": {
+        "key": "signer",
+        "kid": true
+      },
+      "reason": "jws_malformed"
+    },
+    {
+      "name": "signature_base64_alphabet",
+      "jws": "eyJhbGciOiJFZERTQSIsImtpZCI6ImRpZDp3ZWI6c2lnbmVyLmhlbGl4LnRlc3Qja2V5LTEifQ.eyJpc3MiOiJkaWQ6d2ViOnNpZ25lci5oZWxpeC50ZXN0Iiwic3ViIjoiYWdlbnQtMSJ9.mU8LNaqR3iVRmtuJa9qm5u8NkprS3XrDZu9A+SVLkszLfmpaNurCNesCDtVny2VLaJHlHza4fRxKVTMTqugIAw",
+      "verify_with": {
+        "key": "signer",
+        "kid": true
+      },
+      "reason": "jws_malformed"
+    },
+    {
+      "name": "payload_with_white_space",
+      "jws": "eyJhbGciOiJFZERTQSIsImtpZCI6ImRpZDp3ZWI6c2lnbmVyLmhlbGl4LnRlc3Qja2V5LTEifQ.eyJpc3MiOiJkaWQ6d2ViOnNpZ25lci5oZWxpeC50ZXN0Iiwic3ViIjoiYWdlbnQtMSJ9 .mU8LNaqR3iVRmtuJa9qm5u8NkprS3XrDZu9A-SVLkszLfmpaNurCNesCDtVny2VLaJHlHza4fRxKVTMTqugIAw",
+      "verify_with": {
+        "key": "signer",
+        "kid": true
+      },
+      "reason": "jws_malformed"
+    },
+    {
+      "name": "two_segments",
+      "jws": "eyJhbGciOiJFZERTQSIsImtpZCI6ImRpZDp3ZWI6c2lnbmVyLmhlbGl4LnRlc3Qja2V5LTEifQ.eyJpc3MiOiJkaWQ6d2ViOnNpZ25lci5oZWxpeC50ZXN0Iiwic3ViIjoiYWdlbnQtMSJ9",
+      "verify_with": {
+        "key": "signer",
+        "kid": true
+      },
+      "reason": "jws_malformed"
+    },
+    {
+      "name": "four_segments",
+      "jws": "eyJhbGciOiJFZERTQSIsImtpZCI6ImRpZDp3ZWI6c2lnbmVyLmhlbGl4LnRlc3Qja2V5LTEifQ.eyJpc3MiOiJkaWQ6d2ViOnNpZ25lci5oZWxpeC50ZXN0Iiwic3ViIjoiYWdlbnQtMSJ9.mU8LNaqR3iVRmtuJa9qm5u8NkprS3XrDZu9A-SVLkszLfmpaNurCNesCDtVny2VLaJHlHza4fRxKVTMTqugIAw.mU8LNaqR3iVRmtuJa9qm5u8NkprS3XrDZu9A-SVLkszLfmpaNurCNesCDtVny2VLaJHlHza4fRxKVTMTqugIAw",
+      "verify_with": {
+        "key": "signer",
+        "kid": true
+      },
+      "reason": "jws_malformed"
+    },
+    {
+      "name": "empty_signature",
+      "jws": "eyJhbGciOiJFZERTQSIsImtpZCI6ImRpZDp3ZWI6c2lnbmVyLmhlbGl4LnRlc3Qja2V5LTEifQ.eyJpc3MiOiJkaWQ6d2ViOnNpZ25lci5oZWxpeC50ZXN0Iiwic3ViIjoiYWdlbnQtMSJ9.",
+      "verify_with": {
+        "key": "signer",
+        "kid": true
+      },
+      "reason": "jws_malformed"
+    },
+    {
+      "name": "header_not_json",
+      "jws": "bm90IGpzb24.eyJpc3MiOiJkaWQ6d2ViOnNpZ25lci5oZWxpeC50ZXN0Iiwic3ViIjoiYWdlbnQtMSJ9.mU8LNaqR3iVRmtuJa9qm5u8NkprS3XrDZu9A-SVLkszLfmpaNurCNesCDtVny2VLaJHlHza4fRxKVTMTqugIAw",
+      "verify_with": {
+        "key": "signer",
+        "kid": true
+      },
+      "reason": "jws_header_invalid"
+    },
+    {
+      "name": "header_json_array",
+      "jws": "W10.eyJpc3MiOiJkaWQ6d2ViOnNpZ25lci5oZWxpeC50ZXN0Iiwic3ViIjoiYWdlbnQtMSJ9.mU8LNaqR3iVRmtuJa9qm5u8NkprS3XrDZu9A-SVLkszLfmpaNurCNesCDtVny2VLaJHlHza4fRxKVTMTqugIAw",
+      "verify_with": {
+        "key": "signer",
+        "kid": true
+      },
+      "reason": "jws_header_invalid"
+    }
+  ]
+}
