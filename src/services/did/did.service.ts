@@ -10,7 +10,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-import { sha256 } from '@noble/hashes/sha2';
 import {
   deriveDID,
   buildDIDDocument,
@@ -19,7 +18,12 @@ import {
   publicKeyToMultibase,
   HelixError,
   ErrorCode,
-  type IAuditLogger,
+  jsonDigest,
+  publicDid,
+  issueDidWeb,
+  type AuditEventInput,
+  type AuditTrail,
+  type Digest,
   type DIDDocument,
   type ServiceEndpoint,
   type DidMethod,
@@ -30,16 +34,6 @@ import type { ICache } from '../../cache/ICache.js';
 import { NoopCache } from '../../cache/NoopCache.js';
 import { extractEd25519PublicKeyHexFromDIDDocument } from './publicKey.js';
 import { evictDIDCache } from '../../core/did-resolver.js';
-
-/**
- * A short, stable, non-secret identifier derived from an agent's public key
- * — used as the did:web path segment (`:agents:<slug>`). Same construction
- * as deriveDID()'s did:hedera identifier, minus the Hedera-specific prefix.
- */
-function deriveAgentSlug(publicKeyHex: string): string {
-  const hash = sha256(Buffer.from(publicKeyHex, 'hex'));
-  return Buffer.from(hash.slice(0, 16)).toString('hex');
-}
 
 type DIDRecord = {
   id: string;
@@ -103,11 +97,15 @@ export interface IDIDService {
   registerResolvedDID(did: string, document: DIDDocument, subjectType: 'agent' | 'user' | 'service', requestId: string): Promise<void>;
 }
 
+function reportAuditFailure(error: unknown): void {
+  console.error('AUDIT_RECORD_FAILED', error instanceof Error ? error.message : String(error));
+}
+
 export class DIDService implements IDIDService {
   constructor(
     private repository: DidRepository,
     private hedera: IHederaClient,
-    private audit: IAuditLogger,
+    private readonly auditTrail: AuditTrail,
     private cache: ICache<DIDDocument> = new NoopCache<DIDDocument>(),
     private cacheTtlSeconds = 300,
     // Governs how newly-created (agent/user) DIDs are minted, independent of
@@ -118,6 +116,43 @@ export class DIDService implements IDIDService {
     private didMethod: DidMethod = 'hedera',
     private didDomain = '',
   ) {}
+
+  /** Records one typed audit event; a failure to record never breaks the request. */
+  private audit(input: AuditEventInput): void {
+    try {
+      this.auditTrail.record(input).catch(reportAuditFailure);
+    } catch (error) {
+      reportAuditFailure(error);
+    }
+  }
+
+  /** One `configuration.changed` event per DID state change, carrying a digest of the resulting document. */
+  private auditDidChange(requestId: string, did: string, name: string, document?: DIDDocument): void {
+    this.audit({
+      eventType: 'configuration.changed',
+      action: { category: 'did', name },
+      outcome: 'succeeded',
+      correlationId: requestId,
+      resource: publicDid(did),
+      details: {
+        family: 'key',
+        phase: 'configuration_changed',
+        ...(document !== undefined ? { configurationDigest: jsonDigest(document) as Digest } : {}),
+      },
+    });
+  }
+
+  /** A DID creation that changed nothing: the error code is the reason, never its message. */
+  private auditDidCreationFailed(requestId: string, code: string): void {
+    this.audit({
+      eventType: 'configuration.changed',
+      action: { category: 'did', name: 'created' },
+      outcome: 'failed',
+      correlationId: requestId,
+      reason: { code },
+      details: { family: 'key', phase: 'configuration_changed' },
+    });
+  }
 
   /**
    * Prepare a live did:hedera creation request for SDK-side signing. Only
@@ -141,12 +176,7 @@ export class DIDService implements IDIDService {
     // 1. Check for existing DID with this public key (SA-2)
     const existing = await this.repository.findDidByPublicKey(publicKeyHex);
     if (existing) {
-      await this.audit.log({
-        timestamp: new Date().toISOString(),
-        event: 'DID_CREATION_FAILED',
-        requestId,
-        reason: 'DID already exists for this public key',
-      });
+      this.auditDidCreationFailed(requestId, ErrorCode.DID_ALREADY_EXISTS);
       throw new HelixError(
         ErrorCode.DID_ALREADY_EXISTS,
         'DID already exists for this public key',
@@ -173,11 +203,15 @@ export class DIDService implements IDIDService {
       document = buildDIDDocument(did, publicKeyHex, serviceEndpoints);
       anchoring = { transactionId: `not-anchored:key:${did}` };
     } else if (this.didMethod === 'web') {
-      // Hosted at this same instance — see routes/did-web/index.ts, which
-      // serves agent/user DIDs under /agents/:slug/did.json and service DIDs
-      // under /services/:slug/did.json alongside the issuer's own document.
-      const segment = subjectType === 'service' ? 'services' : 'agents';
-      did = `did:web:${this.didDomain}:${segment}:${deriveAgentSlug(publicKeyHex)}`;
+      // Hosted at this same instance: did:web:<DID_DOMAIN>:agents:<hex> or
+      // :services:<hex>, <hex> random (one did:web shape, 2026-11-23), served
+      // at /agents/<hex>/did.json and /services/<hex>/did.json (with its
+      // card) by routes/entity-card. Users are did:key only (L3-H).
+      if (subjectType === 'user') {
+        this.auditDidCreationFailed(requestId, ErrorCode.VALIDATION_ERROR);
+        throw new HelixError(ErrorCode.VALIDATION_ERROR, 'A user DID is a did:key, never a did:web under the Helix domain', 400);
+      }
+      did = issueDidWeb({ host: this.didDomain, kind: subjectType === 'service' ? 'services' : 'agents' });
       document = buildDIDDocument(did, publicKeyHex, serviceEndpoints);
       anchoring = { transactionId: `not-anchored:web:${did}` };
     } else {
@@ -198,12 +232,7 @@ export class DIDService implements IDIDService {
           anchoring = await this.hedera.anchorDocument(JSON.stringify(document));
         }
       } catch (err) {
-        await this.audit.log({
-          timestamp: new Date().toISOString(),
-          event: 'DID_CREATION_FAILED',
-          requestId,
-          reason: 'Hedera anchoring failed',
-        });
+        this.auditDidCreationFailed(requestId, ErrorCode.HEDERA_ANCHOR_FAILED);
         if (err instanceof HelixError) {
           throw err;
         }
@@ -227,15 +256,7 @@ export class DIDService implements IDIDService {
     await this.cache.set(did, document, this.cacheTtlSeconds);
 
     // 5. Audit log
-    await this.audit.log({
-      timestamp: new Date().toISOString(),
-      event: 'DID_CREATED',
-      requestId,
-      did,
-      subjectType,
-      hederaTransactionId: anchoring.transactionId,
-      publicKeyMultibase: document.verificationMethod[0]!.publicKeyMultibase,
-    });
+    this.auditDidChange(requestId, did, 'created', document);
 
     return {
       did: record.id,
@@ -267,6 +288,7 @@ export class DIDService implements IDIDService {
       await this.repository.createDid({
         id: did,
         subjectType,
+        // Stored as the document has it: a document may leave `controller` out (DID Core §5.1.2).
         controller: document.controller,
         publicKey: publicKeyHex,
         publicKeyMultibase: document.verificationMethod[0]!.publicKeyMultibase,
@@ -274,15 +296,7 @@ export class DIDService implements IDIDService {
         didDocument: document,
       });
       await this.cache.set(did, document, this.cacheTtlSeconds);
-      await this.audit.log({
-        timestamp: new Date().toISOString(),
-        event: 'DID_CREATED',
-        requestId,
-        did,
-        subjectType,
-        hederaTransactionId: `not-anchored:${method}:${did}`,
-        publicKeyMultibase: document.verificationMethod[0]!.publicKeyMultibase,
-      });
+      this.auditDidChange(requestId, did, 'created', document);
     } catch (err) {
       // A concurrent request may have just won this same race -- unique-
       // constraint violation on `id` is the one failure mode that's safe to
@@ -298,7 +312,6 @@ export class DIDService implements IDIDService {
    */
   async resolveDID(did: string, options: { live?: boolean } | string = {}, requestId = 'req_unknown'): Promise<ResolveDIDResult> {
     const normalizedOptions = typeof options === 'string' ? {} : options;
-    const normalizedRequestId = typeof options === 'string' ? options : requestId;
     if (!normalizedOptions.live) {
       const cached = await this.cache.get(did);
       if (cached) {
@@ -311,13 +324,6 @@ export class DIDService implements IDIDService {
           await this.cache.delete(did);
           throw new HelixError(ErrorCode.DID_DEACTIVATED, 'DID is deactivated', 410, { did });
         }
-        await this.audit.log({
-          timestamp: new Date().toISOString(),
-          event: 'DID_RESOLVED',
-          requestId: normalizedRequestId,
-          did,
-          source: 'cache',
-        });
         return {
           did,
           didDocument: cached,
@@ -351,14 +357,6 @@ export class DIDService implements IDIDService {
     if (!normalizedOptions.live) {
       await this.cache.set(did, document, this.cacheTtlSeconds);
     }
-
-    await this.audit.log({
-      timestamp: new Date().toISOString(),
-      event: 'DID_RESOLVED',
-      requestId: normalizedRequestId,
-      did,
-      source: normalizedOptions.live ? 'hedera' : 'db',
-    });
 
     return {
       did,
@@ -397,14 +395,7 @@ export class DIDService implements IDIDService {
     });
     await this.cache.delete(did);
 
-    await this.audit.log({
-      timestamp: new Date().toISOString(),
-      event: 'DID_UPDATED',
-      requestId,
-      did,
-      updateType: 'add_service_endpoint',
-      hederaTransactionId: anchoring.transactionId,
-    });
+    this.auditDidChange(requestId, did, 'add_service_endpoint', updatedDoc);
 
     return updatedDoc;
   }
@@ -436,14 +427,7 @@ export class DIDService implements IDIDService {
     });
     await this.cache.delete(did);
 
-    await this.audit.log({
-      timestamp: new Date().toISOString(),
-      event: 'DID_UPDATED',
-      requestId,
-      did,
-      updateType: 'remove_service_endpoint',
-      hederaTransactionId: anchoring.transactionId,
-    });
+    this.auditDidChange(requestId, did, 'remove_service_endpoint', updatedDoc);
 
     return updatedDoc;
   }
@@ -475,12 +459,6 @@ export class DIDService implements IDIDService {
     // would keep resolving from the verifier's cache for up to its TTL.
     evictDIDCache(did);
 
-    await this.audit.log({
-      timestamp: new Date().toISOString(),
-      event: 'DID_DEACTIVATED',
-      requestId,
-      did,
-      reason: 'user_request',
-    });
+    this.auditDidChange(requestId, did, 'deactivated');
   }
 }

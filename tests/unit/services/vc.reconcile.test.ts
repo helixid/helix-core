@@ -4,40 +4,96 @@
 // same identity + same scope set refreshes, a different scope set stands
 // beside, revokeExisting clears the others, and nothing active delegations
 // still hang off is ever revoked. Run against the in-memory repository so
-// the rule is exercised end to end: issue, store, look up, revoke, chain.
+// the rule is exercised end to end: store, look up, revoke, chain. The
+// credentials are DelegationGrantCredentials (what reaches this rule today:
+// a service's grant to an agent for a user), stored through registerSignedVC.
 
+import { randomUUID } from 'node:crypto';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { VCService } from '../../../src/services/vc/vc.service.js';
 import { VcRepository } from '../../../src/repositories/vc.repository.js';
 import { buildDIDDocument, derivePublicKey, getBit, type SignedVC } from '../../../src/core/index.js';
+import { TestAuditTrail } from '../../utils/TestAuditTrail.js';
 
 const signingKey = 'a'.repeat(64);
 const issuerDid = 'did:hedera:testnet:testissuer';
 const agentDid = 'did:key:z6MkAgent';
+const serviceDid = 'did:web:orders.example';
+const userDid = 'did:web:mock.local:users:alice';
+const GRANT = 'DelegationGrantCredential';
 
 describe('VCService.reconcileActive', () => {
   let repository: VcRepository;
-  let audit: { log: ReturnType<typeof vi.fn> };
+  let audit: TestAuditTrail;
   let service: VCService;
 
   beforeEach(() => {
     repository = new VcRepository();
-    audit = { log: vi.fn() };
+    audit = new TestAuditTrail();
     const didService = {
       resolveDID: vi.fn(async (did: string) =>
         did === issuerDid ? { didDocument: buildDIDDocument(issuerDid, derivePublicKey(signingKey)) } : {},
       ),
       registerResolvedDID: vi.fn(),
     };
-    service = new VCService(repository, didService as never, audit as never, signingKey, issuerDid, 'http://localhost');
+    service = new VCService(repository, didService as never, audit, signingKey, issuerDid, 'http://localhost');
   });
 
-  const issue = (scopes: string[], revokeExisting = false) =>
-    service.issueVC({ subjectDid: agentDid, subjectType: 'agent', agentName: 'A', privilegeScopes: scopes, revokeExisting }, 'r');
+  /** A service's grant on the platform list, stored the way grants are, with what reconcile did. */
+  async function issue(
+    scopes: string[],
+    revokeExisting = false,
+    who: { subject?: string; issuer?: string } = {},
+  ): Promise<{ vcId: string; statusListIndex: number; replacedVcIds: string[]; revokedVcIds: string[]; retainedVcIds: string[] }> {
+    const entry = await service.claimStatusListEntry();
+    const vc = {
+      '@context': ['https://www.w3.org/ns/credentials/v2', 'https://helixid.io/contexts/v1'],
+      id: `urn:uuid:${randomUUID()}`,
+      type: ['VerifiableCredential', GRANT],
+      issuer: who.issuer ?? serviceDid,
+      validFrom: new Date().toISOString(),
+      credentialStatus: {
+        id: `${entry.statusListCredentialUrl}#${entry.statusListIndex}`,
+        type: 'BitstringStatusListEntry',
+        statusPurpose: 'revocation',
+        statusListIndex: String(entry.statusListIndex),
+        statusListCredential: entry.statusListCredentialUrl,
+      },
+      credentialSubject: { id: who.subject ?? agentDid, type: 'DelegationGrant', userDid, scopes, durability: 'standing' },
+      proof: { type: 'Ed25519Signature2020', created: '', verificationMethod: '', proofPurpose: 'assertionMethod', proofValue: 'x' },
+    } as unknown as SignedVC;
+    const result = await service.registerSignedVC(vc, { revokeExisting });
+    return { vcId: vc.id, statusListIndex: entry.statusListIndex, ...result };
+  }
 
   async function activeIds(): Promise<string[]> {
-    return (await service.listActiveBySubjectDid(agentDid, 'HelixAgentCredential')).map((vc) => vc['id'] as string);
+    return (await service.listActiveBySubjectDid(agentDid, GRANT)).map((vc) => vc['id'] as string);
   }
+
+  it('latestBySubjectDid: the newest credential of a type, revoked included; null for none', async () => {
+    const first = await issue(['read:a']);
+    const second = await issue(['read:z']);
+    await service.revokeVC(second.vcId, 'r');
+    expect((await service.latestBySubjectDid(agentDid, GRANT))?.['id']).toBe(second.vcId);
+    expect(await service.latestBySubjectDid(agentDid, 'AgentIdentityCredential')).toBeNull();
+    expect(await service.latestBySubjectDid('did:web:nobody', GRANT)).toBeNull();
+    expect(first.vcId).not.toBe(second.vcId);
+  });
+
+  it('latestBySubjectDid reads a stored string and orders records without a creation time first', async () => {
+    const repo = {
+      findMany: async () => [
+        { vcType: 'AgentIdentityCredential', vcJson: JSON.stringify({ id: 'vc:a' }) },
+        { vcType: 'AgentIdentityCredential', vcJson: { id: 'vc:b' }, createdAt: new Date('2026-01-02T00:00:00Z') },
+        { vcType: 'AgentIdentityCredential', vcJson: JSON.stringify({ id: 'vc:c' }), createdAt: new Date('2026-01-01T00:00:00Z') },
+        { vcType: 'Other', vcJson: { id: 'vc:d' }, createdAt: new Date('2026-02-01T00:00:00Z') },
+      ],
+    };
+    const stub = new VCService(repo as never, {} as never, audit, signingKey, issuerDid, 'http://localhost');
+    expect(await stub.latestBySubjectDid('did:x', 'AgentIdentityCredential')).toEqual({ id: 'vc:b' });
+    const only = new VCService({ findMany: async () => [{ vcType: 'T', vcJson: '{"id":"vc:s"}' }] } as never, {} as never, audit, signingKey, issuerDid, 'http://localhost');
+    expect(await only.latestBySubjectDid('did:x', 'T')).toEqual({ id: 'vc:s' });
+  });
 
   it('re-issuing the same scopes refreshes: old revoked on the status list and chained to the new', async () => {
     const first = await issue(['read:b', 'read:a']);
@@ -47,10 +103,17 @@ describe('VCService.reconcileActive', () => {
     expect(second.revokedVcIds).toEqual([]);
     expect(await activeIds()).toEqual([second.vcId]);
     expect((await service.getVC(first.vcId, 'r')).renewedByVcId).toBe(second.vcId);
-    const list = await service.getStatusList('helix-status-list-1');
-    expect(getBit(list.credentialSubject.encodedList, first.statusListIndex)).toBe(1);
-    expect(getBit(list.credentialSubject.encodedList, second.statusListIndex)).toBe(0);
-    expect(audit.log).toHaveBeenCalledWith(expect.objectContaining({ event: 'VC_REVOKED', vcId: first.vcId, reason: 'superseded' }));
+    const list = (await repository.findStatusListById('helix-status-list-1'))!;
+    expect(getBit(list.encodedList, first.statusListIndex)).toBe(1);
+    expect(getBit(list.encodedList, second.statusListIndex)).toBe(0);
+    await audit.flush();
+    expect(audit.ofType('delegation.revoked')).toContainEqual(
+      expect.objectContaining({
+        reason: { code: 'superseded' },
+        resource: { kind: 'public_did', did: agentDid },
+        details: { family: 'delegation', phase: 'revoked', delegationRef: first.vcId },
+      }),
+    );
   });
 
   it('a different scope set stands beside the existing one; revokeExisting clears the others', async () => {
@@ -66,28 +129,24 @@ describe('VCService.reconcileActive', () => {
 
   it('credentials for another subject or from another issuer are a different identity', async () => {
     const mine = await issue(['read:a']);
-    await service.issueVC(
-      { subjectDid: 'did:key:z6MkOther', subjectType: 'agent', agentName: 'B', privilegeScopes: ['read:a'], revokeExisting: true },
-      'r',
-    );
-    expect(await activeIds()).toEqual([mine.vcId]);
+    const otherSubject = await issue(['read:a'], true, { subject: 'did:key:z6MkOther' });
+    const otherIssuer = await issue(['read:a'], true, { issuer: 'did:web:other-service.example' });
+    // Neither revokeExisting touched this agent's grant from this service.
+    expect(otherSubject.revokedVcIds).toEqual([]);
+    expect(otherIssuer.revokedVcIds).toEqual([]);
+    expect(otherIssuer.replacedVcIds).toEqual([]);
+    expect(await activeIds()).toEqual([mine.vcId, otherIssuer.vcId]);
   });
 
   it('never revokes a credential that active delegations still point at', async () => {
     const parent = await issue(['read:a']);
     const child = {
-      id: 'vc:helix:child',
-      type: ['VerifiableCredential', 'HelixAgentCredential'],
+      id: 'urn:zcap:child',
+      type: ['VerifiableCredential', 'DelegationCredential'],
       issuer: agentDid,
       validFrom: new Date().toISOString(),
-      credentialSubject: {
-        id: 'did:key:z6MkSub',
-        type: 'HelixAgent',
-        privilegeScopes: ['read:a'],
-        delegatedFrom: agentDid,
-        parentVcId: parent.vcId,
-      },
-      proof: { type: 'Ed25519Signature2020', created: '', verificationMethod: '', proofPurpose: 'assertionMethod', proofValue: 'x' },
+      credentialSubject: { id: 'did:key:z6MkSub', parentVcId: parent.vcId },
+      proof: { type: 'DataIntegrityProof', created: '', verificationMethod: '', proofPurpose: 'assertionMethod', proofValue: 'x' },
     } as unknown as SignedVC;
     await service.registerSignedVC(child);
 
@@ -99,18 +158,18 @@ describe('VCService.reconcileActive', () => {
     expect(await activeIds()).toEqual([parent.vcId, refreshed.vcId]);
   });
 
-  it('a delegation VC with no status entry of its own is revoked by its row alone', async () => {
+  it('a credential with no status entry of its own is revoked by its row alone', async () => {
     const delegation = (id: string, scopes: string[]) =>
       ({
         id,
-        type: ['VerifiableCredential', 'HelixAgentCredential'],
-        issuer: agentDid,
+        type: ['VerifiableCredential', GRANT],
+        issuer: serviceDid,
         validFrom: new Date().toISOString(),
-        credentialSubject: { id: 'did:key:z6MkSub', type: 'HelixAgent', privilegeScopes: scopes, delegatedFrom: agentDid },
+        credentialSubject: { id: 'did:key:z6MkSub', type: 'DelegationGrant', userDid, scopes, durability: 'standing' },
         proof: { type: 'Ed25519Signature2020', created: '', verificationMethod: '', proofPurpose: 'assertionMethod', proofValue: 'x' },
       }) as unknown as SignedVC;
     // Something else owns bit 0 of the platform list; a placeholder-index
-    // delegation VC must not flip it when superseded.
+    // credential with no status entry must not flip it when superseded.
     const owner = await issue(['read:z']);
     expect(owner.statusListIndex).toBe(0);
 
@@ -119,7 +178,7 @@ describe('VCService.reconcileActive', () => {
 
     expect(result.replacedVcIds).toEqual(['vc:d1']);
     expect((await service.getVC('vc:d1', 'r')).status).toBe('revoked');
-    const list = await service.getStatusList('helix-status-list-1');
-    expect(getBit(list.credentialSubject.encodedList, 0)).toBe(0);
+    const list = (await repository.findStatusListById('helix-status-list-1'))!;
+    expect(getBit(list.encodedList, 0)).toBe(0);
   });
 });

@@ -1,0 +1,1285 @@
+{
+  "generated_from": "helix-core scripts/gen-fixtures.ts with @helixid/sdk-js kyaos.verifier (the JavaScript reference)",
+  "generator": "pnpm generate:verifier-fixtures",
+  "note": "TEST-ONLY keys derived from labels; never reuse. Regenerate whenever the verifier or a builder changes and commit the diff. Do not hand-edit.",
+  "now": "2026-06-01T00:00:00Z",
+  "keys": {
+    "service": {
+      "private_key_hex": "a6140a2ee98c8afea81c8a921578130fa87c8e0745528b373263bd0005702d43",
+      "public_key_hex": "9742345aa7d4118a5e97dba8e0383dcf944a4cd6e11badd401c48e7364413f85",
+      "did": "did:key:z6MkpdiACd8WP1Fo79XkwdWYobFiNQtL9dWxr47zkxfiL6rp",
+      "kid": "did:key:z6MkpdiACd8WP1Fo79XkwdWYobFiNQtL9dWxr47zkxfiL6rp#z6MkpdiACd8WP1Fo79XkwdWYobFiNQtL9dWxr47zkxfiL6rp",
+      "did_document": {
+        "@context": [
+          "https://www.w3.org/ns/did/v1",
+          "https://w3id.org/security/suites/ed25519-2020/v1"
+        ],
+        "id": "did:key:z6MkpdiACd8WP1Fo79XkwdWYobFiNQtL9dWxr47zkxfiL6rp",
+        "controller": "did:key:z6MkpdiACd8WP1Fo79XkwdWYobFiNQtL9dWxr47zkxfiL6rp",
+        "verificationMethod": [
+          {
+            "id": "did:key:z6MkpdiACd8WP1Fo79XkwdWYobFiNQtL9dWxr47zkxfiL6rp#z6MkpdiACd8WP1Fo79XkwdWYobFiNQtL9dWxr47zkxfiL6rp",
+            "type": "Ed25519VerificationKey2020",
+            "controller": "did:key:z6MkpdiACd8WP1Fo79XkwdWYobFiNQtL9dWxr47zkxfiL6rp",
+            "publicKeyMultibase": "z6MkpdiACd8WP1Fo79XkwdWYobFiNQtL9dWxr47zkxfiL6rp"
+          }
+        ],
+        "authentication": [
+          "did:key:z6MkpdiACd8WP1Fo79XkwdWYobFiNQtL9dWxr47zkxfiL6rp#z6MkpdiACd8WP1Fo79XkwdWYobFiNQtL9dWxr47zkxfiL6rp"
+        ],
+        "assertionMethod": [
+          "did:key:z6MkpdiACd8WP1Fo79XkwdWYobFiNQtL9dWxr47zkxfiL6rp#z6MkpdiACd8WP1Fo79XkwdWYobFiNQtL9dWxr47zkxfiL6rp"
+        ]
+      }
+    },
+    "owner": {
+      "private_key_hex": "300069cf60c7e0882a42393fdf03a87a5668267a7cd78a0dc1bcd5c094062821",
+      "public_key_hex": "9d45977b0349a6e4f1ab68cdb88b8354a200b7a31e32aab229666bb1a12fec06",
+      "did": "did:key:z6Mkq3Bbq2EiVri4rJQhD8x5NdDpqHKNtuZoBGVhcyRnUTbb",
+      "kid": "did:key:z6Mkq3Bbq2EiVri4rJQhD8x5NdDpqHKNtuZoBGVhcyRnUTbb#z6Mkq3Bbq2EiVri4rJQhD8x5NdDpqHKNtuZoBGVhcyRnUTbb",
+      "did_document": {
+        "@context": [
+          "https://www.w3.org/ns/did/v1",
+          "https://w3id.org/security/suites/ed25519-2020/v1"
+        ],
+        "id": "did:key:z6Mkq3Bbq2EiVri4rJQhD8x5NdDpqHKNtuZoBGVhcyRnUTbb",
+        "controller": "did:key:z6Mkq3Bbq2EiVri4rJQhD8x5NdDpqHKNtuZoBGVhcyRnUTbb",
+        "verificationMethod": [
+          {
+            "id": "did:key:z6Mkq3Bbq2EiVri4rJQhD8x5NdDpqHKNtuZoBGVhcyRnUTbb#z6Mkq3Bbq2EiVri4rJQhD8x5NdDpqHKNtuZoBGVhcyRnUTbb",
+            "type": "Ed25519VerificationKey2020",
+            "controller": "did:key:z6Mkq3Bbq2EiVri4rJQhD8x5NdDpqHKNtuZoBGVhcyRnUTbb",
+            "publicKeyMultibase": "z6Mkq3Bbq2EiVri4rJQhD8x5NdDpqHKNtuZoBGVhcyRnUTbb"
+          }
+        ],
+        "authentication": [
+          "did:key:z6Mkq3Bbq2EiVri4rJQhD8x5NdDpqHKNtuZoBGVhcyRnUTbb#z6Mkq3Bbq2EiVri4rJQhD8x5NdDpqHKNtuZoBGVhcyRnUTbb"
+        ],
+        "assertionMethod": [
+          "did:key:z6Mkq3Bbq2EiVri4rJQhD8x5NdDpqHKNtuZoBGVhcyRnUTbb#z6Mkq3Bbq2EiVri4rJQhD8x5NdDpqHKNtuZoBGVhcyRnUTbb"
+        ]
+      }
+    },
+    "helix": {
+      "private_key_hex": "8ce96dd57dfde34545fe7c1c877608f9d8f6f2a93310ebb9535a77ceb6e6ac92",
+      "public_key_hex": "5ef2a5e754a64a9648ae1d1cb609a5bf1741bfa2704abce54b8bb7e8e64f9ae8",
+      "did": "did:key:z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P",
+      "kid": "did:key:z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P#z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P",
+      "did_document": {
+        "@context": [
+          "https://www.w3.org/ns/did/v1",
+          "https://w3id.org/security/suites/ed25519-2020/v1"
+        ],
+        "id": "did:key:z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P",
+        "controller": "did:key:z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P",
+        "verificationMethod": [
+          {
+            "id": "did:key:z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P#z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P",
+            "type": "Ed25519VerificationKey2020",
+            "controller": "did:key:z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P",
+            "publicKeyMultibase": "z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P"
+          }
+        ],
+        "authentication": [
+          "did:key:z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P#z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P"
+        ],
+        "assertionMethod": [
+          "did:key:z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P#z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P"
+        ]
+      }
+    },
+    "parent": {
+      "private_key_hex": "cb0c36beaae1baad13292c307d8aed3996542216f16157ef1a88bc158e84fc45",
+      "public_key_hex": "967be75df91e6d130d7aa26663feb0175b95f30f3b1f13a3bbdf781084b225bc",
+      "did": "did:key:z6MkpagnGTM3Ci2aLdBpE9WgHcBWwtBY8AnwJJpCDFDts2xb",
+      "kid": "did:key:z6MkpagnGTM3Ci2aLdBpE9WgHcBWwtBY8AnwJJpCDFDts2xb#z6MkpagnGTM3Ci2aLdBpE9WgHcBWwtBY8AnwJJpCDFDts2xb",
+      "did_document": {
+        "@context": [
+          "https://www.w3.org/ns/did/v1",
+          "https://w3id.org/security/suites/ed25519-2020/v1"
+        ],
+        "id": "did:key:z6MkpagnGTM3Ci2aLdBpE9WgHcBWwtBY8AnwJJpCDFDts2xb",
+        "controller": "did:key:z6MkpagnGTM3Ci2aLdBpE9WgHcBWwtBY8AnwJJpCDFDts2xb",
+        "verificationMethod": [
+          {
+            "id": "did:key:z6MkpagnGTM3Ci2aLdBpE9WgHcBWwtBY8AnwJJpCDFDts2xb#z6MkpagnGTM3Ci2aLdBpE9WgHcBWwtBY8AnwJJpCDFDts2xb",
+            "type": "Ed25519VerificationKey2020",
+            "controller": "did:key:z6MkpagnGTM3Ci2aLdBpE9WgHcBWwtBY8AnwJJpCDFDts2xb",
+            "publicKeyMultibase": "z6MkpagnGTM3Ci2aLdBpE9WgHcBWwtBY8AnwJJpCDFDts2xb"
+          }
+        ],
+        "authentication": [
+          "did:key:z6MkpagnGTM3Ci2aLdBpE9WgHcBWwtBY8AnwJJpCDFDts2xb#z6MkpagnGTM3Ci2aLdBpE9WgHcBWwtBY8AnwJJpCDFDts2xb"
+        ],
+        "assertionMethod": [
+          "did:key:z6MkpagnGTM3Ci2aLdBpE9WgHcBWwtBY8AnwJJpCDFDts2xb#z6MkpagnGTM3Ci2aLdBpE9WgHcBWwtBY8AnwJJpCDFDts2xb"
+        ]
+      }
+    },
+    "agent": {
+      "private_key_hex": "2d658839e298b9af2b8d3297a62fab6f5b49d9c9829d7161b7666f5c53ec4326",
+      "public_key_hex": "cbc7555df595d6a7380d0452d309722d47d80d58104444867c364e4343f2a7cf",
+      "did": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+      "kid": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz#z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+      "did_document": {
+        "@context": [
+          "https://www.w3.org/ns/did/v1",
+          "https://w3id.org/security/suites/ed25519-2020/v1"
+        ],
+        "id": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+        "controller": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+        "verificationMethod": [
+          {
+            "id": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz#z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+            "type": "Ed25519VerificationKey2020",
+            "controller": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+            "publicKeyMultibase": "z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz"
+          }
+        ],
+        "authentication": [
+          "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz#z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz"
+        ],
+        "assertionMethod": [
+          "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz#z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz"
+        ]
+      }
+    },
+    "stranger": {
+      "private_key_hex": "984cd5ce9570b99a846b9d797eaa91317370bd06d452e179aa42f3f126eba45a",
+      "public_key_hex": "29da912ee7e0a784509fb280f00f32f7c1d0dd0a1a504f1bc0316d419eb4ba8a",
+      "did": "did:key:z6MkhGe4c3bBPBRU6UvBm8y5WKucfAhmYSATY83er8MsxbKw",
+      "kid": "did:key:z6MkhGe4c3bBPBRU6UvBm8y5WKucfAhmYSATY83er8MsxbKw#z6MkhGe4c3bBPBRU6UvBm8y5WKucfAhmYSATY83er8MsxbKw",
+      "did_document": {
+        "@context": [
+          "https://www.w3.org/ns/did/v1",
+          "https://w3id.org/security/suites/ed25519-2020/v1"
+        ],
+        "id": "did:key:z6MkhGe4c3bBPBRU6UvBm8y5WKucfAhmYSATY83er8MsxbKw",
+        "controller": "did:key:z6MkhGe4c3bBPBRU6UvBm8y5WKucfAhmYSATY83er8MsxbKw",
+        "verificationMethod": [
+          {
+            "id": "did:key:z6MkhGe4c3bBPBRU6UvBm8y5WKucfAhmYSATY83er8MsxbKw#z6MkhGe4c3bBPBRU6UvBm8y5WKucfAhmYSATY83er8MsxbKw",
+            "type": "Ed25519VerificationKey2020",
+            "controller": "did:key:z6MkhGe4c3bBPBRU6UvBm8y5WKucfAhmYSATY83er8MsxbKw",
+            "publicKeyMultibase": "z6MkhGe4c3bBPBRU6UvBm8y5WKucfAhmYSATY83er8MsxbKw"
+          }
+        ],
+        "authentication": [
+          "did:key:z6MkhGe4c3bBPBRU6UvBm8y5WKucfAhmYSATY83er8MsxbKw#z6MkhGe4c3bBPBRU6UvBm8y5WKucfAhmYSATY83er8MsxbKw"
+        ],
+        "assertionMethod": [
+          "did:key:z6MkhGe4c3bBPBRU6UvBm8y5WKucfAhmYSATY83er8MsxbKw#z6MkhGe4c3bBPBRU6UvBm8y5WKucfAhmYSATY83er8MsxbKw"
+        ]
+      }
+    }
+  },
+  "did_documents": {
+    "did:key:z6MkpdiACd8WP1Fo79XkwdWYobFiNQtL9dWxr47zkxfiL6rp": {
+      "@context": [
+        "https://www.w3.org/ns/did/v1",
+        "https://w3id.org/security/suites/ed25519-2020/v1"
+      ],
+      "id": "did:key:z6MkpdiACd8WP1Fo79XkwdWYobFiNQtL9dWxr47zkxfiL6rp",
+      "controller": "did:key:z6MkpdiACd8WP1Fo79XkwdWYobFiNQtL9dWxr47zkxfiL6rp",
+      "verificationMethod": [
+        {
+          "id": "did:key:z6MkpdiACd8WP1Fo79XkwdWYobFiNQtL9dWxr47zkxfiL6rp#z6MkpdiACd8WP1Fo79XkwdWYobFiNQtL9dWxr47zkxfiL6rp",
+          "type": "Ed25519VerificationKey2020",
+          "controller": "did:key:z6MkpdiACd8WP1Fo79XkwdWYobFiNQtL9dWxr47zkxfiL6rp",
+          "publicKeyMultibase": "z6MkpdiACd8WP1Fo79XkwdWYobFiNQtL9dWxr47zkxfiL6rp"
+        }
+      ],
+      "authentication": [
+        "did:key:z6MkpdiACd8WP1Fo79XkwdWYobFiNQtL9dWxr47zkxfiL6rp#z6MkpdiACd8WP1Fo79XkwdWYobFiNQtL9dWxr47zkxfiL6rp"
+      ],
+      "assertionMethod": [
+        "did:key:z6MkpdiACd8WP1Fo79XkwdWYobFiNQtL9dWxr47zkxfiL6rp#z6MkpdiACd8WP1Fo79XkwdWYobFiNQtL9dWxr47zkxfiL6rp"
+      ]
+    },
+    "did:key:z6Mkq3Bbq2EiVri4rJQhD8x5NdDpqHKNtuZoBGVhcyRnUTbb": {
+      "@context": [
+        "https://www.w3.org/ns/did/v1",
+        "https://w3id.org/security/suites/ed25519-2020/v1"
+      ],
+      "id": "did:key:z6Mkq3Bbq2EiVri4rJQhD8x5NdDpqHKNtuZoBGVhcyRnUTbb",
+      "controller": "did:key:z6Mkq3Bbq2EiVri4rJQhD8x5NdDpqHKNtuZoBGVhcyRnUTbb",
+      "verificationMethod": [
+        {
+          "id": "did:key:z6Mkq3Bbq2EiVri4rJQhD8x5NdDpqHKNtuZoBGVhcyRnUTbb#z6Mkq3Bbq2EiVri4rJQhD8x5NdDpqHKNtuZoBGVhcyRnUTbb",
+          "type": "Ed25519VerificationKey2020",
+          "controller": "did:key:z6Mkq3Bbq2EiVri4rJQhD8x5NdDpqHKNtuZoBGVhcyRnUTbb",
+          "publicKeyMultibase": "z6Mkq3Bbq2EiVri4rJQhD8x5NdDpqHKNtuZoBGVhcyRnUTbb"
+        }
+      ],
+      "authentication": [
+        "did:key:z6Mkq3Bbq2EiVri4rJQhD8x5NdDpqHKNtuZoBGVhcyRnUTbb#z6Mkq3Bbq2EiVri4rJQhD8x5NdDpqHKNtuZoBGVhcyRnUTbb"
+      ],
+      "assertionMethod": [
+        "did:key:z6Mkq3Bbq2EiVri4rJQhD8x5NdDpqHKNtuZoBGVhcyRnUTbb#z6Mkq3Bbq2EiVri4rJQhD8x5NdDpqHKNtuZoBGVhcyRnUTbb"
+      ]
+    },
+    "did:key:z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P": {
+      "@context": [
+        "https://www.w3.org/ns/did/v1",
+        "https://w3id.org/security/suites/ed25519-2020/v1"
+      ],
+      "id": "did:key:z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P",
+      "controller": "did:key:z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P",
+      "verificationMethod": [
+        {
+          "id": "did:key:z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P#z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P",
+          "type": "Ed25519VerificationKey2020",
+          "controller": "did:key:z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P",
+          "publicKeyMultibase": "z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P"
+        }
+      ],
+      "authentication": [
+        "did:key:z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P#z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P"
+      ],
+      "assertionMethod": [
+        "did:key:z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P#z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P"
+      ]
+    },
+    "did:key:z6MkpagnGTM3Ci2aLdBpE9WgHcBWwtBY8AnwJJpCDFDts2xb": {
+      "@context": [
+        "https://www.w3.org/ns/did/v1",
+        "https://w3id.org/security/suites/ed25519-2020/v1"
+      ],
+      "id": "did:key:z6MkpagnGTM3Ci2aLdBpE9WgHcBWwtBY8AnwJJpCDFDts2xb",
+      "controller": "did:key:z6MkpagnGTM3Ci2aLdBpE9WgHcBWwtBY8AnwJJpCDFDts2xb",
+      "verificationMethod": [
+        {
+          "id": "did:key:z6MkpagnGTM3Ci2aLdBpE9WgHcBWwtBY8AnwJJpCDFDts2xb#z6MkpagnGTM3Ci2aLdBpE9WgHcBWwtBY8AnwJJpCDFDts2xb",
+          "type": "Ed25519VerificationKey2020",
+          "controller": "did:key:z6MkpagnGTM3Ci2aLdBpE9WgHcBWwtBY8AnwJJpCDFDts2xb",
+          "publicKeyMultibase": "z6MkpagnGTM3Ci2aLdBpE9WgHcBWwtBY8AnwJJpCDFDts2xb"
+        }
+      ],
+      "authentication": [
+        "did:key:z6MkpagnGTM3Ci2aLdBpE9WgHcBWwtBY8AnwJJpCDFDts2xb#z6MkpagnGTM3Ci2aLdBpE9WgHcBWwtBY8AnwJJpCDFDts2xb"
+      ],
+      "assertionMethod": [
+        "did:key:z6MkpagnGTM3Ci2aLdBpE9WgHcBWwtBY8AnwJJpCDFDts2xb#z6MkpagnGTM3Ci2aLdBpE9WgHcBWwtBY8AnwJJpCDFDts2xb"
+      ]
+    },
+    "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz": {
+      "@context": [
+        "https://www.w3.org/ns/did/v1",
+        "https://w3id.org/security/suites/ed25519-2020/v1"
+      ],
+      "id": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+      "controller": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+      "verificationMethod": [
+        {
+          "id": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz#z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+          "type": "Ed25519VerificationKey2020",
+          "controller": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+          "publicKeyMultibase": "z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz"
+        }
+      ],
+      "authentication": [
+        "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz#z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz"
+      ],
+      "assertionMethod": [
+        "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz#z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz"
+      ]
+    },
+    "did:key:z6MkhGe4c3bBPBRU6UvBm8y5WKucfAhmYSATY83er8MsxbKw": {
+      "@context": [
+        "https://www.w3.org/ns/did/v1",
+        "https://w3id.org/security/suites/ed25519-2020/v1"
+      ],
+      "id": "did:key:z6MkhGe4c3bBPBRU6UvBm8y5WKucfAhmYSATY83er8MsxbKw",
+      "controller": "did:key:z6MkhGe4c3bBPBRU6UvBm8y5WKucfAhmYSATY83er8MsxbKw",
+      "verificationMethod": [
+        {
+          "id": "did:key:z6MkhGe4c3bBPBRU6UvBm8y5WKucfAhmYSATY83er8MsxbKw#z6MkhGe4c3bBPBRU6UvBm8y5WKucfAhmYSATY83er8MsxbKw",
+          "type": "Ed25519VerificationKey2020",
+          "controller": "did:key:z6MkhGe4c3bBPBRU6UvBm8y5WKucfAhmYSATY83er8MsxbKw",
+          "publicKeyMultibase": "z6MkhGe4c3bBPBRU6UvBm8y5WKucfAhmYSATY83er8MsxbKw"
+        }
+      ],
+      "authentication": [
+        "did:key:z6MkhGe4c3bBPBRU6UvBm8y5WKucfAhmYSATY83er8MsxbKw#z6MkhGe4c3bBPBRU6UvBm8y5WKucfAhmYSATY83er8MsxbKw"
+      ],
+      "assertionMethod": [
+        "did:key:z6MkhGe4c3bBPBRU6UvBm8y5WKucfAhmYSATY83er8MsxbKw#z6MkhGe4c3bBPBRU6UvBm8y5WKucfAhmYSATY83er8MsxbKw"
+      ]
+    }
+  },
+  "status_lists": {
+    "https://owner.example/status/1": {
+      "encoded_list": "H4sIAAAAAAAAE2M4wIAXAADrHCIIIAAAAA",
+      "issuer": "did:key:z6Mkq3Bbq2EiVri4rJQhD8x5NdDpqHKNtuZoBGVhcyRnUTbb",
+      "status_purpose": "revocation",
+      "id": "https://owner.example/status/1",
+      "valid_from": "2026-01-01T00:00:00Z",
+      "valid_until": "2027-01-01T00:00:00Z"
+    },
+    "https://helix.example/status/1": {
+      "encoded_list": "H4sIAAAAAAAAE2M4wIAXAADrHCIIIAAAAA",
+      "issuer": "did:key:z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P",
+      "status_purpose": "revocation",
+      "id": "https://helix.example/status/1",
+      "valid_from": "2026-01-01T00:00:00Z",
+      "valid_until": "2027-01-01T00:00:00Z"
+    },
+    "https://parent.example/status/1": {
+      "encoded_list": "H4sIAAAAAAAAE2M4wIAXAADrHCIIIAAAAA",
+      "issuer": "did:key:z6MkpagnGTM3Ci2aLdBpE9WgHcBWwtBY8AnwJJpCDFDts2xb",
+      "status_purpose": "revocation",
+      "id": "https://parent.example/status/1",
+      "valid_from": "2026-01-01T00:00:00Z",
+      "valid_until": "2027-01-01T00:00:00Z"
+    },
+    "https://agent.example/status/1": {
+      "encoded_list": "H4sIAAAAAAAAE2NgwA8ArVUKGSAAAAA",
+      "issuer": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+      "status_purpose": "revocation",
+      "id": "https://agent.example/status/1",
+      "valid_from": "2026-01-01T00:00:00Z",
+      "valid_until": "2027-01-01T00:00:00Z"
+    },
+    "https://owner.example/status/stale": {
+      "encoded_list": "H4sIAAAAAAAAE2NgwA8ArVUKGSAAAAA",
+      "issuer": "did:key:z6Mkq3Bbq2EiVri4rJQhD8x5NdDpqHKNtuZoBGVhcyRnUTbb",
+      "status_purpose": "revocation",
+      "id": "https://owner.example/status/stale",
+      "valid_from": "2026-01-01T00:00:00Z",
+      "valid_until": "2026-03-01T00:00:00Z"
+    },
+    "https://owner.example/status/suspension": {
+      "encoded_list": "H4sIAAAAAAAAE2NgwA8ArVUKGSAAAAA",
+      "issuer": "did:key:z6Mkq3Bbq2EiVri4rJQhD8x5NdDpqHKNtuZoBGVhcyRnUTbb",
+      "status_purpose": "suspension",
+      "id": "https://owner.example/status/suspension",
+      "valid_from": "2026-01-01T00:00:00Z",
+      "valid_until": "2027-01-01T00:00:00Z"
+    },
+    "https://owner.example/status/foreign": {
+      "encoded_list": "H4sIAAAAAAAAE2NgwA8ArVUKGSAAAAA",
+      "issuer": "did:key:z6MkhGe4c3bBPBRU6UvBm8y5WKucfAhmYSATY83er8MsxbKw",
+      "status_purpose": "revocation",
+      "id": "https://owner.example/status/foreign",
+      "valid_from": "2026-01-01T00:00:00Z",
+      "valid_until": "2027-01-01T00:00:00Z"
+    },
+    "https://owner.example/status/other-id": {
+      "encoded_list": "H4sIAAAAAAAAE2NgwA8ArVUKGSAAAAA",
+      "issuer": "did:key:z6Mkq3Bbq2EiVri4rJQhD8x5NdDpqHKNtuZoBGVhcyRnUTbb",
+      "status_purpose": "revocation",
+      "id": "https://owner.example/status/1",
+      "valid_from": "2026-01-01T00:00:00Z",
+      "valid_until": "2027-01-01T00:00:00Z"
+    },
+    "https://owner.example/status/cached": {
+      "encoded_list": "H4sIAAAAAAAAE2NgwA8ArVUKGSAAAAA",
+      "issuer": "did:key:z6Mkq3Bbq2EiVri4rJQhD8x5NdDpqHKNtuZoBGVhcyRnUTbb",
+      "status_purpose": [
+        "suspension",
+        "revocation"
+      ],
+      "id": "https://owner.example/status/cached",
+      "valid_from": "2026-01-01T00:00:00Z",
+      "valid_until": "2027-01-01T00:00:00Z",
+      "fresh": false
+    },
+    "https://owner.example/status/bare": {
+      "encoded_list": "H4sIAAAAAAAAE2NgwA8ArVUKGSAAAAA"
+    },
+    "https://agent.example/status/card": {
+      "encoded_list": "H4sIAAAAAAAAE2NhwA8Ah0-AaCAAAAA",
+      "issuer": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+      "status_purpose": "revocation",
+      "id": "https://agent.example/status/card",
+      "valid_from": "2026-01-01T00:00:00Z",
+      "valid_until": "2027-01-01T00:00:00Z"
+    }
+  },
+  "cards": {
+    "attested": {
+      "id": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+      "entityType": "agent",
+      "name": "orders-agent",
+      "kid": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz#z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+      "capabilities": [
+        {
+          "name": "read:orders",
+          "attestations": [
+            {
+              "vc": {
+                "@context": [
+                  "https://www.w3.org/ns/credentials/v2",
+                  "https://helixid.io/contexts/v1"
+                ],
+                "id": "urn:uuid:00000000-0000-4000-8000-0000000f2001",
+                "type": [
+                  "VerifiableCredential",
+                  "CapabilityAttestationCredential"
+                ],
+                "issuer": "did:key:z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P",
+                "validFrom": "2026-01-01T00:00:00Z",
+                "validUntil": "2026-12-31T00:00:00Z",
+                "credentialSubject": {
+                  "id": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+                  "capability": "read:orders"
+                },
+                "credentialStatus": {
+                  "id": "https://helix.example/status/1#1",
+                  "type": "BitstringStatusListEntry",
+                  "statusPurpose": "revocation",
+                  "statusListIndex": "1",
+                  "statusListCredential": "https://helix.example/status/1"
+                },
+                "proof": {
+                  "type": "DataIntegrityProof",
+                  "cryptosuite": "eddsa-jcs-2022",
+                  "created": "2026-01-01T00:00:01Z",
+                  "verificationMethod": "did:key:z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P#z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P",
+                  "proofPurpose": "assertionMethod",
+                  "proofValue": "zhtkQ8KW69miAa2ys4sJYhq46Z4JJyq3fUHRcbvke85PmxgqAR5WKbQunzZc7JeC3CrqHDi5Ct9syQHccP2ZDEjs"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "write:orders",
+          "attestations": [
+            {
+              "vc": {
+                "@context": [
+                  "https://www.w3.org/ns/credentials/v2",
+                  "https://helixid.io/contexts/v1"
+                ],
+                "id": "urn:uuid:00000000-0000-4000-8000-0000000f2002",
+                "type": [
+                  "VerifiableCredential",
+                  "CapabilityAttestationCredential"
+                ],
+                "issuer": "did:key:z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P",
+                "validFrom": "2026-01-01T00:00:00Z",
+                "validUntil": "2026-12-31T00:00:00Z",
+                "credentialSubject": {
+                  "id": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+                  "capability": "write:orders"
+                },
+                "credentialStatus": {
+                  "id": "https://helix.example/status/1#2",
+                  "type": "BitstringStatusListEntry",
+                  "statusPurpose": "revocation",
+                  "statusListIndex": "2",
+                  "statusListCredential": "https://helix.example/status/1"
+                },
+                "proof": {
+                  "type": "DataIntegrityProof",
+                  "cryptosuite": "eddsa-jcs-2022",
+                  "created": "2026-01-01T00:00:01Z",
+                  "verificationMethod": "did:key:z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P#z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P",
+                  "proofPurpose": "assertionMethod",
+                  "proofValue": "z4nwMYMoveEVoFthDXhobmW3fZFgkbBVuerRd55WDJNGdhgbVZYwtQ3gdg12aK5k9xhEVNuPDB8LHk515xkNzV32r"
+                }
+              }
+            }
+          ]
+        }
+      ],
+      "responsibleParty": "did:key:z6Mkq3Bbq2EiVri4rJQhD8x5NdDpqHKNtuZoBGVhcyRnUTbb",
+      "proofProfile": "org.kya-os/proof.v1"
+    },
+    "one_bare": {
+      "id": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+      "entityType": "agent",
+      "name": "orders-agent",
+      "kid": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz#z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+      "capabilities": [
+        {
+          "name": "read:orders",
+          "attestations": [
+            {
+              "vc": {
+                "@context": [
+                  "https://www.w3.org/ns/credentials/v2",
+                  "https://helixid.io/contexts/v1"
+                ],
+                "id": "urn:uuid:00000000-0000-4000-8000-0000000f2001",
+                "type": [
+                  "VerifiableCredential",
+                  "CapabilityAttestationCredential"
+                ],
+                "issuer": "did:key:z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P",
+                "validFrom": "2026-01-01T00:00:00Z",
+                "validUntil": "2026-12-31T00:00:00Z",
+                "credentialSubject": {
+                  "id": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+                  "capability": "read:orders"
+                },
+                "credentialStatus": {
+                  "id": "https://helix.example/status/1#1",
+                  "type": "BitstringStatusListEntry",
+                  "statusPurpose": "revocation",
+                  "statusListIndex": "1",
+                  "statusListCredential": "https://helix.example/status/1"
+                },
+                "proof": {
+                  "type": "DataIntegrityProof",
+                  "cryptosuite": "eddsa-jcs-2022",
+                  "created": "2026-01-01T00:00:01Z",
+                  "verificationMethod": "did:key:z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P#z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P",
+                  "proofPurpose": "assertionMethod",
+                  "proofValue": "zhtkQ8KW69miAa2ys4sJYhq46Z4JJyq3fUHRcbvke85PmxgqAR5WKbQunzZc7JeC3CrqHDi5Ct9syQHccP2ZDEjs"
+                }
+              }
+            }
+          ]
+        },
+        "write:orders"
+      ],
+      "responsibleParty": "did:key:z6Mkq3Bbq2EiVri4rJQhD8x5NdDpqHKNtuZoBGVhcyRnUTbb",
+      "proofProfile": "org.kya-os/proof.v1"
+    },
+    "revoked_attestation": {
+      "id": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+      "entityType": "agent",
+      "name": "orders-agent",
+      "kid": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz#z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+      "capabilities": [
+        {
+          "name": "read:orders",
+          "attestations": [
+            {
+              "vc": {
+                "@context": [
+                  "https://www.w3.org/ns/credentials/v2",
+                  "https://helixid.io/contexts/v1"
+                ],
+                "id": "urn:uuid:00000000-0000-4000-8000-0000000f2008",
+                "type": [
+                  "VerifiableCredential",
+                  "CapabilityAttestationCredential"
+                ],
+                "issuer": "did:key:z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P",
+                "validFrom": "2026-01-01T00:00:00Z",
+                "validUntil": "2026-12-31T00:00:00Z",
+                "credentialSubject": {
+                  "id": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+                  "capability": "read:orders"
+                },
+                "credentialStatus": {
+                  "id": "https://helix.example/status/1#8",
+                  "type": "BitstringStatusListEntry",
+                  "statusPurpose": "revocation",
+                  "statusListIndex": "8",
+                  "statusListCredential": "https://helix.example/status/1"
+                },
+                "proof": {
+                  "type": "DataIntegrityProof",
+                  "cryptosuite": "eddsa-jcs-2022",
+                  "created": "2026-01-01T00:00:01Z",
+                  "verificationMethod": "did:key:z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P#z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P",
+                  "proofPurpose": "assertionMethod",
+                  "proofValue": "z5EsaNaT8kRzACFNQmGcXZ8brE5Q4kKkgmUTFHRKcp1waTWgWxiWM5W7cWyeT4fNsJZ8y7P8SNP6KE8fmRBXu9oSn"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "write:orders",
+          "attestations": [
+            {
+              "vc": {
+                "@context": [
+                  "https://www.w3.org/ns/credentials/v2",
+                  "https://helixid.io/contexts/v1"
+                ],
+                "id": "urn:uuid:00000000-0000-4000-8000-0000000f2002",
+                "type": [
+                  "VerifiableCredential",
+                  "CapabilityAttestationCredential"
+                ],
+                "issuer": "did:key:z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P",
+                "validFrom": "2026-01-01T00:00:00Z",
+                "validUntil": "2026-12-31T00:00:00Z",
+                "credentialSubject": {
+                  "id": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+                  "capability": "write:orders"
+                },
+                "credentialStatus": {
+                  "id": "https://helix.example/status/1#2",
+                  "type": "BitstringStatusListEntry",
+                  "statusPurpose": "revocation",
+                  "statusListIndex": "2",
+                  "statusListCredential": "https://helix.example/status/1"
+                },
+                "proof": {
+                  "type": "DataIntegrityProof",
+                  "cryptosuite": "eddsa-jcs-2022",
+                  "created": "2026-01-01T00:00:01Z",
+                  "verificationMethod": "did:key:z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P#z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P",
+                  "proofPurpose": "assertionMethod",
+                  "proofValue": "z4nwMYMoveEVoFthDXhobmW3fZFgkbBVuerRd55WDJNGdhgbVZYwtQ3gdg12aK5k9xhEVNuPDB8LHk515xkNzV32r"
+                }
+              }
+            }
+          ]
+        }
+      ],
+      "responsibleParty": "did:key:z6Mkq3Bbq2EiVri4rJQhD8x5NdDpqHKNtuZoBGVhcyRnUTbb",
+      "proofProfile": "org.kya-os/proof.v1"
+    },
+    "stranger_attested": {
+      "id": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+      "entityType": "agent",
+      "name": "orders-agent",
+      "kid": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz#z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+      "capabilities": [
+        {
+          "name": "read:orders",
+          "attestations": [
+            {
+              "vc": {
+                "@context": [
+                  "https://www.w3.org/ns/credentials/v2",
+                  "https://helixid.io/contexts/v1"
+                ],
+                "id": "urn:uuid:00000000-0000-4000-8000-0000000f2003",
+                "type": [
+                  "VerifiableCredential",
+                  "CapabilityAttestationCredential"
+                ],
+                "issuer": "did:key:z6MkhGe4c3bBPBRU6UvBm8y5WKucfAhmYSATY83er8MsxbKw",
+                "validFrom": "2026-01-01T00:00:00Z",
+                "validUntil": "2026-12-31T00:00:00Z",
+                "credentialSubject": {
+                  "id": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+                  "capability": "read:orders"
+                },
+                "credentialStatus": {
+                  "id": "https://stranger.example/status/1#3",
+                  "type": "BitstringStatusListEntry",
+                  "statusPurpose": "revocation",
+                  "statusListIndex": "3",
+                  "statusListCredential": "https://stranger.example/status/1"
+                },
+                "proof": {
+                  "type": "DataIntegrityProof",
+                  "cryptosuite": "eddsa-jcs-2022",
+                  "created": "2026-01-01T00:00:01Z",
+                  "verificationMethod": "did:key:z6MkhGe4c3bBPBRU6UvBm8y5WKucfAhmYSATY83er8MsxbKw#z6MkhGe4c3bBPBRU6UvBm8y5WKucfAhmYSATY83er8MsxbKw",
+                  "proofPurpose": "assertionMethod",
+                  "proofValue": "z5oFTjPrr1zq6bMLPsSRRNTbuMGbUatZhYo8m1tmgR7qjfXWY1cRCGgBT8C2MeUaUBi428F93pBt4wRLF4SdVgirP"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "write:orders",
+          "attestations": [
+            {
+              "vc": {
+                "@context": [
+                  "https://www.w3.org/ns/credentials/v2",
+                  "https://helixid.io/contexts/v1"
+                ],
+                "id": "urn:uuid:00000000-0000-4000-8000-0000000f2002",
+                "type": [
+                  "VerifiableCredential",
+                  "CapabilityAttestationCredential"
+                ],
+                "issuer": "did:key:z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P",
+                "validFrom": "2026-01-01T00:00:00Z",
+                "validUntil": "2026-12-31T00:00:00Z",
+                "credentialSubject": {
+                  "id": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+                  "capability": "write:orders"
+                },
+                "credentialStatus": {
+                  "id": "https://helix.example/status/1#2",
+                  "type": "BitstringStatusListEntry",
+                  "statusPurpose": "revocation",
+                  "statusListIndex": "2",
+                  "statusListCredential": "https://helix.example/status/1"
+                },
+                "proof": {
+                  "type": "DataIntegrityProof",
+                  "cryptosuite": "eddsa-jcs-2022",
+                  "created": "2026-01-01T00:00:01Z",
+                  "verificationMethod": "did:key:z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P#z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P",
+                  "proofPurpose": "assertionMethod",
+                  "proofValue": "z4nwMYMoveEVoFthDXhobmW3fZFgkbBVuerRd55WDJNGdhgbVZYwtQ3gdg12aK5k9xhEVNuPDB8LHk515xkNzV32r"
+                }
+              }
+            }
+          ]
+        }
+      ],
+      "responsibleParty": "did:key:z6Mkq3Bbq2EiVri4rJQhD8x5NdDpqHKNtuZoBGVhcyRnUTbb",
+      "proofProfile": "org.kya-os/proof.v1"
+    },
+    "no_responsible_party": {
+      "id": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+      "entityType": "agent",
+      "name": "orders-agent",
+      "kid": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz#z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+      "capabilities": [
+        {
+          "name": "read:orders",
+          "attestations": [
+            {
+              "vc": {
+                "@context": [
+                  "https://www.w3.org/ns/credentials/v2",
+                  "https://helixid.io/contexts/v1"
+                ],
+                "id": "urn:uuid:00000000-0000-4000-8000-0000000f2001",
+                "type": [
+                  "VerifiableCredential",
+                  "CapabilityAttestationCredential"
+                ],
+                "issuer": "did:key:z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P",
+                "validFrom": "2026-01-01T00:00:00Z",
+                "validUntil": "2026-12-31T00:00:00Z",
+                "credentialSubject": {
+                  "id": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+                  "capability": "read:orders"
+                },
+                "credentialStatus": {
+                  "id": "https://helix.example/status/1#1",
+                  "type": "BitstringStatusListEntry",
+                  "statusPurpose": "revocation",
+                  "statusListIndex": "1",
+                  "statusListCredential": "https://helix.example/status/1"
+                },
+                "proof": {
+                  "type": "DataIntegrityProof",
+                  "cryptosuite": "eddsa-jcs-2022",
+                  "created": "2026-01-01T00:00:01Z",
+                  "verificationMethod": "did:key:z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P#z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P",
+                  "proofPurpose": "assertionMethod",
+                  "proofValue": "zhtkQ8KW69miAa2ys4sJYhq46Z4JJyq3fUHRcbvke85PmxgqAR5WKbQunzZc7JeC3CrqHDi5Ct9syQHccP2ZDEjs"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "write:orders",
+          "attestations": [
+            {
+              "vc": {
+                "@context": [
+                  "https://www.w3.org/ns/credentials/v2",
+                  "https://helixid.io/contexts/v1"
+                ],
+                "id": "urn:uuid:00000000-0000-4000-8000-0000000f2002",
+                "type": [
+                  "VerifiableCredential",
+                  "CapabilityAttestationCredential"
+                ],
+                "issuer": "did:key:z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P",
+                "validFrom": "2026-01-01T00:00:00Z",
+                "validUntil": "2026-12-31T00:00:00Z",
+                "credentialSubject": {
+                  "id": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+                  "capability": "write:orders"
+                },
+                "credentialStatus": {
+                  "id": "https://helix.example/status/1#2",
+                  "type": "BitstringStatusListEntry",
+                  "statusPurpose": "revocation",
+                  "statusListIndex": "2",
+                  "statusListCredential": "https://helix.example/status/1"
+                },
+                "proof": {
+                  "type": "DataIntegrityProof",
+                  "cryptosuite": "eddsa-jcs-2022",
+                  "created": "2026-01-01T00:00:01Z",
+                  "verificationMethod": "did:key:z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P#z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P",
+                  "proofPurpose": "assertionMethod",
+                  "proofValue": "z4nwMYMoveEVoFthDXhobmW3fZFgkbBVuerRd55WDJNGdhgbVZYwtQ3gdg12aK5k9xhEVNuPDB8LHk515xkNzV32r"
+                }
+              }
+            }
+          ]
+        }
+      ],
+      "responsibleParty": "did:key:z6Mkq3Bbq2EiVri4rJQhD8x5NdDpqHKNtuZoBGVhcyRnUTbb",
+      "proofProfile": "org.kya-os/proof.v1"
+    },
+    "stranger_responsible": {
+      "id": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+      "entityType": "agent",
+      "name": "orders-agent",
+      "kid": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz#z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+      "capabilities": [
+        {
+          "name": "read:orders",
+          "attestations": [
+            {
+              "vc": {
+                "@context": [
+                  "https://www.w3.org/ns/credentials/v2",
+                  "https://helixid.io/contexts/v1"
+                ],
+                "id": "urn:uuid:00000000-0000-4000-8000-0000000f2001",
+                "type": [
+                  "VerifiableCredential",
+                  "CapabilityAttestationCredential"
+                ],
+                "issuer": "did:key:z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P",
+                "validFrom": "2026-01-01T00:00:00Z",
+                "validUntil": "2026-12-31T00:00:00Z",
+                "credentialSubject": {
+                  "id": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+                  "capability": "read:orders"
+                },
+                "credentialStatus": {
+                  "id": "https://helix.example/status/1#1",
+                  "type": "BitstringStatusListEntry",
+                  "statusPurpose": "revocation",
+                  "statusListIndex": "1",
+                  "statusListCredential": "https://helix.example/status/1"
+                },
+                "proof": {
+                  "type": "DataIntegrityProof",
+                  "cryptosuite": "eddsa-jcs-2022",
+                  "created": "2026-01-01T00:00:01Z",
+                  "verificationMethod": "did:key:z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P#z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P",
+                  "proofPurpose": "assertionMethod",
+                  "proofValue": "zhtkQ8KW69miAa2ys4sJYhq46Z4JJyq3fUHRcbvke85PmxgqAR5WKbQunzZc7JeC3CrqHDi5Ct9syQHccP2ZDEjs"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "write:orders",
+          "attestations": [
+            {
+              "vc": {
+                "@context": [
+                  "https://www.w3.org/ns/credentials/v2",
+                  "https://helixid.io/contexts/v1"
+                ],
+                "id": "urn:uuid:00000000-0000-4000-8000-0000000f2002",
+                "type": [
+                  "VerifiableCredential",
+                  "CapabilityAttestationCredential"
+                ],
+                "issuer": "did:key:z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P",
+                "validFrom": "2026-01-01T00:00:00Z",
+                "validUntil": "2026-12-31T00:00:00Z",
+                "credentialSubject": {
+                  "id": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+                  "capability": "write:orders"
+                },
+                "credentialStatus": {
+                  "id": "https://helix.example/status/1#2",
+                  "type": "BitstringStatusListEntry",
+                  "statusPurpose": "revocation",
+                  "statusListIndex": "2",
+                  "statusListCredential": "https://helix.example/status/1"
+                },
+                "proof": {
+                  "type": "DataIntegrityProof",
+                  "cryptosuite": "eddsa-jcs-2022",
+                  "created": "2026-01-01T00:00:01Z",
+                  "verificationMethod": "did:key:z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P#z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P",
+                  "proofPurpose": "assertionMethod",
+                  "proofValue": "z4nwMYMoveEVoFthDXhobmW3fZFgkbBVuerRd55WDJNGdhgbVZYwtQ3gdg12aK5k9xhEVNuPDB8LHk515xkNzV32r"
+                }
+              }
+            }
+          ]
+        }
+      ],
+      "responsibleParty": "did:key:z6MkhGe4c3bBPBRU6UvBm8y5WKucfAhmYSATY83er8MsxbKw",
+      "proofProfile": "org.kya-os/proof.v1"
+    },
+    "malformed": {
+      "id": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+      "entityType": "agent",
+      "name": "orders-agent",
+      "kid": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz#z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+      "capabilities": [
+        {
+          "name": "read:orders",
+          "attestations": [
+            {
+              "vc": {
+                "@context": [
+                  "https://www.w3.org/ns/credentials/v2",
+                  "https://helixid.io/contexts/v1"
+                ],
+                "id": "urn:uuid:00000000-0000-4000-8000-0000000f2001",
+                "type": [
+                  "VerifiableCredential",
+                  "CapabilityAttestationCredential"
+                ],
+                "issuer": "did:key:z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P",
+                "validFrom": "2026-01-01T00:00:00Z",
+                "validUntil": "2026-12-31T00:00:00Z",
+                "credentialSubject": {
+                  "id": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+                  "capability": "read:orders"
+                },
+                "credentialStatus": {
+                  "id": "https://helix.example/status/1#1",
+                  "type": "BitstringStatusListEntry",
+                  "statusPurpose": "revocation",
+                  "statusListIndex": "1",
+                  "statusListCredential": "https://helix.example/status/1"
+                },
+                "proof": {
+                  "type": "DataIntegrityProof",
+                  "cryptosuite": "eddsa-jcs-2022",
+                  "created": "2026-01-01T00:00:01Z",
+                  "verificationMethod": "did:key:z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P#z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P",
+                  "proofPurpose": "assertionMethod",
+                  "proofValue": "zhtkQ8KW69miAa2ys4sJYhq46Z4JJyq3fUHRcbvke85PmxgqAR5WKbQunzZc7JeC3CrqHDi5Ct9syQHccP2ZDEjs"
+                }
+              }
+            }
+          ]
+        }
+      ],
+      "responsibleParty": "did:key:z6Mkq3Bbq2EiVri4rJQhD8x5NdDpqHKNtuZoBGVhcyRnUTbb",
+      "proofProfile": "org.kya-os/proof.v1",
+      "unknownMember": true
+    },
+    "stranger_card": {
+      "id": "did:key:z6MkhGe4c3bBPBRU6UvBm8y5WKucfAhmYSATY83er8MsxbKw",
+      "entityType": "agent",
+      "name": "orders-agent",
+      "kid": "did:key:z6MkhGe4c3bBPBRU6UvBm8y5WKucfAhmYSATY83er8MsxbKw#z6MkhGe4c3bBPBRU6UvBm8y5WKucfAhmYSATY83er8MsxbKw",
+      "capabilities": [
+        {
+          "name": "read:orders",
+          "attestations": [
+            {
+              "vc": {
+                "@context": [
+                  "https://www.w3.org/ns/credentials/v2",
+                  "https://helixid.io/contexts/v1"
+                ],
+                "id": "urn:uuid:00000000-0000-4000-8000-0000000f2001",
+                "type": [
+                  "VerifiableCredential",
+                  "CapabilityAttestationCredential"
+                ],
+                "issuer": "did:key:z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P",
+                "validFrom": "2026-01-01T00:00:00Z",
+                "validUntil": "2026-12-31T00:00:00Z",
+                "credentialSubject": {
+                  "id": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+                  "capability": "read:orders"
+                },
+                "credentialStatus": {
+                  "id": "https://helix.example/status/1#1",
+                  "type": "BitstringStatusListEntry",
+                  "statusPurpose": "revocation",
+                  "statusListIndex": "1",
+                  "statusListCredential": "https://helix.example/status/1"
+                },
+                "proof": {
+                  "type": "DataIntegrityProof",
+                  "cryptosuite": "eddsa-jcs-2022",
+                  "created": "2026-01-01T00:00:01Z",
+                  "verificationMethod": "did:key:z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P#z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P",
+                  "proofPurpose": "assertionMethod",
+                  "proofValue": "zhtkQ8KW69miAa2ys4sJYhq46Z4JJyq3fUHRcbvke85PmxgqAR5WKbQunzZc7JeC3CrqHDi5Ct9syQHccP2ZDEjs"
+                }
+              }
+            }
+          ]
+        }
+      ],
+      "responsibleParty": "did:key:z6Mkq3Bbq2EiVri4rJQhD8x5NdDpqHKNtuZoBGVhcyRnUTbb",
+      "proofProfile": "org.kya-os/proof.v1"
+    },
+    "card_revoked": {
+      "id": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+      "entityType": "agent",
+      "name": "orders-agent",
+      "kid": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz#z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+      "capabilities": [
+        {
+          "name": "read:orders",
+          "attestations": [
+            {
+              "vc": {
+                "@context": [
+                  "https://www.w3.org/ns/credentials/v2",
+                  "https://helixid.io/contexts/v1"
+                ],
+                "id": "urn:uuid:00000000-0000-4000-8000-0000000f2001",
+                "type": [
+                  "VerifiableCredential",
+                  "CapabilityAttestationCredential"
+                ],
+                "issuer": "did:key:z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P",
+                "validFrom": "2026-01-01T00:00:00Z",
+                "validUntil": "2026-12-31T00:00:00Z",
+                "credentialSubject": {
+                  "id": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+                  "capability": "read:orders"
+                },
+                "credentialStatus": {
+                  "id": "https://helix.example/status/1#1",
+                  "type": "BitstringStatusListEntry",
+                  "statusPurpose": "revocation",
+                  "statusListIndex": "1",
+                  "statusListCredential": "https://helix.example/status/1"
+                },
+                "proof": {
+                  "type": "DataIntegrityProof",
+                  "cryptosuite": "eddsa-jcs-2022",
+                  "created": "2026-01-01T00:00:01Z",
+                  "verificationMethod": "did:key:z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P#z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P",
+                  "proofPurpose": "assertionMethod",
+                  "proofValue": "zhtkQ8KW69miAa2ys4sJYhq46Z4JJyq3fUHRcbvke85PmxgqAR5WKbQunzZc7JeC3CrqHDi5Ct9syQHccP2ZDEjs"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "write:orders",
+          "attestations": [
+            {
+              "vc": {
+                "@context": [
+                  "https://www.w3.org/ns/credentials/v2",
+                  "https://helixid.io/contexts/v1"
+                ],
+                "id": "urn:uuid:00000000-0000-4000-8000-0000000f2002",
+                "type": [
+                  "VerifiableCredential",
+                  "CapabilityAttestationCredential"
+                ],
+                "issuer": "did:key:z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P",
+                "validFrom": "2026-01-01T00:00:00Z",
+                "validUntil": "2026-12-31T00:00:00Z",
+                "credentialSubject": {
+                  "id": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+                  "capability": "write:orders"
+                },
+                "credentialStatus": {
+                  "id": "https://helix.example/status/1#2",
+                  "type": "BitstringStatusListEntry",
+                  "statusPurpose": "revocation",
+                  "statusListIndex": "2",
+                  "statusListCredential": "https://helix.example/status/1"
+                },
+                "proof": {
+                  "type": "DataIntegrityProof",
+                  "cryptosuite": "eddsa-jcs-2022",
+                  "created": "2026-01-01T00:00:01Z",
+                  "verificationMethod": "did:key:z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P#z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P",
+                  "proofPurpose": "assertionMethod",
+                  "proofValue": "z4nwMYMoveEVoFthDXhobmW3fZFgkbBVuerRd55WDJNGdhgbVZYwtQ3gdg12aK5k9xhEVNuPDB8LHk515xkNzV32r"
+                }
+              }
+            }
+          ]
+        }
+      ],
+      "responsibleParty": "did:key:z6Mkq3Bbq2EiVri4rJQhD8x5NdDpqHKNtuZoBGVhcyRnUTbb",
+      "proofProfile": "org.kya-os/proof.v1",
+      "revocation": {
+        "statusListCredential": "https://agent.example/status/card",
+        "statusListIndex": "5"
+      }
+    },
+    "card_live": {
+      "id": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+      "entityType": "agent",
+      "name": "orders-agent",
+      "kid": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz#z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+      "capabilities": [
+        {
+          "name": "read:orders",
+          "attestations": [
+            {
+              "vc": {
+                "@context": [
+                  "https://www.w3.org/ns/credentials/v2",
+                  "https://helixid.io/contexts/v1"
+                ],
+                "id": "urn:uuid:00000000-0000-4000-8000-0000000f2001",
+                "type": [
+                  "VerifiableCredential",
+                  "CapabilityAttestationCredential"
+                ],
+                "issuer": "did:key:z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P",
+                "validFrom": "2026-01-01T00:00:00Z",
+                "validUntil": "2026-12-31T00:00:00Z",
+                "credentialSubject": {
+                  "id": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+                  "capability": "read:orders"
+                },
+                "credentialStatus": {
+                  "id": "https://helix.example/status/1#1",
+                  "type": "BitstringStatusListEntry",
+                  "statusPurpose": "revocation",
+                  "statusListIndex": "1",
+                  "statusListCredential": "https://helix.example/status/1"
+                },
+                "proof": {
+                  "type": "DataIntegrityProof",
+                  "cryptosuite": "eddsa-jcs-2022",
+                  "created": "2026-01-01T00:00:01Z",
+                  "verificationMethod": "did:key:z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P#z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P",
+                  "proofPurpose": "assertionMethod",
+                  "proofValue": "zhtkQ8KW69miAa2ys4sJYhq46Z4JJyq3fUHRcbvke85PmxgqAR5WKbQunzZc7JeC3CrqHDi5Ct9syQHccP2ZDEjs"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "write:orders",
+          "attestations": [
+            {
+              "vc": {
+                "@context": [
+                  "https://www.w3.org/ns/credentials/v2",
+                  "https://helixid.io/contexts/v1"
+                ],
+                "id": "urn:uuid:00000000-0000-4000-8000-0000000f2002",
+                "type": [
+                  "VerifiableCredential",
+                  "CapabilityAttestationCredential"
+                ],
+                "issuer": "did:key:z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P",
+                "validFrom": "2026-01-01T00:00:00Z",
+                "validUntil": "2026-12-31T00:00:00Z",
+                "credentialSubject": {
+                  "id": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+                  "capability": "write:orders"
+                },
+                "credentialStatus": {
+                  "id": "https://helix.example/status/1#2",
+                  "type": "BitstringStatusListEntry",
+                  "statusPurpose": "revocation",
+                  "statusListIndex": "2",
+                  "statusListCredential": "https://helix.example/status/1"
+                },
+                "proof": {
+                  "type": "DataIntegrityProof",
+                  "cryptosuite": "eddsa-jcs-2022",
+                  "created": "2026-01-01T00:00:01Z",
+                  "verificationMethod": "did:key:z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P#z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P",
+                  "proofPurpose": "assertionMethod",
+                  "proofValue": "z4nwMYMoveEVoFthDXhobmW3fZFgkbBVuerRd55WDJNGdhgbVZYwtQ3gdg12aK5k9xhEVNuPDB8LHk515xkNzV32r"
+                }
+              }
+            }
+          ]
+        }
+      ],
+      "responsibleParty": "did:key:z6Mkq3Bbq2EiVri4rJQhD8x5NdDpqHKNtuZoBGVhcyRnUTbb",
+      "proofProfile": "org.kya-os/proof.v1",
+      "revocation": {
+        "statusListCredential": "https://agent.example/status/card",
+        "statusListIndex": "4"
+      }
+    },
+    "card_list_not_kept": {
+      "id": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+      "entityType": "agent",
+      "name": "orders-agent",
+      "kid": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz#z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+      "capabilities": [
+        {
+          "name": "read:orders",
+          "attestations": [
+            {
+              "vc": {
+                "@context": [
+                  "https://www.w3.org/ns/credentials/v2",
+                  "https://helixid.io/contexts/v1"
+                ],
+                "id": "urn:uuid:00000000-0000-4000-8000-0000000f2001",
+                "type": [
+                  "VerifiableCredential",
+                  "CapabilityAttestationCredential"
+                ],
+                "issuer": "did:key:z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P",
+                "validFrom": "2026-01-01T00:00:00Z",
+                "validUntil": "2026-12-31T00:00:00Z",
+                "credentialSubject": {
+                  "id": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+                  "capability": "read:orders"
+                },
+                "credentialStatus": {
+                  "id": "https://helix.example/status/1#1",
+                  "type": "BitstringStatusListEntry",
+                  "statusPurpose": "revocation",
+                  "statusListIndex": "1",
+                  "statusListCredential": "https://helix.example/status/1"
+                },
+                "proof": {
+                  "type": "DataIntegrityProof",
+                  "cryptosuite": "eddsa-jcs-2022",
+                  "created": "2026-01-01T00:00:01Z",
+                  "verificationMethod": "did:key:z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P#z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P",
+                  "proofPurpose": "assertionMethod",
+                  "proofValue": "zhtkQ8KW69miAa2ys4sJYhq46Z4JJyq3fUHRcbvke85PmxgqAR5WKbQunzZc7JeC3CrqHDi5Ct9syQHccP2ZDEjs"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "write:orders",
+          "attestations": [
+            {
+              "vc": {
+                "@context": [
+                  "https://www.w3.org/ns/credentials/v2",
+                  "https://helixid.io/contexts/v1"
+                ],
+                "id": "urn:uuid:00000000-0000-4000-8000-0000000f2002",
+                "type": [
+                  "VerifiableCredential",
+                  "CapabilityAttestationCredential"
+                ],
+                "issuer": "did:key:z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P",
+                "validFrom": "2026-01-01T00:00:00Z",
+                "validUntil": "2026-12-31T00:00:00Z",
+                "credentialSubject": {
+                  "id": "did:key:z6MktAj6jUwc1S3XDifaQiu8eAwoZPXdwCC8quWwXMCypzJz",
+                  "capability": "write:orders"
+                },
+                "credentialStatus": {
+                  "id": "https://helix.example/status/1#2",
+                  "type": "BitstringStatusListEntry",
+                  "statusPurpose": "revocation",
+                  "statusListIndex": "2",
+                  "statusListCredential": "https://helix.example/status/1"
+                },
+                "proof": {
+                  "type": "DataIntegrityProof",
+                  "cryptosuite": "eddsa-jcs-2022",
+                  "created": "2026-01-01T00:00:01Z",
+                  "verificationMethod": "did:key:z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P#z6Mkkqty7Rk9ZfbH6XkwYJQXp4dUasTnqzf9gKUC81WSoi4P",
+                  "proofPurpose": "assertionMethod",
+                  "proofValue": "z4nwMYMoveEVoFthDXhobmW3fZFgkbBVuerRd55WDJNGdhgbVZYwtQ3gdg12aK5k9xhEVNuPDB8LHk515xkNzV32r"
+                }
+              }
+            }
+          ]
+        }
+      ],
+      "responsibleParty": "did:key:z6Mkq3Bbq2EiVri4rJQhD8x5NdDpqHKNtuZoBGVhcyRnUTbb",
+      "proofProfile": "org.kya-os/proof.v1",
+      "revocation": {
+        "statusListCredential": "https://helix.example/status/1",
+        "statusListIndex": "4"
+      }
+    }
+  }
+}

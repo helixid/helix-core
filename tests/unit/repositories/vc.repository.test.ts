@@ -54,15 +54,15 @@ describe('VcRepository Unit Tests', () => {
 
   it('filters active VCs by credential type', async () => {
     mockPrisma.vc.findMany.mockResolvedValue([
-      { vcId: 'v1', vcJson: { type: ['VerifiableCredential', 'HelixAgentCredential'] } },
+      { vcId: 'v1', vcJson: { type: ['VerifiableCredential', 'AgentIdentityCredential'] } },
       { vcId: 'v2', vcJson: '{"type":["VerifiableCredential"]}' },
       { vcId: 'v3', vcJson: null },
     ]);
 
-    const res = await repository.findActiveBySubjectDid('did:1', 'HelixAgentCredential');
+    const res = await repository.findActiveBySubjectDid('did:1', 'AgentIdentityCredential');
 
     expect(res).toEqual([
-      { vcId: 'v1', vcJson: { type: ['VerifiableCredential', 'HelixAgentCredential'] } },
+      { vcId: 'v1', vcJson: { type: ['VerifiableCredential', 'AgentIdentityCredential'] } },
     ]);
   });
 
@@ -76,7 +76,7 @@ describe('VcRepository Unit Tests', () => {
       vcId: 'vc:raw',
       subjectDid: 'did:raw',
       subjectType: 'agent',
-      vcJson: { type: ['VerifiableCredential', 'HelixAgentCredential'] },
+      vcJson: { type: ['VerifiableCredential', 'AgentIdentityCredential'] },
       privilegeScopes: ['read:orders'],
       statusListIndex: 0,
       expiresAt: new Date(Date.now() + 60_000),
@@ -109,7 +109,7 @@ describe('VcRepository Unit Tests', () => {
       expiresAt: rawRecord.expiresAt,
     })).resolves.toMatchObject({ vcId: 'vc:raw' });
     await expect(rawRepository.findByVcId('missing')).resolves.toBeNull();
-    await expect(rawRepository.findActiveBySubjectDid('did:raw', 'HelixAgentCredential')).resolves.toEqual([rawRecord]);
+    await expect(rawRepository.findActiveBySubjectDid('did:raw', 'AgentIdentityCredential')).resolves.toEqual([rawRecord]);
   });
 
   it('throws when raw VC insert returns no row and returns raw active records without type filter', async () => {

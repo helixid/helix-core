@@ -18,6 +18,16 @@ import { HelixError, InternalError } from '../core/index.js';
  * Ensures every error response follows the structured Helix ID format.
  * Satisfies EH-1, EH-3, and EH-5.
  */
+function isFastifyRequestError(error: FastifyError): boolean {
+  return (
+    typeof error.code === 'string' &&
+    error.code.startsWith('FST_') &&
+    typeof error.statusCode === 'number' &&
+    error.statusCode >= 400 &&
+    error.statusCode < 500
+  );
+}
+
 export function errorHandler(
   error: FastifyError,
   request: FastifyRequest,
@@ -55,6 +65,20 @@ export function errorHandler(
         details: {
           issues: error.validation,
         },
+      },
+    });
+  }
+
+  // Fastify's own refusals of the request itself (FST_* with a 4xx status: an
+  // empty or malformed JSON body, an unsupported content type, a body too
+  // large) are the caller's error, not ours: keep their status. Their message
+  // describes the request, not internal state.
+  if (isFastifyRequestError(error)) {
+    return reply.status(error.statusCode!).send({
+      error: {
+        code: 'VALIDATION_ERROR',
+        message: error.message,
+        requestId,
       },
     });
   }

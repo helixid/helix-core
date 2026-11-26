@@ -26,6 +26,9 @@ importers:
       '@fastify/swagger-ui':
         specifier: ^5.2.6
         version: 5.2.6
+      '@helixid/sdk-js':
+        specifier: link:../helix-sdk-js/helix-sdk-js
+        version: link:../helix-sdk-js/helix-sdk-js
       '@noble/curves':
         specifier: ^1.9.7
         version: 1.9.7
@@ -72,9 +75,6 @@ importers:
       '@helixid/did-hedera':
         specifier: ^0.1.2
         version: 0.1.2(bn.js@5.2.5)(react-native@0.87.1(@babel/core@7.29.7)(@types/react@19.3.0)(react@19.2.8))
-      '@helixid/sdk-js':
-        specifier: ^0.2.0
-        version: 0.2.0
       '@types/better-sqlite3':
         specifier: ^7.6.13
         version: 7.6.13
@@ -4107,7 +4107,7 @@ snapshots:
   '@grpc/proto-loader@0.7.15':
     dependencies:
       lodash.camelcase: 4.3.0
-      long: 5.3.1
+      long: 5.3.2
       protobufjs: 8.0.2
       yargs: 17.7.3
 

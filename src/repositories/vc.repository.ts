@@ -44,6 +44,13 @@ export interface ListVcFilters {
   limit: number;
 }
 
+/** One credential of a revocation: its record, and its bit when it has one on a list this deployment keeps. */
+export interface RevokeVcItem {
+  vcId: string;
+  listId?: string | undefined;
+  index?: number | undefined;
+}
+
 export interface StatusListEntryRecord {
   listId: string;
   encodedList: string;
@@ -155,6 +162,11 @@ export class VcRepository {
 
   async revokeVc(vcId: string, listId: string, newEncodedList: string): Promise<VCRecord> {
     return this.driver.revokeVc(vcId, listId, newEncodedList);
+  }
+
+  /** Revokes every item in one transaction: bits set on their lists under a lock, records marked revoked. */
+  async revokeVcs(items: readonly RevokeVcItem[]): Promise<VCRecord[]> {
+    return this.driver.revokeVcs(items);
   }
 
   async markAsRenewed(oldVcId: string, newVcId: string): Promise<VCRecord> {

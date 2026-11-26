@@ -14,7 +14,7 @@ export * from './core/index.js';
 export { errorHandler } from './middleware/errorHandler.js';
 export { registerRequestLogger } from './middleware/requestLogger.js';
 
-export { ApiAuditLogger } from './audit/index.js';
+export * from './audit/index.js';
 
 export type { ICache } from './cache/ICache.js';
 export { NoopCache } from './cache/NoopCache.js';
@@ -43,8 +43,6 @@ export type {
   CreateVcParams,
   StatusListEntryRecord,
 } from './repositories/vc.repository.js';
-export { AuditLogRepository } from './repositories/audit-log.repository.js';
-export type { AuditLogRecord, ListAuditLogFilters } from './repositories/audit-log.repository.js';
 export { AgentRepository } from './repositories/agent.repository.js';
 export type {
   EnrollmentTokenRecord,
@@ -89,8 +87,6 @@ export type {
   ReconcileOptions,
   ReconcileResult,
 } from './services/vc/vc.service.js';
-export { VPService } from './services/vp/vp.service.js';
-export type { IVPService } from './services/vp/IVPService.js';
 export { AgentService, mapAgentError, hashToken } from './services/agent/agent.service.js';
 export type {
   IAgentService,
@@ -98,10 +94,29 @@ export type {
   ChallengeResult,
   OnboardVerifyResult,
   OnboardWithCustodyResult,
-  SignVPResult,
   UserChallengeVerifyResult,
-  DelegateAuthorityOptions,
 } from './services/agent/IAgentService.js';
+export { CredentialService } from './services/credentials/credential.service.js';
+// KYA-OS story L3-C: signed per-issuer status lists, revocation and the revocation signal.
+export { StatusListPublisher, StatusListService, STATUS_LIST_LENGTH } from './services/status-lists/status-list.service.js';
+export type { StatusListPublisherOptions, StatusListRepository, RevocationSignalSink, RevokeContext } from './services/status-lists/status-list.service.js';
+export { RevocationService, REVOCATION_REQUEST_TYP } from './services/revocation/revocation.service.js';
+export type { RevocationOutcome, RevocationRequestClaims, RevocationServiceOptions } from './services/revocation/revocation.service.js';
+export { RevocationSignalPublisher, InProcessSignalBus, RedisSignalBus } from './services/revocation/signal-publisher.js';
+export type { RevocationEvent, SignalBus, RedisPubSubLike, RevocationSignalPublisherOptions } from './services/revocation/signal-publisher.js';
+export { publicDidResolver } from './services/revocation/public-resolver.js';
+export type {
+  AgentCredentials,
+  CredentialStatus,
+  CredentialStatusStore,
+  CredentialVcRepository,
+  IssueAttestationsInput,
+  IssueHopInput,
+  IssueIdentityInput,
+  IssueRootHopInput,
+  StoredCredential,
+} from './services/credentials/credential.service.js';
+export { CustodySigner } from './services/credentials/custody-signer.js';
 export { AesGcmKeyCustody } from './services/key-custody/key-custody.js';
 export type { IKeyCustody, EncryptedKeyMaterial } from './services/key-custody/key-custody.js';
 export {
@@ -111,17 +126,95 @@ export {
 export type {
   IServiceProviderService,
   EnrollServiceInput,
-  IssueDelegationGrantInput,
 } from './services/service-provider/service-provider.service.js';
 
 export { default as didRoutes } from './routes/did/index.js';
 export type { DIDRouteAction, DIDRouteOptions } from './routes/did/index.js';
 export { default as didWebRoutes } from './routes/did-web/index.js';
+// Registry v3 (2026-11-24): the Helix agent registry ("Make discoverable"), and registering agents there.
+export { default as registryRoutes, REGISTRY_MCP_TOOLS, REGISTRY_MCP_PROTOCOL_VERSION, REGISTRY_RATE_LIMIT_DEFAULT, type RegistryRouteOptions } from './routes/registry/index.js';
+export * from './services/registry/registry.js';
+export { RegistryService, type RegistrySource, type PublishedEntries } from './services/registry/registry.service.js';
+export { deploymentRegistrySource, type DeploymentRegistrySourceDeps } from './services/registry/deployment-registry.source.js';
+export { signRegistration, verifyRegistration, RegistrationInvalidError, REGISTRATION_TYP, REGISTRATION_TTL_SECONDS, type RegistrationClaims } from './services/registry/registration.js';
+export { HelixRegistryInbox, MemoryPublishedStore, type PublishedEntry, type PublishedStore, type HelixRegistryInboxOptions } from './services/registry/helix-registry.inbox.js';
+export { HelixRegistryPublisher, describeRegistration, type PublishOutcome, type HelixRegistryPublisherOptions } from './services/registry/helix-registry.publisher.js';
+export { RegistryEntryRepository, type RegistryEntryRow } from './repositories/registry-entry.repository.js';
 export { default as vcRoutes, type VcRouteOptions } from './routes/vc/index.js';
 export { default as statusListRoutes } from './routes/status-list/index.js';
-export { default as vpRoutes } from './routes/vp/index.js';
-export { default as agentRoutes } from './routes/agent/index.js';
-export { default as auditLogRoutes } from './routes/audit-log/index.js';
+export { default as verifyRoutes, helixStatusListIssuers } from './routes/verify/index.js';
+export { default as revocationRoutes } from './routes/revocations/index.js';
+export { default as eventRoutes } from './routes/events/index.js';
+export type { VerifyRouteOptions } from './routes/verify/index.js';
+export { default as agentRoutes, enrollmentOnboardingHandler } from './routes/agent/index.js';
+// KYA-OS F-1 credential routes with a host authorize hook (F-3 parity: helix-server-enterprise mounts them account-scoped).
+export { default as credentialRoutes, hopDelegate } from './routes/credentials/index.js';
+export type { CredentialRouteAction, CredentialRouteOptions } from './routes/credentials/index.js';
+export { default as entityCardRoutes, hostedUrls } from './routes/entity-card/index.js';
+export type { EntityCardRouteOptions, EntityCardSource, EntityCardRecord } from './routes/entity-card/index.js';
+export { createEntityCardSource, assertionKeyOf, attestedCardCapabilities, credentialCardDetails } from './services/entity-card/entity-card.source.js';
+export type { EntityCardSourceOptions, EntityCardDetails, ActiveCredentialStore } from './services/entity-card/entity-card.source.js';
+// KYA-OS story F-3: custody preference, KeyStore, custodial signing, conformance report.
+export { default as custodyRoutes } from './routes/custody/index.js';
+export type { CustodyAction, CustodyRouteOptions } from './routes/custody/index.js';
+export * from './services/custody/custody.service.js';
+export { CustodyRecheckScheduler, custodyRecheckSettings } from './services/custody/custody-recheck.js';
+export type { CustodyRecheckSchedulerOptions, CustodyRecheckTarget } from './services/custody/custody-recheck.js';
+export { CUSTODIAL_SIGNING_SUBJECTS } from './services/custody/custodial-keys.js';
+export type { CustodialKeys, CustodialSigningSubject, CustodialSigningUse } from './services/custody/custodial-keys.js';
+export { DbKeyStore, resolveKeyEncryptionKey, DB_KEY_STORE_ALGORITHM } from './services/custody/db-key-store.js';
+export type { DbKeyStoreOptions, WrappedKeyTable, KeyEncryptionKeyConfig } from './services/custody/db-key-store.js';
+export { CustodyAudit, payloadDigest } from './services/custody/custody-audit.js';
+export { CUSTODY_AUDIT_CATEGORY } from './services/custody/custody-audit.js';
+export type { CustodyActor, CustodialSigningRefusal, CustodyFactsSink } from './services/custody/custody-audit.js';
+export { pendingHopReissuer, HOP_REISSUE_PENDING_NOTE } from './services/custody/hop-reissue.js';
+export type { HopReissuer, HopReissueInput, HopReissueResult } from './services/custody/hop-reissue.js';
+export { CustodyRepository, WrappedKeyRepository, CUSTODY_STATUSES } from './repositories/custody.repository.js';
+export type { CustodyRecordRow, CustodyKeyRow, CustodyStatus, CustodyKeyLocation, CustodyKeyStatus, WrappedKeyRow } from './repositories/custody.repository.js';
+export { default as auditLogRoutes, type AuditLogRouteOptions } from './routes/audit-log/index.js';
+export { default as auditRoutes, requireAuditOperator, type AuditRouteOptions, type AuditSubmissionAuthorizer } from './routes/audit/index.js';
+export { runAuditCli, verifyAuditLedgerExport, type AuditCliIo, type AuditLedgerExport } from './cli/audit.js';
 export { default as sessionRoutes } from './routes/sessions/index.js';
 export { default as serviceProviderRoutes } from './routes/service-provider/index.js';
 export type { ServiceProviderAction, ServiceProviderRouteOptions } from './routes/service-provider/index.js';
+// KYA-OS story L3-H: the root delegation signed by the user's did:key at consent.
+export { default as consentRoutes, readCookie, type ConsentRouteOptions } from './routes/consent/index.js';
+export { ConsentService, readUnsignedGrant, CONSENT_PAGE_COOKIE, DEFAULT_CONSENT_REQUEST_TTL_SECONDS, DEFAULT_MAX_CONSENT_WINDOW_SECONDS } from './services/consent/consent.service.js';
+export type {
+  ApprovedConsent,
+  ConsentPage,
+  ConsentRequestResult,
+  ConsentRequestState,
+  ConsentServiceInfo,
+  ConsentServiceOptions,
+  CreatedConsentRequest,
+  RenewedHop,
+  WithdrawnConsent,
+} from './services/consent/consent.service.js';
+export { UserKeyService, serviceUserRefOf, ORPHAN_USER_KEY_MS } from './services/consent/user-key.service.js';
+export type { UserKeyServiceOptions, UserKeyRepository } from './services/consent/user-key.service.js';
+export {
+  CONSENT_REQUEST_TYP,
+  CONSENT_RENEWAL_TYP,
+  CONSENT_WITHDRAWAL_TYP,
+  SIGNED_REQUEST_SKEW_SECONDS,
+  MemoryJtiStore,
+  signRequest,
+  verifySignedRequest,
+} from './services/consent/signed-request.js';
+export type { JtiStore, SignedRequestClaims, SignedRequestOptions } from './services/consent/signed-request.js';
+export { consentServiceDirectory, consentAgentScopes } from './services/consent/directory.js';
+export { actsOnUserConsent } from './services/consent/acts-on-user-consent.js';
+export type { ActsOnUserConsentDeps } from './services/consent/acts-on-user-consent.js';
+export type { ServiceDirectorySources } from './services/consent/directory.js';
+export { ConsentRepository, CONSENT_REQUEST_STATUSES } from './repositories/consent.repository.js';
+export type {
+  ConsentDisplay,
+  ConsentRequestRow,
+  ConsentRequestStatus,
+  UnsignedRootGrant,
+  UserConsentRow,
+  UserKeyRow,
+} from './repositories/consent.repository.js';
+export { CONSENT_SQLITE_DDL } from './repositories/drivers/consent.drivers.js';
+export type { CredentialCardOptions } from './services/entity-card/entity-card.source.js';

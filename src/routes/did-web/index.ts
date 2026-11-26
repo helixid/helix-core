@@ -1,5 +1,5 @@
 import type { FastifyPluginAsync } from 'fastify';
-import type { DIDDocument } from '../../core/index.js';
+import { didWebFor, sameDid, type DIDDocument } from '../../core/index.js';
 
 interface DidWebRouteOptions {
   issuerDid: string;
@@ -9,9 +9,26 @@ interface DidWebRouteOptions {
   };
 }
 
+/**
+ * The Helix issuer's own did:web document at `/.well-known/did.json`
+ * (`did:web:<DID_DOMAIN>`). Only a did:web issuer of this domain is served
+ * there: with `DID_METHOD=key` (or hedera) the issuer is not a did:web, so the
+ * path claims no did:web id and answers 404. Agents, services and accounts
+ * (`/agents/<hex>/did.json`, `/services/<hex>/did.json`,
+ * `/accounts/<hex>/did.json`, with their `card.json`) are served by
+ * `routes/entity-card`.
+ */
 const didWebRoutes: FastifyPluginAsync<DidWebRouteOptions> = async (fastify, options) => {
+  let hostDid: string | undefined;
+  try {
+    hostDid = options.didDomain ? didWebFor(options.didDomain) : undefined;
+  } catch {
+    hostDid = undefined;
+  }
+  const servesIssuer = hostDid !== undefined && sameDid(options.issuerDid, hostDid);
+
   fastify.get('/.well-known/did.json', async (_request, reply) => {
-    const issuer = await options.didRepository.findDidById(options.issuerDid);
+    const issuer = servesIssuer ? await options.didRepository.findDidById(options.issuerDid) : null;
     if (!issuer) {
       return reply.code(404).send({
         error: {
@@ -25,63 +42,6 @@ const didWebRoutes: FastifyPluginAsync<DidWebRouteOptions> = async (fastify, opt
       .type('application/json')
       .header('Cache-Control', 'public, max-age=3600')
       .send(issuer.didDocument as DIDDocument);
-  });
-
-  // Agent/user DIDs minted with DID_METHOD=web (see DIDService.createDID)
-  // are `did:web:<domain>:agents:<slug>`, which per the did:web spec
-  // resolves to <domain>/agents/<slug>/did.json.
-  fastify.get<{ Params: { slug: string } }>('/agents/:slug/did.json', async (request, reply) => {
-    const did = `did:web:${options.didDomain}:agents:${request.params.slug}`;
-    const record = await options.didRepository.findDidById(did);
-    if (!record) {
-      return reply.code(404).send({
-        error: {
-          code: 'DID_NOT_FOUND',
-          message: 'DID document is not available.',
-        },
-      });
-    }
-    if (record.deactivatedAt) {
-      return reply.code(410).send({
-        error: {
-          code: 'DID_DEACTIVATED',
-          message: 'DID is deactivated.',
-        },
-      });
-    }
-
-    return reply
-      .type('application/json')
-      .header('Cache-Control', 'public, max-age=3600')
-      .send(record.didDocument as DIDDocument);
-  });
-
-  // Service DIDs (DIDService.createDID with subjectType 'service') are
-  // `did:web:<domain>:services:<slug>` -> <domain>/services/<slug>/did.json.
-  fastify.get<{ Params: { slug: string } }>('/services/:slug/did.json', async (request, reply) => {
-    const did = `did:web:${options.didDomain}:services:${request.params.slug}`;
-    const record = await options.didRepository.findDidById(did);
-    if (!record) {
-      return reply.code(404).send({
-        error: {
-          code: 'DID_NOT_FOUND',
-          message: 'DID document is not available.',
-        },
-      });
-    }
-    if (record.deactivatedAt) {
-      return reply.code(410).send({
-        error: {
-          code: 'DID_DEACTIVATED',
-          message: 'DID is deactivated.',
-        },
-      });
-    }
-
-    return reply
-      .type('application/json')
-      .header('Cache-Control', 'public, max-age=3600')
-      .send(record.didDocument as DIDDocument);
   });
 };
 

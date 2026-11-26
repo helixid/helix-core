@@ -4,33 +4,81 @@
 // You may obtain a copy of the License at
 //    http://www.apache.org/licenses/LICENSE-2.0
 
-import type { FastifyPluginAsync } from 'fastify';
-import { AdminAuthRequiredError } from '../../core/index.js';
+import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from 'fastify';
 import type { IAgentService } from '../../services/agent/IAgentService.js';
 import { mapAgentError } from '../../services/agent/agent.service.js';
+import type { CredentialService } from '../../services/credentials/credential.service.js';
+import credentialRoutes from '../credentials/index.js';
 
-interface AgentRouteOptions {
+export interface AgentRouteOptions {
   agentService: IAgentService;
+  /**
+   * Issues and revokes the split credentials of KYA-OS story F-1 (identity,
+   * capability attestations, delegation hops). Required for the /agents/:did
+   * credential routes and /grants; without it those routes answer 503.
+   */
+  credentialService?: CredentialService | undefined;
   /** Required to call POST /agents/:did/vp — see that route's comment for why. */
   adminApiKey?: string | undefined;
+  /**
+   * Whether this plugin registers POST /agents. False when the custody routes
+   * (KYA-OS story F-3) own the path: they hand a body carrying
+   * `enrollmentToken` to `enrollmentOnboardingHandler`, unchanged.
+   */
+  createAgentRoute?: boolean | undefined;
+  /**
+   * Whether this plugin registers the F-1 credential routes (`credentialRoutes`:
+   * /agents/:did/credentials, attestations, /grants) behind the admin key.
+   * False when the host registers them itself with its own `authorize`.
+   */
+  credentialRoutes?: boolean | undefined;
+}
+
+function sendError(request: FastifyRequest, reply: FastifyReply, error: unknown): FastifyReply {
+  const mapped = mapAgentError(error);
+  return reply
+    .code(mapped.statusCode)
+    .send({ error: { code: mapped.code, message: mapped.message, requestId: request.id } });
+}
+
+/**
+ * POST /agents with an enrollment token (story F-1): onboard a custodial agent
+ * and return its identity credential plus one capability attestation per
+ * requested scope. The request may carry `ownerDid`, the party that answers
+ * for the agent (default: the Helix issuer DID).
+ */
+export function enrollmentOnboardingHandler(
+  agentService: Pick<IAgentService, 'onboardWithCustody'>,
+): (request: FastifyRequest, reply: FastifyReply) => Promise<FastifyReply> {
+  return async (request, reply) => {
+    try {
+      const body = request.body as { enrollmentToken: string; domains?: string[]; ownerDid?: string };
+      const result = await agentService.onboardWithCustody(
+        {
+          enrollmentToken: body.enrollmentToken,
+          ...(body.domains ? { domains: body.domains } : {}),
+          ...(body.ownerDid ? { ownerDid: body.ownerDid } : {}),
+        },
+        request.id,
+      );
+      return reply.code(201).send({
+        agentDid: result.agentDid,
+        identity: result.identity,
+        attestations: result.attestations,
+      });
+    } catch (error) {
+      return sendError(request, reply, error);
+    }
+  };
 }
 
 const agentRoutes: FastifyPluginAsync<AgentRouteOptions> = async (fastify, options) => {
-  function requireAdmin(request: { headers: Record<string, string | string[] | undefined> }): void {
-    const submitted = request.headers['x-admin-api-key'];
-    const submittedKey = Array.isArray(submitted) ? submitted[0] : submitted;
-    if (!options.adminApiKey || submittedKey !== options.adminApiKey) {
-      throw new AdminAuthRequiredError();
-    }
-  }
-
   fastify.post('/enrollment-tokens', async (request, reply) => {
     try {
       const body = request.body as {
         agentName: string;
         requestedScopes: string[];
         requestedDomains?: string[];
-        maxDelegationDepth?: number;
         expiry?: number;
       };
       const result = await options.agentService.generateEnrollmentToken(body, request.id);
@@ -54,73 +102,7 @@ const agentRoutes: FastifyPluginAsync<AgentRouteOptions> = async (fastify, optio
         request.body as { enrollmentToken: string; domains?: string[] },
         request.id,
       );
-      return reply.code(201).send(result);
-    } catch (error) {
-      const mapped = mapAgentError(error);
-      return reply
-        .code(mapped.statusCode)
-        .send({ error: { code: mapped.code, message: mapped.message, requestId: request.id } });
-    }
-  });
-
-  // POST /agents/:did/vp - sign a VP on behalf of a server-custody agent.
-  // The caller never has the agent's private key, so this has to be an API
-  // call rather than local VPBuilder.sign(). Gated by the admin key: OSS has
-  // no per-tenant credential narrower than that (unlike the hosted/
-  // enterprise build's per-account bearer token), so this is deliberately
-  // the same all-or-nothing trust already placed in the admin key for VC
-  // issuance/revocation — a known scoping reduction versus self-custody,
-  // where only the agent's own key could ever sign for itself.
-  fastify.post('/agents/:did/vp', async (request, reply) => {
-    try {
-      requireAdmin(request);
-      const params = request.params as { did: string };
-      const body = request.body as { targetService: string; userDid?: string };
-      const result = await options.agentService.signVP(
-        {
-          did: params.did,
-          targetService: body.targetService,
-          ...(body.userDid ? { userDid: body.userDid } : {}),
-        },
-        request.id,
-      );
-      return reply.code(200).send(result);
-    } catch (error) {
-      const mapped = mapAgentError(error);
-      return reply
-        .code(mapped.statusCode)
-        .send({ error: { code: mapped.code, message: mapped.message, requestId: request.id } });
-    }
-  });
-
-  // POST /agents/:did/delegate - delegate a slice of a server-custody
-  // agent's authority to another DID. Same trust boundary and gating as
-  // POST /agents/:did/vp above: the delegator's private key is what
-  // authorizes this, and OSS has no per-tenant credential narrower than the
-  // admin key.
-  fastify.post('/agents/:did/delegate', async (request, reply) => {
-    try {
-      requireAdmin(request);
-      const params = request.params as { did: string };
-      const body = request.body as {
-        to: string;
-        scopes: string[];
-        expiresIn: number;
-        vcId?: string;
-        revokeExisting?: boolean;
-      };
-      const result = await options.agentService.delegateAuthority(
-        {
-          did: params.did,
-          to: body.to,
-          scopes: body.scopes,
-          expiresIn: body.expiresIn,
-          ...(body.vcId ? { vcId: body.vcId } : {}),
-          ...(body.revokeExisting !== undefined ? { revokeExisting: body.revokeExisting } : {}),
-        },
-        request.id,
-      );
-      return reply.code(200).send(result);
+      return reply.code(201).send({ agentDid: result.agentDid, vcId: result.vcId });
     } catch (error) {
       const mapped = mapAgentError(error);
       return reply
@@ -162,6 +144,20 @@ const agentRoutes: FastifyPluginAsync<AgentRouteOptions> = async (fastify, optio
     }
   });
 
+
+
+  // POST /agents - see enrollmentOnboardingHandler. Not registered here when
+  // the custody routes own the path (createAgentRoute: false).
+  if (options.createAgentRoute !== false) {
+    fastify.post('/agents', enrollmentOnboardingHandler(options.agentService));
+  }
+
+  // The F-1 credential routes (credentials, attestations, grants and hops),
+  // admin-gated here; a build with accounts registers credentialRoutes itself
+  // with its own authorize hook and sets credentialRoutes: false.
+  if (options.credentialRoutes !== false) {
+    await fastify.register(credentialRoutes, { credentialService: options.credentialService, adminApiKey: options.adminApiKey });
+  }
 };
 
 export default agentRoutes;

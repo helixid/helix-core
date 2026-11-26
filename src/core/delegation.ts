@@ -1,104 +1,21 @@
-import { randomUUID } from 'node:crypto';
-import { createEd25519Proof } from './proof.js';
-import {
-  MaxDelegationDepthExceededError,
-  ScopeEscalationDeniedError,
-  SelfDelegationNotAllowedError,
-} from './errors/HelixError.js';
-import type { SignedVC } from './schemas/vc.js';
+// Copyright 2026 DgVerse LLP
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//    http://www.apache.org/licenses/LICENSE-2.0
 
-export interface DelegateOptions {
-  to: string;
-  scopes: string[];
-  expiresIn: number;
-  fromVC: SignedVC;
-  /**
-   * The delegation's own revocation entry. With it, revoking this one
-   * delegation reaches every verifier through the status list, VPs signed
-   * before the revocation included; without it, the delegation only
-   * inherits revocation from its ancestors.
-   */
-  credentialStatus?: SignedVC['credentialStatus'];
-}
-
+/**
+ * One verified link of the retired VP path's agent-credential chain. The
+ * verifier that reported it is gone with KYA-OS story F-2; the type stays for
+ * consumers that still name it (helix-server-enterprise). The
+ * chain builder that used to live here (`buildDelegationVC`, `delegationDepth`
+ * / `maxDelegationDepth`) is gone with KYA-OS story F-1: delegation is a
+ * chain of `DelegationCredential` hops (src/core/credentials/hop.ts).
+ */
 export interface DelegationLink {
   issuer: string;
   subject: string;
   vcId: string;
   scopes: string[];
   delegationDepth: number;
-}
-
-type AgentSignedVC = SignedVC & {
-  credentialSubject: SignedVC['credentialSubject'] & {
-    privilegeScopes: string[];
-    delegatedFrom?: string;
-    delegationDepth?: number;
-    maxDelegationDepth?: number;
-    parentVcId?: string;
-  };
-  delegationChain?: SignedVC[];
-};
-
-function assertAgentVC(vc: SignedVC): asserts vc is AgentSignedVC {
-  const subject = vc.credentialSubject as { privilegeScopes?: unknown };
-  if (!Array.isArray(subject.privilegeScopes)) {
-    throw new ScopeEscalationDeniedError('credential has no privilege scopes');
-  }
-}
-
-function assertSubset(parentScopes: string[], childScopes: string[]): void {
-  const parent = new Set(parentScopes);
-  for (const scope of childScopes) {
-    if (!parent.has(scope)) {
-      throw new ScopeEscalationDeniedError(scope);
-    }
-  }
-}
-
-export async function buildDelegationVC(
-  options: DelegateOptions,
-  wallet: { did: string; privateKeyHex: string },
-): Promise<SignedVC> {
-  if (options.to === wallet.did) {
-    throw new SelfDelegationNotAllowedError(wallet.did);
-  }
-  assertAgentVC(options.fromVC);
-  const parentSubject = options.fromVC.credentialSubject;
-  const parentDepth = parentSubject.delegationDepth ?? 0;
-  const maxDepth = parentSubject.maxDelegationDepth ?? 0;
-
-  assertSubset(parentSubject.privilegeScopes, options.scopes);
-  if (parentDepth + 1 > maxDepth) {
-    throw new MaxDelegationDepthExceededError();
-  }
-
-  const now = new Date();
-  const expiresAt = new Date(now.getTime() + options.expiresIn * 1000);
-  const parentChain = options.fromVC.delegationChain ?? [];
-  const payload = {
-    '@context': ['https://www.w3.org/ns/credentials/v2', 'https://helixid.io/contexts/v1'],
-    id: `vc:helix:delegation:${randomUUID()}`,
-    type: ['VerifiableCredential', 'HelixAgentCredential'],
-    issuer: wallet.did,
-    validFrom: now.toISOString(),
-    validUntil: expiresAt.toISOString(),
-    credentialSubject: {
-      id: options.to,
-      type: 'HelixAgent' as const,
-      privilegeScopes: options.scopes,
-      agentName: options.to,
-      delegatedFrom: wallet.did,
-      delegationDepth: parentDepth + 1,
-      maxDelegationDepth: maxDepth,
-      parentVcId: options.fromVC.id,
-    },
-    ...(options.credentialStatus ? { credentialStatus: options.credentialStatus } : {}),
-    delegationChain: [...parentChain, options.fromVC],
-  };
-
-  return {
-    ...payload,
-    proof: await createEd25519Proof(payload, wallet.privateKeyHex, `${wallet.did}#key-1`),
-  };
 }

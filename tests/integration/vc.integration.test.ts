@@ -19,11 +19,13 @@ import { VCService } from '../../src/services/vc/vc.service.js';
 import { VcRepository } from '../../src/repositories/vc.repository.js';
 import { DIDService } from '../../src/services/did/did.service.js';
 import { DidRepository } from '../../src/repositories/did.repository.js';
-import { ApiAuditLogger } from '../../src/audit/index.js';
+import { TestAuditTrail } from '../utils/TestAuditTrail.js';
 import { MockHederaClient } from '../../src/hedera/mock/MockHederaClient.js';
 import { errorHandler } from '../../src/middleware/errorHandler.js';
 import vcRoutes from '../../src/routes/vc/index.js';
 import statusListRoutes from '../../src/routes/status-list/index.js';
+import { StatusListPublisher, StatusListService } from '../../src/services/status-lists/status-list.service.js';
+import { EnvSigner } from '../../src/core/index.js';
 import { createTestPrisma } from '../utils/prisma.js';
 
 describe('VC API Integration', () => {
@@ -36,7 +38,7 @@ describe('VC API Integration', () => {
   beforeAll(async () => {
     prisma = createTestPrisma();
     
-    const auditLogger = new ApiAuditLogger(prisma);
+    const auditLogger = new TestAuditTrail();
     const didRepo = new DidRepository(prisma);
     const vcRepo = new VcRepository(prisma);
     const mockHedera = new MockHederaClient();
@@ -51,12 +53,23 @@ describe('VC API Integration', () => {
       'http://localhost:3000'
     );
 
+    // Story L3-C: the issuer's list, signed by the issuer, served by the StatusListService.
+    const issuerSigner = new EnvSigner({ did: issuerDid, envVar: 'K', env: { K: signingKey } });
+    const publisher = new StatusListPublisher({
+      repo: vcRepo,
+      helixIssuerDid: issuerDid,
+      apiBaseUrl: 'http://localhost:3000',
+      signerFor: async (did) => (did === issuerDid ? issuerSigner : undefined),
+      resolveDid: async () => null,
+    });
+    const statusLists = new StatusListService({ publisher, repo: vcRepo, audit: auditLogger });
+
     app = Fastify({ logger: false });
     app.setErrorHandler(errorHandler);
-    await app.register(vcRoutes, { prefix: '/v1/vcs', vcService, adminApiKey: 'test-admin-key-0001' });
+    await app.register(vcRoutes, { prefix: '/v1/vcs', vcService, statusLists, adminApiKey: 'test-admin-key-0001' });
     await app.register(statusListRoutes, {
       prefix: '/v1/status-list',
-      vcService,
+      statusLists,
       adminApiKey: 'test-admin-key-0001',
     });
     await app.ready();
@@ -107,26 +120,36 @@ describe('VC API Integration', () => {
   }
 
   describe('POST /v1/vcs', () => {
-    it('issues an agent VC successfully', async () => {
+    it('issues a user VC successfully', async () => {
       const response = await app.inject({
         method: 'POST',
         url: '/v1/vcs',
         headers: { 'x-admin-api-key': 'test-admin-key-0001' },
-        payload: {
-          subjectDid: didId,
-          subjectType: 'agent',
-          privilegeScopes: ['read:orders'],
-          agentName: 'Test Agent',
-        },
+        payload: { subjectDid: didId, subjectType: 'user', userId: 'test-user' },
       });
 
       expect(response.statusCode).toBe(201);
       const body = JSON.parse(response.body);
       expect(body.vcId).toMatch(/^vc:helix:[0-9a-f]{24}$/);
+      expect(body.vc.type).toEqual(['VerifiableCredential', 'HelixUserCredential']);
       expect(body.vc.validFrom).toBeDefined();
       expect(body.vc.validUntil).toBeDefined();
       expect(body.vc.credentialStatus.type).toBe('BitstringStatusListEntry');
-      expect(body.vc.credentialSubject.privilegeScopes).toContain('read:orders');
+      expect(body.vc.credentialSubject).toMatchObject({ id: didId, userId: 'test-user' });
+    });
+
+    it('refuses an agent VC: agents are issued an identity credential and attestations at onboarding', async () => {
+      const response = await app.inject({
+        method: 'POST',
+        url: '/v1/vcs',
+        headers: { 'x-admin-api-key': 'test-admin-key-0001' },
+        payload: { subjectDid: didId, subjectType: 'agent', privilegeScopes: ['read:orders'], agentName: 'Test Agent' },
+      });
+
+      expect(response.statusCode).toBe(400);
+      const { error } = JSON.parse(response.body);
+      expect(error.code).toBe(ErrorCode.VALIDATION_ERROR);
+      expect(error.message).toContain('AgentIdentityCredential');
     });
 
     it('requires admin authorization for issuance', async () => {
@@ -220,7 +243,7 @@ describe('VC API Integration', () => {
   });
 
   describe('GET /v1/status-list/:listId', () => {
-    it('serves the status list credential with caching headers', async () => {
+    it('serves the issuer-signed status list credential, revalidated on every read', async () => {
       await issueUserVC();
 
       const response = await app.inject({
@@ -229,14 +252,16 @@ describe('VC API Integration', () => {
       });
 
       expect(response.statusCode).toBe(200);
-      expect(response.headers['cache-control']).toBe('public, max-age=300');
+      expect(response.headers['cache-control']).toBe('no-cache');
       const body = JSON.parse(response.body);
       expect(body.type).toContain('BitstringStatusListCredential');
+      expect(body).toMatchObject({ issuer: issuerDid, proof: { type: 'DataIntegrityProof', cryptosuite: 'eddsa-jcs-2022' } });
+      expect(typeof body.validUntil).toBe('string');
     });
   });
 
   describe('POST /v1/status-list', () => {
-    it('creates or replaces the default status list credential', async () => {
+    it('creates the default status list when missing, and never resets one (a reset would revive revoked credentials)', async () => {
       const firstIssue = await app.inject({
         method: 'POST',
         url: '/v1/vcs',
@@ -262,7 +287,7 @@ describe('VC API Integration', () => {
         headers: { 'x-admin-api-key': 'test-admin-key-0001' },
         payload: { subjectDid: didId, subjectType: 'user', userId: 'test-user-2' },
       });
-      expect(JSON.parse(secondIssue.body).statusListIndex).toBe(0);
+      expect(JSON.parse(secondIssue.body).statusListIndex).toBe(1);
     });
 
     it('requires admin authorization', async () => {

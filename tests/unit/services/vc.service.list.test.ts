@@ -1,5 +1,6 @@
 // Copyright 2026 DgVerse LLP
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { TestAuditTrail } from '../../utils/TestAuditTrail.js';
 import { VCService } from '../../../src/services/vc/vc.service.js';
 
 function record(overrides: Record<string, unknown> = {}): Record<string, unknown> {
@@ -31,7 +32,7 @@ describe('VCService.listVCs', () => {
     service = new VCService(
       repository,
       { resolveDID: vi.fn() } as any,
-      { log: vi.fn() } as any,
+      new TestAuditTrail(),
       'a'.repeat(64),
       'did:hedera:testnet:issuer',
       'http://localhost',
@@ -129,6 +130,20 @@ describe('VCService.listVCs', () => {
       scopes: ['write:invoices'],
       issuedAt: '2026-02-02T00:00:00.000Z',
     });
+  });
+
+  it("takes an identity credential's name (story F-1) as the agent name, and no other credential's", async () => {
+    repository.findMany.mockResolvedValue([
+      record({ vcId: 'vc:identity', vcType: 'AgentIdentityCredential', vcJson: { credentialSubject: { id: 'did:web:x:agents:1', name: 'orders-agent' } } }),
+      record({ vcId: 'vc:attestation', vcType: 'CapabilityAttestationCredential', vcJson: { credentialSubject: { id: 'did:web:x:agents:1', name: 'read:orders' } } }),
+      record({ vcId: 'vc:identity-unnamed', vcType: 'AgentIdentityCredential', vcJson: { credentialSubject: { id: 'did:web:x:agents:2', name: '' } } }),
+    ]);
+
+    const [identity, attestation, unnamed] = await service.listVCs({});
+
+    expect(identity).toMatchObject({ vcId: 'vc:identity', vcType: 'AgentIdentityCredential', agentName: 'orders-agent' });
+    expect(attestation).not.toHaveProperty('agentName');
+    expect(unnamed).not.toHaveProperty('agentName');
   });
 
   it('returns empty scopes and omits agentName when absent', async () => {

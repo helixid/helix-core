@@ -12,6 +12,7 @@
 
 import { z } from 'zod';
 import { derivePublicKey, isSupportedEd25519PrivateKeyHex, publicKeyToMultibase } from '../crypto/keys.js';
+import { didWebFor, isRawDidWebHost } from '../did/web.js';
 
 const BooleanEnvSchema = z.preprocess((value) => {
   if (typeof value === 'boolean') return value;
@@ -73,9 +74,88 @@ export const ConfigSchema = z.object({
   STATUS_LIST_CACHE_L1_TTL_SECONDS: z.coerce.number().int().min(1).max(3600).default(60),
   STATUS_LIST_CACHE_L2_TTL_SECONDS: z.coerce.number().int().min(1).max(86400).default(300),
 
-  // Audit
-  AUDIT_LOG_DESTINATION: z.enum(['stdout', 'file', 'both']).default('stdout'),
+  // Signed per-issuer status lists and revocation signals (KYA-OS story L3-C)
+  STATUS_LIST_TTL_SECONDS: z.coerce.number().int().min(60).max(86400).default(3600),
+  STATUS_LIST_REFRESH_BEFORE_SECONDS: z.coerce.number().int().min(0).max(3600).default(300),
+  /** Comma-separated https endpoints every revocation SET is pushed to (RFC 8935). */
+  REVOCATION_WEBHOOK_URLS: z.string().optional(),
+
+  // Audit (KYA-OS A-1). Events are stored in the database; AUDIT_LOG_DESTINATION
+  // additionally echoes each canonical event as one JSON line to stdout and/or a file.
+  AUDIT_LOG_DESTINATION: z.enum(['stdout', 'file', 'both', 'none']).default('stdout'),
   AUDIT_LOG_PATH: z.string().optional(),
+  // Names this API as a producer source; sequences and predecessor digests are per source.
+  AUDIT_SOURCE_ID: z.string().min(1).max(256).default('helix-api'),
+  // Record tool names in tool events. Off by default: an explicit policy decision.
+  AUDIT_INCLUDE_TOOL_NAMES: BooleanEnvSchema.default(false),
+  // The evidence vault key (AES-256-GCM). Unset: exact payloads are never kept and events carry no evidence.
+  AUDIT_EVIDENCE_KEY: z
+    .string()
+    .regex(/^[0-9a-fA-F]{64}$/, 'must be 64 hex chars (32 bytes) for AES-256-GCM')
+    .optional(),
+  AUDIT_EVIDENCE_KEY_ID: z.string().min(1).max(256).default('evidence-key-v1'),
+
+  // Audit recorder (KYA-OS A-2, AAP-2 Chained). The recorder signs every
+  // receipt with its own key, never an issuer key: AUDIT_RECORDER_SIGNING_KEY
+  // (Ed25519, hex) must differ from HELIX_SIGNING_KEY. Unset outside
+  // production, a per-process key is generated (each restart then opens a
+  // key_rotation epoch); unset in production, the server refuses to start.
+  AUDIT_RECORDER_SIGNING_KEY: z
+    .string()
+    .refine(isSupportedEd25519PrivateKeyHex, { message: 'must be an Ed25519 private key in hex' })
+    .optional(),
+  // The recorder's DID and key fragment; default did:key of the recorder key.
+  AUDIT_RECORDER_DID: z.string().regex(/^did:[^\r\n]{3,}$/).optional(),
+  AUDIT_RECORDER_KID: z.string().min(1).max(256).optional(),
+  // managed: Helix records for every tenant that submits (a ledger per tenant).
+  // self-hosted: only the tenants named in AUDIT_RECORDER_TENANTS (JSON array of
+  // party references); by default this API's own tenant.
+  AUDIT_RECORDER_MODE: z.enum(['managed', 'self-hosted']).default('managed'),
+  AUDIT_RECORDER_TENANTS: z.string().optional(),
+  // The restore witness: what this recorder last committed, kept outside the
+  // database it witnesses. Default ./data/audit-recorder-witness.json for a
+  // durable journal; unset with the memory journal.
+  AUDIT_RECORDER_WITNESS_PATH: z.string().optional(),
+  // A floor below which nothing is disposed, on top of the longest delegation lifetime.
+  AUDIT_RETENTION_MIN_DAYS: z.coerce.number().int().min(0).max(36500).default(0),
+
+  // KYA-OS story F-3: the KeyStore's key-encryption key (AES-256-GCM, 64 hex
+  // chars) and its id. Unset, HOSTED_KEY_ENCRYPTION_KEY is used; outside
+  // production a random per-process key (Helix-held keys then do not survive
+  // a restart). Production refuses to start without one.
+  HELIX_KEY_STORE_KEK: z
+    .string()
+    .regex(/^[0-9a-fA-F]{64}$/, 'must be 64 hex chars (32 bytes) for AES-256-GCM')
+    .optional(),
+  HELIX_KEY_STORE_KEK_ID: z.string().min(1).optional(),
+
+  // KYA-OS story F-3: the background re-check of own-hosted subjects waiting
+  // for their DID document (pending_resolution). Every TICK seconds each API
+  // instance checks the subjects that are due: the first check INITIAL
+  // seconds after the subject starts waiting, then twice as long after each
+  // check up to MAX, at most BATCH_SIZE subjects and one per owner host per
+  // run, stopping GIVE_UP_AFTER seconds after the subject started waiting.
+  CUSTODY_RECHECK_ENABLED: z
+    .enum(['true', 'false'])
+    .default('true')
+    .transform((value) => value === 'true'),
+  // KYA-OS story C-E: how long a superseded key stays usable beside the new
+  // one after a rotation (the overlap window); 0 ends it at once. A request
+  // may set its own.
+  KEY_ROTATION_OVERLAP_SECONDS: z.coerce.number().int().min(0).max(30 * 86400).default(86400),
+  CUSTODY_RECHECK_TICK_SECONDS: z.coerce.number().int().min(5).max(3600).default(60),
+  CUSTODY_RECHECK_INITIAL_INTERVAL_SECONDS: z.coerce.number().int().min(10).max(86400).default(120),
+  CUSTODY_RECHECK_MAX_INTERVAL_SECONDS: z.coerce.number().int().min(10).max(86400).default(3600),
+  CUSTODY_RECHECK_GIVE_UP_AFTER_SECONDS: z.coerce.number().int().min(60).max(30 * 86400).default(3 * 86400),
+  CUSTODY_RECHECK_BATCH_SIZE: z.coerce.number().int().min(1).max(500).default(20),
+
+  // KYA-OS story L3-H: consent requests and the user's pairwise did:keys.
+  // A consent request waits this long for the user's click; a consented
+  // window lasts at most MAX_WINDOW; the shred job runs every
+  // USER_KEY_SHRED_INTERVAL_SECONDS (0: off, run it through the admin route).
+  CONSENT_REQUEST_TTL_SECONDS: z.coerce.number().int().min(30).max(86400).default(600),
+  CONSENT_MAX_WINDOW_SECONDS: z.coerce.number().int().min(60).max(5 * 365 * 86400).default(365 * 86400),
+  USER_KEY_SHRED_INTERVAL_SECONDS: z.coerce.number().int().min(0).max(86400).default(3600),
 
   // Hosted accounts & auth (Item #1, see the hosted-instance design).
   // All optional/defaulted so self-hosted deployments (which don't use
@@ -109,7 +189,6 @@ export const ConfigSchema = z.object({
   HOSTED_RATE_LIMIT_REGISTER_MAX: z.coerce.number().int().min(1).default(3),
   HOSTED_RATE_LIMIT_REFRESH_MAX: z.coerce.number().int().min(1).default(20),
   HOSTED_QUOTA_VC_ISSUANCE_PER_DAY: z.coerce.number().int().min(1).default(1000),
-  HOSTED_QUOTA_ENROLLMENT_TOKEN_PER_DAY: z.coerce.number().int().min(1).default(2000),
   TURNSTILE_SECRET_KEY: z.string().optional(),
 
   // E2E / Testing
@@ -140,6 +219,12 @@ export function loadConfig(input: Record<string, unknown>): Config {
   const config = result.data;
   const didMethod = resolveDidMethod(config);
 
+  if (config.DID_DOMAIN && !isRawDidWebHost(config.DID_DOMAIN)) {
+    throw new Error(
+      'Environment configuration is invalid:\n  DID_DOMAIN: the raw host, optionally with a port (api.example.com or localhost:3000), not percent-encoded and without a scheme or path',
+    );
+  }
+
   if (didMethod === 'web') {
     if (!config.DID_DOMAIN) {
       throw new Error(
@@ -147,7 +232,7 @@ export function loadConfig(input: Record<string, unknown>): Config {
       );
     }
     if (!config.HELIX_ISSUER_DID) {
-      config.HELIX_ISSUER_DID = `did:web:${config.DID_DOMAIN}`;
+      config.HELIX_ISSUER_DID = didWebFor(config.DID_DOMAIN);
     }
     if (!config.HELIX_ISSUER_DID.startsWith('did:web:')) {
       throw new Error(

@@ -6,7 +6,6 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createServer } from 'node:net';
 import { expect } from 'vitest';
-import type { SignedVC, SignedVP } from '@helixid/sdk-js';
 import { createTestPrisma } from './prisma.js';
 
 export const LIVE_HEDERA_TIMEOUT_MS = 240_000;
@@ -56,7 +55,8 @@ export async function resetLiveTestDatabase(): Promise<void> {
   if (usingSqliteAdapter()) return;
   assertTestDatabaseUrl(process.env['DATABASE_URL']);
   const prisma = createTestPrisma();
-  await prisma.auditLog.deleteMany();
+  // The audit journal and vault are not reset: they are append-only, and the
+  // database refuses deletes (story A-2). Ledgers simply carry on across tests.
   // services and agents came with the service-provider revamp; a service name
   // is unique per server, so a stale 'amazon' would 409 the next file.
   await prisma.service.deleteMany();
@@ -186,8 +186,7 @@ export async function startLiveApi(): Promise<LiveApi> {
  * Onboards an agent through the real single-call, server-custody flow —
  * agent self-custody (client-generated keypair, wallet file, passphrase)
  * has been retired. The server generates and holds the private key; the
- * only handle a caller gets back is the DID, used afterward to request a
- * signed VP via signLiveVP() below.
+ * only handle a caller gets back is the DID.
  */
 export async function onboardLiveAgent(
   api: LiveApi,
@@ -223,30 +222,6 @@ export async function onboardLiveAgent(
 }
 
 /**
- * Signs a VP server-side for an agent onboarded via onboardLiveAgent() —
- * there is no local private key to build one with anymore, so this is an
- * API call (POST /v1/agents/:did/vp) rather than local VPBuilder use.
- * Gated by the admin key, same as every other privileged live-test call.
- */
-export async function signLiveVP(
-  api: LiveApi,
-  holderDid: string,
-  options: { targetService: string; userDid?: string },
-): Promise<SignedVP> {
-  const res = await fetch(`${api.baseUrl}/v1/agents/${encodeURIComponent(holderDid)}/vp`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json', 'x-admin-api-key': api.adminApiKey },
-    body: JSON.stringify({
-      targetService: options.targetService,
-      ...(options.userDid !== undefined ? { userDid: options.userDid } : {}),
-    }),
-  });
-  expect(res.status).toBe(200);
-  const { signedVP } = (await res.json()) as { signedVP: SignedVP };
-  return signedVP;
-}
-
-/**
  * Enrolls a service (POST /v1/services) and returns its DID. A VP names its
  * targetService by DID, and the platform mints and holds the service's key,
  * so a live test registers a real service rather than naming one. Names are
@@ -265,25 +240,6 @@ export async function enrollLiveService(api: LiveApi, name = 'amazon'): Promise<
   expect(res.status).toBe(201);
   const record = (await res.json()) as { did: string; name: string };
   return { did: record.did, name: record.name };
-}
-
-/**
- * A user's consent for an agent, issued by the service through
- * POST /v1/service-delegation-grants. signVP with a userDid refuses without
- * one, so any test that signs on a user's behalf issues it first.
- */
-export async function issueLiveGrant(
-  api: LiveApi,
-  input: { serviceDid: string; agentDid: string; userDid: string; scopes: string[] },
-): Promise<SignedVC> {
-  const res = await fetch(`${api.baseUrl}/v1/service-delegation-grants`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json', 'x-admin-api-key': api.adminApiKey },
-    body: JSON.stringify({ ...input, durability: 'standing' }),
-  });
-  expect(res.status).toBe(201);
-  const { grantVC } = (await res.json()) as { grantVC: SignedVC };
-  return grantVC;
 }
 
 async function getAvailablePort(): Promise<number> {

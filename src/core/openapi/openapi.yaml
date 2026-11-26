@@ -229,7 +229,56 @@ paths:
           description: Prepared payload expired
   /v1/status-list/{listId}:
     get:
-      summary: Get StatusList2021 credential
+      summary: Get an issuer's signed status list (W3C Bitstring Status List v1.0, KYA-OS story L3-C)
+      description: >
+        One list per issuer DID, signed by that issuer with a DataIntegrityProof (eddsa-jcs-2022), validFrom and
+        validUntil set. Republished on change and before expiry. Cache-Control no-cache with an ETag. 503 while an
+        issuer that holds its own key has not signed the current bits (verifiers then read its credentials as revoked).
+      parameters:
+        - in: path
+          name: listId
+          required: true
+          schema:
+            type: string
+        - in: header
+          name: If-None-Match
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Signed BitstringStatusListCredential
+        "304":
+          description: Not modified
+        "404":
+          description: No such list
+        "503":
+          description: The list awaits its issuer's signature over its current bits
+    put:
+      summary: Submit a status list its self-custody issuer signed
+      description: Accepted only when it is this list with exactly the stored bits, a current window, and a proof by the issuer's assertionMethod key.
+      parameters:
+        - in: path
+          name: listId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        "200":
+          description: The list, now served
+        "400":
+          description: Not this list as it stands, or the proof does not verify
+        "404":
+          description: No such list
+  /v1/status-list/{listId}/unsigned:
+    get:
+      summary: The list as it stands, unsigned, with a fresh window, for a self-custody issuer to sign
       parameters:
         - in: path
           name: listId
@@ -238,10 +287,147 @@ paths:
             type: string
       responses:
         "200":
-          description: Status list credential
+          description: Unsigned BitstringStatusListCredential
+        "404":
+          description: No such list
+  /v1/status-list/entries:
+    post:
+      summary: An entry on an issuer's own list, for a credential a self-custody issuer signs itself
+      parameters:
+        - in: header
+          name: x-admin-api-key
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [issuer]
+              properties:
+                issuer:
+                  type: string
+      responses:
+        "201":
+          description: BitstringStatusListEntry
+  /v1/revocations:
+    post:
+      summary: Revoke a credential and, cascading, every delegation below it (KYA-OS story L3-C)
+      description: >
+        Either a request the revoker signed (compact JWS, typ kya-os-revocation+jwt, claims iss, credentialId, iat,
+        jti, aud = <API>/v1/revocations), or credentialId and revoker with the admin API key for a revoker whose key
+        Helix holds. Allowed revokers: the direct issuer, any ancestor issuer, the root Responsible Party, and an
+        identity credential's responsibleParty; never the subject. Every affected bit flips on its issuer's list in one
+        transaction, each list is republished, one audit event and one revocation signal (RFC 8417 SET) per credential.
+      parameters:
+        - in: header
+          name: x-admin-api-key
+          required: false
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                request:
+                  type: string
+                credentialId:
+                  type: string
+                revoker:
+                  type: string
+      responses:
+        "200":
+          description: "{ credentialId, revoker, revoked: [target, ...descendants] }"
+        "400":
+          description: Malformed request
+        "401":
+          description: The request's signature does not verify under the revoker's key
+        "403":
+          description: Not an allowed revoker (the subject never is), or no admin API key for the custodial form
+        "404":
+          description: No such credential
+        "409":
+          description: Already revoked
+  /v1/events/revocations:
+    get:
+      summary: Revocation signals as Server-Sent Events (one RFC 8417 SET per revoked credential)
+      description: Each event is `event revocation`, id the SET's jti, data the SET. Last-Event-ID replays missed events.
+      parameters:
+        - in: header
+          name: Last-Event-ID
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: text/event-stream
+  /v1/events/revocations/webhooks:
+    get:
+      summary: List the endpoints that receive every SET by push (RFC 8935)
+      parameters:
+        - in: header
+          name: x-admin-api-key
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: "{ webhooks }"
+    post:
+      summary: Register a push endpoint (https)
+      parameters:
+        - in: header
+          name: x-admin-api-key
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [url]
+              properties:
+                url:
+                  type: string
+      responses:
+        "201":
+          description: "{ webhooks }"
+        "400":
+          description: Not an https URL
+    delete:
+      summary: Remove a push endpoint
+      parameters:
+        - in: header
+          name: x-admin-api-key
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [url]
+              properties:
+                url:
+                  type: string
+      responses:
+        "200":
+          description: "{ webhooks }"
+        "404":
+          description: No such endpoint
   /v1/status-list:
     post:
-      summary: Create or replace the default StatusList2021 credential
+      summary: Create a status list (default the Helix issuer's) and return it signed
       parameters:
         - in: header
           name: x-admin-api-key
@@ -265,14 +451,46 @@ paths:
           description: Status list credential created
         "403":
           description: Admin authorization required
-  /v1/vp/verify:
+  /v1/verify:
     post:
-      summary: Verify signed VP only for JWT session bridge flow
+      summary: Verify a KYA-OS request proof and its carried delegation chain (story F-2)
+      description: >
+        Runs the local verifier of @helixid/sdk-js for callers that do not run
+        the SDK. Reads only the presented artifacts, public DID documents,
+        status lists and Entity Cards over HTTPS, an in-process nonce store and
+        configuration; never a Helix database. Replaces /v1/vp/verify.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [proof, request, expectedAudience]
+              properties:
+                proof:
+                  description: The org.kya-os/proof.v1 object from _meta["org.kya-os/request-proof"].
+                chain:
+                  description: The carried chain from _meta["org.kya-os/delegation-chain"], root to leaf.
+                request:
+                  type: object
+                  description: The JSON-RPC request the proof binds ({method, params}).
+                card:
+                  description: The agent's Entity Card, when the caller holds it.
+                expectedAudience:
+                  type: string
+                  description: The caller's own DID, the audience the proof must name.
+                resource: { type: string }
+                resourceOwner: { type: string }
+                trustedRootIssuers: { type: array, items: { type: string } }
+                catalog: { type: array, items: { type: string } }
+                action: { type: string }
+                tokenCnfJkt: { type: string }
+                maxChainLength: { type: integer, minimum: 1 }
       responses:
         "200":
-          description: VP verified and JWT session issued
-        "410":
-          description: SDK-only VP verification must use verifyVP() from @helixid/sdk-js
+          description: The verifier's result, {ok, level, effectiveScopes, reasons, chainSummary, ...}, whether or not the proof verified
+        "400":
+          description: The body is not a verification request
   /v1/sessions/public-key:
     get:
       summary: Get JWT session verification public key
@@ -297,9 +515,10 @@ paths:
       description: >
         Redeems an enrollment token in a single call: the server generates
         and holds the agent's keypair, creates its DID, and issues its
-        HelixAgentCredential. Agent self-custody is retired, so there is no
-        separate challenge/verify step any more -- just this one call after
-        POST /v1/enrollment-tokens.
+        AgentIdentityCredential plus one CapabilityAttestationCredential per
+        requested scope (story F-1). The response's vcId is the identity
+        credential. There is no separate challenge/verify step -- just this
+        one call after POST /v1/enrollment-tokens.
       requestBody:
         required: true
         content:
@@ -340,11 +559,31 @@ paths:
           description: Challenge verified
   /v1/audit-log:
     get:
-      summary: List audit events
-      description: Admin-only audit operation. Requires x-admin-api-key.
+      summary: List audit journal entries, one page at a time
+      description: >-
+        Admin-only audit operation. Requires x-admin-api-key. Newest first by
+        the recorder's service time, ties by ledger, epoch and sequence. Answers
+        `{ items, nextCursor }`; pass `nextCursor` back as `cursor` for the next
+        page (null on the last). A hosted deployment's account audit view pages
+        the same way with the same cursor.
       parameters:
         - in: query
           name: eventType
+          required: false
+          schema:
+            type: string
+        - in: query
+          name: family
+          required: false
+          schema:
+            type: string
+        - in: query
+          name: correlationId
+          required: false
+          schema:
+            type: string
+        - in: query
+          name: ledgerId
           required: false
           schema:
             type: string
@@ -354,6 +593,11 @@ paths:
           schema:
             type: string
             format: date-time
+        - in: query
+          name: cursor
+          required: false
+          schema:
+            type: string
         - in: query
           name: limit
           required: false
@@ -369,7 +613,43 @@ paths:
             type: string
       responses:
         "200":
-          description: Audit event summaries
+          description: One page of journal entries
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, nextCursor]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      required: [id, recordedAt, eventDigest, event, ledgerId, ledgerEpochId, sequence, entryDigest, receipt]
+                      properties:
+                        id:
+                          type: string
+                        recordedAt:
+                          type: string
+                          format: date-time
+                        eventDigest:
+                          type: string
+                        event:
+                          type: object
+                        ledgerId:
+                          type: string
+                        ledgerEpochId:
+                          type: string
+                        sequence:
+                          type: string
+                        entryDigest:
+                          type: string
+                        receipt:
+                          type: object
+                  nextCursor:
+                    type: string
+                    nullable: true
+        "400":
+          description: Invalid query or cursor
         "403":
           description: Admin authorization required
   /v1/audit-log/vp-verification:
@@ -435,19 +715,18 @@ components:
             type: string
     IssueVCRequest:
       type: object
-      required: [subjectDid, subjectType, expiresInSeconds]
+      description: >
+        A user credential (HelixUserCredential). Agents are not issued
+        credentials here: onboarding gives them an AgentIdentityCredential and
+        one CapabilityAttestationCredential per scope (story F-1).
+      required: [subjectDid, subjectType, userId, expiresInSeconds]
+      additionalProperties: false
       properties:
         subjectDid:
           type: string
         subjectType:
           type: string
-          enum: [agent, user]
-        privilegeScopes:
-          type: array
-          items:
-            type: string
-        agentName:
-          type: string
+          enum: [user]
         userId:
           type: string
         expiresInSeconds:

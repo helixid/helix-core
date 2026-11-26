@@ -1,12 +1,13 @@
 // Copyright 2026 DgVerse LLP
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { VCService } from '../../../src/services/vc/vc.service.js';
+import { TestAuditTrail } from '../../utils/TestAuditTrail.js';
 import { ErrorCode, buildDIDDocument, createStatusList, derivePublicKey, getBit } from '../../../src/core/index.js';
 
 describe('VCService Branch Coverage', () => {
   let repository: any;
   let didService: any;
-  let auditLogger: any;
+  let auditLogger: TestAuditTrail;
   let service: VCService;
   const validStatusList = createStatusList();
   const signingKey = 'a'.repeat(64);
@@ -34,7 +35,7 @@ describe('VCService Branch Coverage', () => {
         return Promise.resolve({});
       }),
     };
-    auditLogger = { log: vi.fn() };
+    auditLogger = new TestAuditTrail();
     service = new VCService(
       repository,
       didService,
@@ -58,7 +59,7 @@ describe('VCService Branch Coverage', () => {
       ]);
 
       await expect(
-        service.findActiveBySubjectDid('did:1', 'HelixAgentCredential'),
+        service.findActiveBySubjectDid('did:1', 'AgentIdentityCredential'),
       ).resolves.toEqual({ id: 'vc-new' });
     });
 
@@ -69,7 +70,7 @@ describe('VCService Branch Coverage', () => {
       ]);
 
       await expect(
-        service.findActiveBySubjectDid('did:1', 'HelixAgentCredential'),
+        service.findActiveBySubjectDid('did:1', 'AgentIdentityCredential'),
       ).rejects.toMatchObject({ code: ErrorCode.VP_MULTIPLE_ACTIVE_VC });
     });
 
@@ -79,14 +80,14 @@ describe('VCService Branch Coverage', () => {
         subjectDid: 'did:1',
         revokedAt: null,
         expiresAt: new Date(Date.now() + 60_000),
-        vcJson: { id: 'vc-1', type: ['VerifiableCredential', 'HelixAgentCredential'] },
+        vcJson: { id: 'vc-1', type: ['VerifiableCredential', 'AgentIdentityCredential'] },
       });
 
       await expect(
-        service.findActiveByVcIdForSubject('vc-1', 'did:1', 'HelixAgentCredential'),
-      ).resolves.toEqual({ id: 'vc-1', type: ['VerifiableCredential', 'HelixAgentCredential'] });
+        service.findActiveByVcIdForSubject('vc-1', 'did:1', 'AgentIdentityCredential'),
+      ).resolves.toEqual({ id: 'vc-1', type: ['VerifiableCredential', 'AgentIdentityCredential'] });
       await expect(
-        service.findActiveByVcIdForSubject('vc-1', 'did:other', 'HelixAgentCredential'),
+        service.findActiveByVcIdForSubject('vc-1', 'did:other', 'AgentIdentityCredential'),
       ).resolves.toBeNull();
       await expect(
         service.findActiveByVcIdForSubject('vc-1', 'did:1', 'HelixUserCredential'),
@@ -140,22 +141,30 @@ describe('VCService Branch Coverage', () => {
       ).rejects.toMatchObject({ code: ErrorCode.STATUS_LIST_INDEX_EXHAUSTED });
     });
 
-    it('throws VALIDATION_ERROR for user with scopes', async () => {
-      await expect(
-        service.issueVC(
-          { subjectDid: 'did:1', subjectType: 'user', userId: 'u1', privilegeScopes: ['read'] },
-          'req-1',
-        ),
-      ).rejects.toMatchObject({ code: ErrorCode.VALIDATION_ERROR });
+    it('throws VALIDATION_ERROR for a user credential carrying scopes or an agent name, or no userId', async () => {
+      for (const bad of [
+        { subjectDid: 'did:1', subjectType: 'user', userId: 'u1', privilegeScopes: ['read'] },
+        { subjectDid: 'did:1', subjectType: 'user', userId: 'u1', privilegeScopes: [] },
+        { subjectDid: 'did:1', subjectType: 'user', userId: 'u1', agentName: 'A' },
+        { subjectDid: 'did:1', subjectType: 'user', userId: '' },
+        { subjectDid: 'did:1', subjectType: 'user' },
+      ]) {
+        await expect(service.issueVC(bad as never, 'req-1')).rejects.toMatchObject({ code: ErrorCode.VALIDATION_ERROR });
+      }
+      expect(didService.resolveDID).not.toHaveBeenCalled();
     });
 
-    it('throws VALIDATION_ERROR for agent without scopes or name', async () => {
-      await expect(
-        service.issueVC({ subjectDid: 'did:1', subjectType: 'agent', agentName: '' }, 'req-1'),
-      ).rejects.toMatchObject({ code: ErrorCode.VALIDATION_ERROR });
+    it('refuses an agent credential, or any subject type but user, before touching the DID or the status list', async () => {
+      for (const subjectType of ['agent', 'service', undefined]) {
+        await expect(
+          service.issueVC({ subjectDid: 'did:1', subjectType, agentName: 'A', privilegeScopes: ['read'] } as never, 'req-1'),
+        ).rejects.toMatchObject({ code: ErrorCode.VALIDATION_ERROR, httpStatus: 400, message: expect.stringContaining('AgentIdentityCredential') });
+      }
+      expect(didService.resolveDID).not.toHaveBeenCalled();
+      expect(repository.claimNextIndex).not.toHaveBeenCalled();
     });
 
-    it('accepts any well-formed privilege scope', async () => {
+    it('issues a HelixUserCredential naming the user, and stores no scopes', async () => {
       repository.findStatusListById.mockResolvedValue({
         id: 'l1',
         nextIndex: 0,
@@ -164,49 +173,13 @@ describe('VCService Branch Coverage', () => {
       repository.claimNextIndex.mockResolvedValue({ list: { id: 'l1' }, claimedIndex: 0 });
       repository.createVc.mockResolvedValue({ vcId: 'v1', vcJson: {} });
 
-      await expect(
-        service.issueVC(
-          {
-            subjectDid: 'did:1',
-            subjectType: 'agent',
-            agentName: 'Agent One',
-            privilegeScopes: ['read:flights'],
-          },
-          'req-1',
-        ),
-      ).resolves.toMatchObject({ vcId: expect.stringMatching(/^vc:helix:/) });
-      expect(repository.createVc).toHaveBeenCalledWith(
-        expect.objectContaining({
-          privilegeScopes: ['read:flights'],
-        }),
-      );
-    });
-
-    it('allows agent VCs with an empty privilege scope list', async () => {
-      repository.findStatusListById.mockResolvedValue({
-        id: 'l1',
-        nextIndex: 0,
-        encodedList: validStatusList,
-      });
-      repository.claimNextIndex.mockResolvedValue({ list: { id: 'l1' }, claimedIndex: 0 });
-      repository.createVc.mockResolvedValue({ vcId: 'v1', vcJson: {} });
-
-      await expect(
-        service.issueVC(
-          {
-            subjectDid: 'did:1',
-            subjectType: 'agent',
-            agentName: 'No Access Agent',
-            privilegeScopes: [],
-          },
-          'req-1',
-        ),
-      ).resolves.toMatchObject({ vcId: expect.stringMatching(/^vc:helix:/) });
-      expect(repository.createVc).toHaveBeenCalledWith(
-        expect.objectContaining({
-          privilegeScopes: [],
-        }),
-      );
+      const result = await service.issueVC({ subjectDid: 'did:1', subjectType: 'user', userId: 'u1' }, 'req-1');
+      expect(result.vcId).toMatch(/^vc:helix:/);
+      expect(result.vc.type).toEqual(['VerifiableCredential', 'HelixUserCredential']);
+      expect(result.vc.credentialSubject).toEqual({ id: 'did:1', type: 'HelixUser', userId: 'u1' });
+      const stored = repository.createVc.mock.calls[0][0];
+      expect(stored).toMatchObject({ subjectType: 'user', vcType: 'HelixUserCredential' });
+      expect(stored).not.toHaveProperty('privilegeScopes');
     });
 
     it('throws ISSUER_SIGNING_KEY_MISMATCH before claiming an index if issuer DID key differs', async () => {
@@ -230,6 +203,27 @@ describe('VCService Branch Coverage', () => {
   });
 
   describe('revokeVC branches', () => {
+    it('fails when the platform status list is missing', async () => {
+      repository.findByVcId.mockResolvedValue({ vcId: 'v1', revokedAt: null, statusListIndex: 5, vcJson: {} });
+      repository.findStatusListById.mockResolvedValue(null);
+      await expect(service.revokeVC('v1', 'req-1')).rejects.toThrow('Status list missing during revocation');
+    });
+
+    it('a failure to record the audit event never breaks the revocation (rejected or thrown)', async () => {
+      const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+      repository.findStatusListById.mockResolvedValue({ encodedList: validStatusList });
+      repository.revokeVc.mockResolvedValue({ revokedAt: new Date() });
+      const failing = (record: () => Promise<unknown>) =>
+        new VCService(repository, didService, { record } as never, signingKey, issuerDid, 'http://localhost');
+      repository.findByVcId.mockResolvedValue({ vcId: 'v1', subjectDid: 'did:key:z6MkSubject', revokedAt: null, statusListIndex: 5, vcJson: {} });
+      await expect(failing(() => Promise.reject(new Error('sink down'))).revokeVC('v1', 'req-1')).resolves.toMatchObject({ vcId: 'v1', revoked: true });
+      await expect(failing(() => { throw 'boom'; }).revokeVC('v1', 'req-1')).resolves.toMatchObject({ vcId: 'v1', revoked: true });
+      await new Promise((resolve) => setImmediate(resolve));
+      expect(errors).toHaveBeenCalledWith('AUDIT_RECORD_FAILED', 'sink down');
+      expect(errors).toHaveBeenCalledWith('AUDIT_RECORD_FAILED', 'boom');
+      errors.mockRestore();
+    });
+
     it('throws VC_NOT_FOUND if record missing', async () => {
       repository.findByVcId.mockResolvedValue(null);
       await expect(service.revokeVC('v1', 'req-1')).rejects.toMatchObject({
@@ -298,7 +292,7 @@ describe('VCService Branch Coverage', () => {
   describe('registerSignedVC status index', () => {
     const delegation = (credentialStatus?: Record<string, string>) => ({
       id: 'vc:helix:delegation:1',
-      type: ['VerifiableCredential', 'HelixAgentCredential'],
+      type: ['VerifiableCredential', 'DelegationCredential'],
       issuer: 'did:key:z6Mkparent',
       credentialSubject: { id: 'did:key:z6Mkchild', privilegeScopes: ['read'], delegatedFrom: 'did:key:z6Mkparent', delegationDepth: 1 },
       ...(credentialStatus ? { credentialStatus } : {}),
@@ -340,7 +334,7 @@ describe('VCService Branch Coverage', () => {
         userId: 'u1',
         statusListId: 'l1',
         statusListIndex: 0,
-        vcJson: { credentialSubject: { userId: 'u1' } },
+        vcJson: { type: ['VerifiableCredential', 'HelixUserCredential'], credentialSubject: { userId: 'u1' } },
         expiresAt: new Date(Date.now() + 100000),
       };
       repository.findByVcId.mockResolvedValue(oldVc);
@@ -354,7 +348,23 @@ describe('VCService Branch Coverage', () => {
 
       const res = await service.renewVC('v1', {}, 'req-1');
       expect(res.vcId).toMatch(/^vc:helix:[0-9a-f]{24}$/);
+      expect(res.vc.type).toEqual(['VerifiableCredential', 'HelixUserCredential']);
+      expect(res.vc.credentialSubject).toMatchObject({ userId: 'u1' });
       expect(repository.markAsRenewed).toHaveBeenCalledWith('v1', res.vcId);
+    });
+
+    it('refuses to renew anything but a user credential, without issuing', async () => {
+      for (const vcJson of [
+        { type: ['VerifiableCredential', 'DelegationGrantCredential'], credentialSubject: { id: 'did:a', scopes: ['read'] } },
+        { type: ['VerifiableCredential', 'CapabilityAttestationCredential'], credentialSubject: { id: 'did:a', capability: 'read' } },
+        { type: ['VerifiableCredential', 'HelixUserCredential'], credentialSubject: {} },
+        { credentialSubject: { userId: 'u1' } },
+      ]) {
+        repository.findByVcId.mockResolvedValue({ vcId: 'v1', subjectDid: 'did:a', subjectType: 'agent', revokedAt: null, vcJson });
+        await expect(service.renewVC('v1', {}, 'req-1')).rejects.toMatchObject({ code: ErrorCode.VALIDATION_ERROR, httpStatus: 400 });
+      }
+      expect(repository.claimNextIndex).not.toHaveBeenCalled();
+      expect(repository.markAsRenewed).not.toHaveBeenCalled();
     });
   });
 
@@ -404,12 +414,32 @@ describe('VCService Branch Coverage', () => {
     });
   });
 
-  describe('getStatusList branches', () => {
-    it('throws STATUS_LIST_NOT_FOUND if missing', async () => {
+  describe('claimStatusListEntry (the platform list legacy grants use: the Helix issuer\'s list, story L3-C)', () => {
+    it('creates the list on first use, claims the next index and names the list URL', async () => {
       repository.findStatusListById.mockResolvedValue(null);
-      await expect(service.getStatusList('l1')).rejects.toMatchObject({
-        code: ErrorCode.STATUS_LIST_NOT_FOUND,
-      });
+      repository.createStatusList.mockResolvedValue(undefined);
+      repository.claimNextIndex.mockResolvedValue({ list: {}, claimedIndex: 0 });
+      const entry = await service.claimStatusListEntry();
+      expect(repository.createStatusList).toHaveBeenCalledWith('helix-status-list-1', expect.any(String));
+      expect(entry).toMatchObject({ statusListIndex: 0, statusListCredentialUrl: expect.stringMatching(/\/v1\/status-list\/helix-status-list-1$/) });
+    });
+
+    it('claims on an existing list, and refuses a full one', async () => {
+      repository.findStatusListById.mockResolvedValue({ listId: 'helix-status-list-1', encodedList: 'H4s', nextIndex: 7 });
+      repository.claimNextIndex.mockResolvedValue({ list: {}, claimedIndex: 7 });
+      expect((await service.claimStatusListEntry()).statusListIndex).toBe(7);
+      repository.findStatusListById.mockResolvedValue({ listId: 'helix-status-list-1', encodedList: 'H4s', nextIndex: 131072 });
+      await expect(service.claimStatusListEntry()).rejects.toMatchObject({ code: ErrorCode.STATUS_LIST_INDEX_EXHAUSTED });
+    });
+  });
+
+  describe('createStatusList', () => {
+    it('creates the row and returns its id and bits; serving lists is the StatusListService\'s (story L3-C)', async () => {
+      repository.createStatusList.mockResolvedValue(undefined);
+      const created = await service.createStatusList({ listId: 'l1', length: 64 });
+      expect(created.listId).toBe('l1');
+      expect(repository.createStatusList).toHaveBeenCalledWith('l1', created.encodedList);
+      expect((await service.createStatusList()).listId).toBe('helix-status-list-1');
     });
   });
 });

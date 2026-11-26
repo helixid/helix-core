@@ -115,7 +115,7 @@ export class PrismaDidStorageDriver implements DidStorageDriver {
 type SqliteDidRow = {
   id: string;
   subject_type: string;
-  controller: string;
+  controller: string | null;
   public_key: string;
   public_key_multibase: string | null;
   hedera_topic_id: string | null;
@@ -132,7 +132,7 @@ function fromSqliteRow(row: SqliteDidRow | undefined): DIDRecord | null {
   const base: DIDRecord = {
     id: row.id,
     subjectType: row.subject_type,
-    controller: row.controller,
+    ...(row.controller === null ? {} : { controller: row.controller }),
     publicKey: row.public_key,
     publicKeyMultibase: row.public_key_multibase,
     hederaTopicId: row.hedera_topic_id,
@@ -174,7 +174,7 @@ export class SqliteDidStorageDriver implements DidStorageDriver {
     return {
       id: data.id,
       subjectType: data.subjectType,
-      controller: data.controller,
+      ...(data.controller === undefined ? {} : { controller: data.controller }),
       publicKey: data.publicKey,
       publicKeyMultibase: data.publicKeyMultibase ?? null,
       hederaTopicId: data.hederaTopicId ?? null,
@@ -255,7 +255,7 @@ export class InMemoryDidStorageDriver implements DidStorageDriver {
     const record: DIDRecord = {
       id: data.id,
       subjectType: data.subjectType,
-      controller: data.controller,
+      ...(data.controller === undefined ? {} : { controller: data.controller }),
       publicKey: data.publicKey,
       publicKeyMultibase: data.publicKeyMultibase ?? null,
       hederaTopicId: data.hederaTopicId ?? null,
