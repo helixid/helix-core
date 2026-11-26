@@ -1,7 +1,7 @@
 // Copyright 2026 DgVerse LLP
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { DIDService } from '../../../src/services/did/did.service.js';
-import { ErrorCode, HelixError, hashJson } from '../../../src/core/index.js';
+import { ErrorCode, HelixError, buildDIDDocument, generateKeyPair, hashJson } from '../../../src/core/index.js';
 import { TestAuditTrail } from '../../utils/TestAuditTrail.js';
 
 describe('DIDService Branch Coverage', () => {
@@ -212,6 +212,21 @@ describe('DIDService Branch Coverage', () => {
         hedera.anchorDocument.mockRejectedValue(new Error('fail'));
         await service.deactivateDID('did:1', 'req-1');
         expect(repository.deactivateDid).toHaveBeenCalled();
+    });
+  });
+
+  describe('registerResolvedDID', () => {
+    it('stores the top-level controller as the document has it, and none when it has none', async () => {
+      const did = 'did:web:127.0.0.1%3A3880:agents:b';
+      const keys = generateKeyPair();
+      const { controller: _dropped, ...document } = buildDIDDocument(did, keys.publicKey) as unknown as Record<string, unknown>;
+      repository.findDidById.mockResolvedValue(null);
+      repository.createDid.mockResolvedValue({});
+      await service.registerResolvedDID(did, document as never, 'agent', 'req-1');
+      expect(repository.createDid).toHaveBeenLastCalledWith(expect.objectContaining({ id: did, controller: undefined, publicKey: keys.publicKey }));
+      const ACCOUNT = 'did:web:127.0.0.1%3A3880:accounts:a0';
+      await service.registerResolvedDID(did, { ...document, controller: ACCOUNT } as never, 'agent', 'req-2');
+      expect(repository.createDid).toHaveBeenLastCalledWith(expect.objectContaining({ id: did, controller: ACCOUNT }));
     });
   });
 });

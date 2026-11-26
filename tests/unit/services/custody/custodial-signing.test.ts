@@ -231,3 +231,39 @@ describe('the enrollment event', () => {
   });
 
 });
+
+describe('Helix does not sign for a revoked agent', () => {
+  const sign = (h: Harness, did: string) => h.service.sign(did, { payload: base64UrlEncode(new Uint8Array([1, 2, 3])) }, h.context({ actor: 'account:acc_1' }), 'agent');
+
+  it('refuses with 403 AGENT_REVOKED once the identity credential is revoked, and audits the refusal', async () => {
+    const revoked = new Set<string>();
+    const h = harness({
+      credentials: {
+        issuerDid: 'did:web:helix.example',
+        issueIdentity: async () => ({ id: 'vc:identity:1' }),
+        issueAttestations: async (input) => input.capabilities.map((capability) => ({ id: `att:${capability}` })),
+        isRevoked: async (vcId) => revoked.has(vcId),
+      },
+    });
+    const agent = await h.service.createAgent({ name: 'Revocable', scopes: ['read:orders'], keyCustody: 'helix' }, h.context());
+    await expect(sign(h, agent.did)).resolves.toMatchObject({ did: agent.did });
+    revoked.add('vc:identity:1');
+    await expect(sign(h, agent.did)).rejects.toMatchObject({ code: 'AGENT_REVOKED', httpStatus: 403, message: `Helix does not sign for ${agent.did}: its identity credential is revoked` });
+    expect(events(h, CustodyEvents.CUSTODIAL_SIGNING_REFUSED)).toEqual([expect.objectContaining({ did: agent.did, code: 'identity_revoked' })]);
+    expect(events(h, CustodyEvents.CUSTODIAL_SIGNATURE)).toHaveLength(1);
+  });
+
+  it('refuses once the DID is deactivated', async () => {
+    const h = harness();
+    const agent = await h.service.createAgent({ name: 'Gone', keyCustody: 'helix' }, h.context());
+    await h.dids.deactivateDid(agent.did, new Date('2026-11-21T11:00:00Z'));
+    await expect(sign(h, agent.did)).rejects.toMatchObject({ code: 'AGENT_REVOKED', httpStatus: 403, message: expect.stringContaining('its DID is deactivated') });
+    expect(events(h, CustodyEvents.CUSTODIAL_SIGNING_REFUSED)).toEqual([expect.objectContaining({ did: agent.did, code: 'did_deactivated' })]);
+  });
+
+  it('signs as before when the credentials cannot say (no isRevoked)', async () => {
+    const h = harness();
+    const agent = await h.service.createAgent({ name: 'Plain', keyCustody: 'helix' }, h.context());
+    await expect(sign(h, agent.did)).resolves.toMatchObject({ did: agent.did });
+  });
+});

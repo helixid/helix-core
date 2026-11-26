@@ -43,6 +43,17 @@ describe('buildDidDocument', () => {
     });
   });
 
+  it('names a top-level controller only when given (an agent account DID); each key controller stays the agent', () => {
+    const ACCOUNT = 'did:web:agents.example.com:accounts:a0';
+    const document = buildDidDocument({ did: DID, publicKeyJwk: JWK, controller: ACCOUNT });
+    expect(document.controller).toBe(ACCOUNT);
+    expect(Object.keys(document).slice(0, 3)).toEqual(['@context', 'id', 'controller']);
+    expect(document.verificationMethod[0]!.controller).toBe(DID);
+    expect(buildDidDocument({ did: DID, publicKeyJwk: JWK })).not.toHaveProperty('controller');
+    expect(() => buildDidDocument({ did: DID, publicKeyJwk: JWK, controller: 'acct-1' })).toThrow('controller must be a DID');
+    expect(() => buildDidDocument({ did: DID, publicKeyJwk: JWK, controller: 5 as never })).toThrow('controller must be a DID');
+  });
+
   it('defaults the key id, accepts a full verification-method id, drops a self-reference from alsoKnownAs, keeps services', () => {
     expect(buildDidDocument({ did: DID, publicKeyJwk: JWK }).verificationMethod[0]!.id).toBe(`${DID}#${DEFAULT_AGENT_KEY_ID}`);
     expect(buildDidDocument({ did: DID, publicKeyJwk: JWK, kid: `${DID}#k2` }).assertionMethod).toEqual([`${DID}#k2`]);

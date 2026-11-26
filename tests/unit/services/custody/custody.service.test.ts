@@ -60,6 +60,46 @@ function publishOwnDomain(h: Harness, documents: { didDocument: unknown; card: u
   h.web.set(documents.cardUrl, documents.card);
 }
 
+describe("the agent's account DID as its DID document's top-level controller (Harish, 2026-11-24)", () => {
+  const ACCOUNT = 'did:web:helix.example:accounts:a0a0a0a0a0a0a0a0';
+
+  it('custodial: the document and the stored DID name the account; the key names the agent', async () => {
+    const h = harness({ accountControlsAgents: true });
+    const created = await h.service.createAgent({ name: 'Custodial', keyCustody: 'helix', didHosting: 'helix' }, h.context({ owner: ACCOUNT }));
+    const document = created.documents!.didDocument;
+    expect(document.controller).toBe(ACCOUNT);
+    expect(document.verificationMethod[0]!.controller).toBe(created.did);
+    const stored = await h.dids.findDidById(created.did);
+    expect(stored?.controller).toBe(ACCOUNT);
+    expect((stored?.didDocument as { controller?: string }).controller).toBe(ACCOUNT);
+  });
+
+  it('self custody: the document published after helix init names the account too', async () => {
+    const h = harness({ accountControlsAgents: true });
+    const created = await h.service.createAgent({ name: 'Self', keyCustody: 'self' }, h.context({ owner: ACCOUNT }));
+    const challenge = await h.service.enrollmentChallenge(created.enrollmentToken!);
+    const key = clientKey();
+    const enrolled = await h.service.enroll(
+      { enrollmentToken: created.enrollmentToken!, publicKeyJwk: key.publicKeyJwk, signature: enrollmentSignature(key, challenge.did, challenge.kid, challenge.nonce) },
+      h.context({ actor: 'enrollment-token' }),
+    );
+    expect(enrolled.documents!.didDocument.controller).toBe(ACCOUNT);
+    expect((await h.dids.findDidById(created.did))?.controller).toBe(ACCOUNT);
+  });
+
+  it('none without accounts (helixid), none for a service, none when no owner is known', async () => {
+    const off = harness();
+    const plain = await off.service.createAgent({ name: 'No accounts', keyCustody: 'helix', didHosting: 'helix', ownerDid: ACCOUNT }, off.context());
+    expect(plain.documents!.didDocument).not.toHaveProperty('controller');
+    expect((await off.dids.findDidById(plain.did))?.controller ?? undefined).toBeUndefined();
+    const on = harness({ accountControlsAgents: true });
+    const ownerless = await on.service.createAgent({ name: 'Ownerless', keyCustody: 'helix', didHosting: 'helix' }, on.context());
+    expect(ownerless.documents!.didDocument).not.toHaveProperty('controller');
+    const service = await on.service.createService({ name: 'Svc', domain: 'svc.example', requiredScopes: ['read'], keyCustody: 'helix', didHosting: 'helix' }, on.context({ owner: ACCOUNT }));
+    expect(service.documents!.didDocument).not.toHaveProperty('controller');
+  });
+});
+
 describe('custody facts beside the audit digest (F-4 point 6)', () => {
   it('hands the facts of each custody event to auditFacts, matching the digest the event carries', async () => {
     const kept = new Map<string, Readonly<Record<string, unknown>>>();

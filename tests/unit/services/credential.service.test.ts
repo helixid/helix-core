@@ -254,6 +254,14 @@ describe('CredentialService', () => {
       expect(statusStore.revokeVC.mock.calls).toEqual([[other!.id, 'req-2']]);
       expect(write).toBeDefined();
     });
+
+    it('isRevoked: true once revoked, false before and for a credential this deployment does not hold', async () => {
+      const identity = await service.issueIdentity({ agentDid: childDid, name: 'x', ownerDid }, 'req');
+      expect(await service.isRevoked(identity.id)).toBe(false);
+      await service.revokeVC(identity.id, 'req');
+      expect(await service.isRevoked(identity.id)).toBe(true);
+      expect(await service.isRevoked('urn:uuid:not-here')).toBe(false);
+    });
   });
 
   describe('hops', () => {
