@@ -1243,7 +1243,7 @@ export class CustodyService implements CustodialKeys {
     await this.options.records.addKey({ did, kid, location, publicKeyJwk, status: 'active', sequence: 1, retiresAt: null, revokedAt: null, createdAt: this.clock() });
     const record = (await this.options.records.findRecord(did))!;
     const publicKey = publicKeyJwkBytes(publicKeyJwk);
-    const documents = await this.documentsFor(record, [{ kid, publicKeyJwk }], documentVersion(await this.options.records.listKeys(did)), ownerEntityType);
+    let documents = await this.documentsFor(record, [{ kid, publicKeyJwk }], documentVersion(await this.options.records.listKeys(did)), ownerEntityType);
     await this.options.didRepository.createDid({
       id: did,
       subjectType: record.subjectType,
@@ -1259,13 +1259,30 @@ export class CustodyService implements CustodialKeys {
       return { ...active, documents: active.documents ?? documents };
     }
     const now = this.clock();
-    const pending = await this.options.records.updateRecord(did, {
+    let pending = await this.options.records.updateRecord(did, {
       status: 'pending_resolution',
       pendingResolutionSince: now,
       recheckAttempts: 0,
       nextRecheckAt: new Date(now.getTime() + this.recheckSettings.initialIntervalSeconds * 1000),
     });
-    return { ...(await this.view(pending)), documents, publishRequired: true };
+    // An own-hosted agent's credentials are issued now, not at activation, so
+    // the card the owner publishes first is already the final one: no
+    // republish after activation. Nothing can use them before then, since no
+    // verifier resolves the DID until its document is live on the owner's domain.
+    // Best effort: when issuing fails here, enrollment still stands and activation issues them as before.
+    let vcId: string | undefined;
+    if (pending.subjectType === 'agent') {
+      try {
+        vcId = await this.issueCredential(pending, context);
+      } catch {
+        vcId = undefined;
+      }
+      if (vcId !== undefined) {
+        pending = await this.options.records.updateRecord(did, { credentialVcId: vcId });
+        documents = await this.documentsFor(pending, [{ kid, publicKeyJwk }], documentVersion(await this.options.records.listKeys(did)), ownerEntityType);
+      }
+    }
+    return { ...(await this.view(pending)), ...(vcId ? { vcId } : {}), documents, publishRequired: true };
   }
 
   private async markActive(record: CustodyRecordRow, context: CustodyContext, resolution: 'helix-hosted' | 'verified'): Promise<OnboardingResult> {
@@ -1276,8 +1293,9 @@ export class CustodyService implements CustodialKeys {
     if (!active) {
       throw new CustodyStateInvalidError(`${record.did} was activated by another request`, { status: 'active' });
     }
-    let vcId: string | undefined;
-    if (record.subjectType === 'agent') {
+    // An own-hosted agent already got its credentials when its key was registered.
+    let vcId: string | undefined = record.credentialVcId ?? undefined;
+    if (record.subjectType === 'agent' && vcId === undefined) {
       try {
         vcId = await this.issueCredential(record, context);
       } catch (error) {
@@ -1300,8 +1318,8 @@ export class CustodyService implements CustodialKeys {
       // The same enrollment event the agent service logs when an agent is onboarded.
       this.audit.agentOnboarded({ requestId: context.requestId, agentDid: record.did, credentialId: vcId });
     }
-    // An agent's documents now carry what its credentials say on the card; an
-    // own-hosted agent's owner republishes that card (helix activate does).
+    // An agent's documents carry what its credentials say on the card. An
+    // own-hosted agent's card had them from enrollment, so it is unchanged here.
     const documents = record.subjectType === 'agent' ? await this.currentDocuments(active) : undefined;
     return { ...(await this.view(active)), ...(vcId ? { vcId } : {}), ...(documents ? { documents } : {}) };
   }
@@ -1356,7 +1374,8 @@ export class CustodyService implements CustodialKeys {
       others,
       version,
     );
-    const fromCredentials = record.status === 'active' ? await this.options.credentialDetails?.(record.did, record.subjectType) : undefined;
+    // An own-hosted agent's credentials exist from enrollment (credentialVcId), before it is active.
+    const fromCredentials = record.status === 'active' || record.credentialVcId ? await this.options.credentialDetails?.(record.did, record.subjectType) : undefined;
     const card = buildEntityCard({
       id: record.did,
       entityType: entityTypeOf(record.subjectType, ownerEntityType),

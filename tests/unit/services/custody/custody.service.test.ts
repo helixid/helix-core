@@ -676,17 +676,59 @@ describe('the card carries what the agent\'s credentials say (F-3 parity)', () =
     revocation: { statusListCredential: 'https://helix.example/v1/status-list/1', statusListIndex: '4' },
   };
 
-  it('an own-hosted agent: activation returns the card to republish, and GET custody keeps returning it', async () => {
+  it('an own-hosted agent: enrollment returns the final card, so nothing is republished after activation', async () => {
     const h = withCredentialDetails();
     const did = 'did:web:owner.example:agents:carded';
     const { enrolled } = await onboardSelf(h, { didHosting: 'own', did, scopes: ['read:orders'] });
-    // Before activation nothing is attested, so the card the owner first publishes has none.
-    expect(enrolled.documents!.card).not.toHaveProperty('capabilities');
+    // Issued at enrollment: the card the owner first publishes already carries them.
+    expect(enrolled).toMatchObject({ status: 'pending_resolution', vcId: 'vc:test:1' });
+    expect(enrolled.documents!.card).toMatchObject({ id: did, ...carried });
+    expect((await h.service.getCustody(did, 'agent')).documents!.card).toMatchObject(carried);
     publishOwnDomain(h, enrolled.documents!);
     const active = await h.service.activate(did, h.context());
-    expect(active.documents!.card).toMatchObject({ id: did, ...carried });
-    expect(active.documents!.didDocument).toEqual(enrolled.documents!.didDocument);
-    expect((await h.service.getCustody(did, 'agent')).documents!.card).toMatchObject(carried);
+    expect(active).toMatchObject({ status: 'active', vcId: 'vc:test:1' });
+    expect(active.documents).toEqual(enrolled.documents);
+    // Activation issues nothing more.
+    expect(h.issued).toHaveLength(1);
+    expect(h.attested).toHaveLength(1);
+    expect(events(h, CustodyEvents.CUSTODY_ACTIVATED)).toEqual([expect.objectContaining({ did, resolution: 'verified' })]);
+  });
+
+  it('a custodial own-hosted agent gets its credentials at creation too', async () => {
+    const h = withCredentialDetails();
+    const did = 'did:web:owner.example:agents:hybrid-carded';
+    const created = await h.service.createAgent({ name: 'Hybrid', scopes: ['read:orders'], keyCustody: 'helix', didHosting: 'own', did }, h.context());
+    expect(created).toMatchObject({ status: 'pending_resolution', vcId: 'vc:test:1' });
+    expect(created.documents!.card).toMatchObject(carried);
+    publishOwnDomain(h, created.documents!);
+    expect(await h.service.activate(did, h.context())).toMatchObject({ status: 'active', vcId: 'vc:test:1' });
+    expect(h.issued).toHaveLength(1);
+  });
+
+  it('an own-hosted agent whose credentials could not be issued at enrollment still enrolls, and activation issues them', async () => {
+    let fail = true;
+    const h = harness();
+    const failing = harness({
+      records: h.records,
+      keyStore: h.keyStore,
+      didRepository: h.dids,
+      credentials: {
+        issuerDid: 'did:web:helix.example',
+        issueIdentity: async () => {
+          if (fail) throw new Error('issuer down');
+          return { id: 'vc:late' };
+        },
+        issueAttestations: async () => [],
+      },
+    });
+    const did = 'did:web:owner.example:agents:late';
+    const { enrolled } = await onboardSelf(failing, { didHosting: 'own', did });
+    expect(enrolled.status).toBe('pending_resolution');
+    expect(enrolled).not.toHaveProperty('vcId');
+    expect((await h.records.findRecord(did))!.credentialVcId).toBeNull();
+    fail = false;
+    publishOwnDomain(failing, enrolled.documents!);
+    expect(await failing.service.activate(did, failing.context())).toMatchObject({ status: 'active', vcId: 'vc:late' });
   });
 
   it('a custodial Helix-hosted agent is returned with the same card at creation; services and pending agents get none', async () => {
