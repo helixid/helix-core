@@ -44,7 +44,7 @@ export class SqliteStore {
 CREATE TABLE IF NOT EXISTS dids (
   id TEXT PRIMARY KEY,
   subject_type TEXT NOT NULL,
-  controller TEXT NOT NULL,
+  controller TEXT,
   public_key TEXT NOT NULL,
   public_key_multibase TEXT,
   hedera_topic_id TEXT,
@@ -164,6 +164,13 @@ CREATE TABLE IF NOT EXISTS agents (
 );
 CREATE INDEX IF NOT EXISTS idx_agents_visibility_published_at ON agents(visibility, published_at);
 CREATE INDEX IF NOT EXISTS idx_agents_credential_vc_id ON agents(credential_vc_id);
+
+CREATE TABLE IF NOT EXISTS registry_entries (
+  did TEXT PRIMARY KEY,
+  discoverable INTEGER NOT NULL DEFAULT 1,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
 
 DROP TABLE IF EXISTS audit_log;
 

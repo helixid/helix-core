@@ -56,7 +56,7 @@ import type { HopReissueResult } from './hop-reissue.js';
 export type CustodyActor = string;
 
 /** Why custodial signing was refused: the subject is self-custody, or the kid is not an active Helix-held key. */
-export type CustodialSigningRefusal = 'custody_self' | 'key_not_active';
+export type CustodialSigningRefusal = 'custody_self' | 'key_not_active' | 'identity_revoked' | 'did_deactivated';
 
 /**
  * Receives each `configurationDigest` with the value it commits (who asked,

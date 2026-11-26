@@ -93,6 +93,13 @@ export interface CredentialCardOptions {
    * root check falls to each chain's own root, the consenting user's did:key.
    */
   actsOnUserConsent?: ((agentDid: string) => Promise<boolean>) | undefined;
+  /**
+   * Own authority (four-clients, 2026-11-24): no agent card names a
+   * `responsibleParty`, so a service that opts in may accept an agent acting
+   * on its own attested capabilities without a chain. A chain the agent
+   * carries is still checked against its own root.
+   */
+  omitResponsibleParty?: boolean | undefined;
 }
 
 /**
@@ -122,7 +129,7 @@ export function credentialCardDetails(
     const party = (identity?.['credentialSubject'] as { responsibleParty?: unknown } | undefined)?.responsibleParty;
     // Story L3-H (Harish, 2026-11-23): an agent acting on user consent has no single responsible party;
     // each chain's own root (the user's did:key) is, so the card leaves it out.
-    if (typeof party === 'string' && party !== '' && !(await options.actsOnUserConsent?.(did))) details.responsibleParty = party;
+    if (typeof party === 'string' && party !== '' && options.omitResponsibleParty !== true && !(await options.actsOnUserConsent?.(did))) details.responsibleParty = party;
     const status = identity?.['credentialStatus'] as { statusListCredential?: unknown; statusListIndex?: unknown } | undefined;
     if (typeof status?.statusListCredential === 'string' && (typeof status.statusListIndex === 'string' || typeof status.statusListIndex === 'number')) {
       details.revocation = { statusListCredential: status.statusListCredential, statusListIndex: String(status.statusListIndex) };

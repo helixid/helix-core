@@ -74,6 +74,8 @@ export type AgentVerificationMethod = {
 export type AgentDidDocument = {
   '@context': string[];
   id: string;
+  /** The DID controller (DID Core §5.1.2): for an agent, its account's DID. Absent when there is none. */
+  controller?: string;
   alsoKnownAs?: string[];
   verificationMethod: AgentVerificationMethod[];
   authentication: string[];
@@ -92,6 +94,12 @@ export interface BuildDidDocumentOptions {
   publicKeyJwk: unknown;
   /** Verification-method fragment (`key-1`) or full id (`<did>#key-1`). Default `key-1`. */
   kid?: string;
+  /**
+   * The top-level `controller`: for an agent Helix makes or hosts, its
+   * account's DID. Left out when not given. Each verification method keeps
+   * the subject itself as its `controller`.
+   */
+  controller?: string | undefined;
   /** Other DIDs of the same subject, the did:key form of this key for one. */
   alsoKnownAs?: readonly string[];
   /** Service endpoints to keep on the document, as the DID core spec lists them. */
@@ -253,6 +261,9 @@ export function buildDidDocument(options: BuildDidDocumentOptions): AgentDidDocu
   }
   const publicKey = publicKeyJwkBytes(options.publicKeyJwk);
   const id = verificationMethodId(options.did, options.kid);
+  if (options.controller !== undefined && (typeof options.controller !== 'string' || !options.controller.startsWith('did:'))) {
+    throw new ValidationError('controller must be a DID');
+  }
   const alsoKnownAs = (options.alsoKnownAs ?? []).filter((other) => other !== options.did);
   for (const other of alsoKnownAs) {
     if (typeof other !== 'string' || !other.startsWith('did:')) {
@@ -268,6 +279,7 @@ export function buildDidDocument(options: BuildDidDocumentOptions): AgentDidDocu
   return {
     '@context': [...DID_WEB_CONTEXTS],
     id: options.did,
+    ...(options.controller !== undefined ? { controller: options.controller } : {}),
     ...(alsoKnownAs.length > 0 ? { alsoKnownAs } : {}),
     verificationMethod: [
       {

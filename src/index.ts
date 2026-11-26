@@ -131,6 +131,15 @@ export type {
 export { default as didRoutes } from './routes/did/index.js';
 export type { DIDRouteAction, DIDRouteOptions } from './routes/did/index.js';
 export { default as didWebRoutes } from './routes/did-web/index.js';
+// Registry v3 (2026-11-24): the Helix agent registry ("Make discoverable"), and registering agents there.
+export { default as registryRoutes, REGISTRY_MCP_TOOLS, REGISTRY_MCP_PROTOCOL_VERSION, REGISTRY_RATE_LIMIT_DEFAULT, type RegistryRouteOptions } from './routes/registry/index.js';
+export * from './services/registry/registry.js';
+export { RegistryService, type RegistrySource, type PublishedEntries } from './services/registry/registry.service.js';
+export { deploymentRegistrySource, type DeploymentRegistrySourceDeps } from './services/registry/deployment-registry.source.js';
+export { signRegistration, verifyRegistration, RegistrationInvalidError, REGISTRATION_TYP, REGISTRATION_TTL_SECONDS, type RegistrationClaims } from './services/registry/registration.js';
+export { HelixRegistryInbox, MemoryPublishedStore, type PublishedEntry, type PublishedStore, type HelixRegistryInboxOptions } from './services/registry/helix-registry.inbox.js';
+export { HelixRegistryPublisher, describeRegistration, type PublishOutcome, type HelixRegistryPublisherOptions } from './services/registry/helix-registry.publisher.js';
+export { RegistryEntryRepository, type RegistryEntryRow } from './repositories/registry-entry.repository.js';
 export { default as vcRoutes, type VcRouteOptions } from './routes/vc/index.js';
 export { default as statusListRoutes } from './routes/status-list/index.js';
 export { default as verifyRoutes, helixStatusListIssuers } from './routes/verify/index.js';

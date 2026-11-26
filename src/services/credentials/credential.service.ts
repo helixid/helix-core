@@ -447,6 +447,12 @@ export class CredentialService implements HopReissuer {
    * identity's status entry as its `revocation`. Hops are separate grants and
    * are revoked on their own (`revokeHop`).
    */
+  /** Whether the credential is revoked (`CustodyCredentials.isRevoked`): false for one this deployment does not hold. */
+  async isRevoked(vcId: string): Promise<boolean> {
+    const record = await this.vcRepo.findByVcId(vcId);
+    return record !== null && record.revokedAt !== null && record.revokedAt !== undefined;
+  }
+
   async revokeVC(vcId: string, requestId: string): Promise<{ vcId: string; revoked: true; revokedAt: string }> {
     const record = await this.vcRepo.findByVcId(vcId);
     const result = await this.statusStore.revokeVC(vcId, requestId);

@@ -288,6 +288,7 @@ export class DIDService implements IDIDService {
       await this.repository.createDid({
         id: did,
         subjectType,
+        // Stored as the document has it: a document may leave `controller` out (DID Core §5.1.2).
         controller: document.controller,
         publicKey: publicKeyHex,
         publicKeyMultibase: document.verificationMethod[0]!.publicKeyMultibase,

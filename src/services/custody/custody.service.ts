@@ -41,6 +41,7 @@
 
 import { randomBytes } from 'node:crypto';
 import {
+  AgentRevokedError,
   CustodialSigningRefusedError,
   CustodyStateInvalidError,
   CustodySubjectNotFoundError,
@@ -144,7 +145,7 @@ export interface CustodyDidRecords {
   createDid(data: {
     id: string;
     subjectType: string;
-    controller: string;
+    controller?: string | undefined;
     publicKey: string;
     publicKeyMultibase?: string | undefined;
     hederaTransactionId: string;
@@ -172,6 +173,8 @@ export interface CustodyCredentials {
    * new; resolves to its id, or null when `vcId` is not an identity.
    */
   reissueIdentity?(input: { vcId: string; agentDid: string }, requestId: string): Promise<string | null>;
+  /** Whether the credential is revoked: Helix does not sign for an agent whose identity credential is. */
+  isRevoked?(vcId: string): Promise<boolean>;
 }
 
 export interface CustodyServices {
@@ -203,6 +206,15 @@ export interface CustodyServiceOptions {
   credentialDetails?: ((did: string, subjectType: string) => Promise<EntityCardDetails | undefined>) | undefined;
   /** The origin Helix-hosted documents are reachable at, when it is not `https://<host>`. */
   publicOrigin?: string | undefined;
+  /**
+   * An agent's DID document names its account's DID as the top-level
+   * `controller` (Harish, 2026-11-24): the owner DID the account system sets
+   * when the agent is created (`ownerDidOf`; enterprise: the account's issuer
+   * DID). Off where there are no accounts (helixid): the document then has
+   * no top-level `controller`. Each verification method's `controller` is the
+   * agent itself either way.
+   */
+  accountControlsAgents?: boolean | undefined;
   /** The DID service's document cache, dropped when a document changes. */
   didCache?: { delete(did: string): Promise<unknown> | unknown } | undefined;
   /** Where own-hosted documents are read from; default the SafeFetch seam of story C-A. */
@@ -793,6 +805,11 @@ export class CustodyService implements CustodialKeys {
     if (record.status !== 'active') {
       throw new CustodyStateInvalidError(`${did} is ${record.status}; Helix signs for active subjects only`, { status: record.status });
     }
+    const revoked = await this.revocationOf(record);
+    if (revoked) {
+      this.audit.signingRefused({ requestId: context.requestId, actor: context.actor, subjectType: record.subjectType, did, code: revoked.code });
+      throw new AgentRevokedError(did, revoked.reason);
+    }
     await this.finalizeDue(record, context);
     const payload = typeof input?.payload === 'string' ? base64UrlDecodeStrict(input.payload) : undefined;
     if (payload === undefined) throw new ValidationError('payload must be base64url bytes');
@@ -809,6 +826,15 @@ export class CustodyService implements CustodialKeys {
     const signature = await this.options.keyStore.sign({ did, kid }, payload);
     this.audit.signature({ requestId: context.requestId, actor: context.actor, subjectType: record.subjectType, did, kid, payload });
     return { did, kid, alg: 'EdDSA', signature: base64UrlEncode(signature) };
+  }
+
+  /** Why Helix must not sign for the subject any more: its DID is deactivated or its identity credential revoked. */
+  private async revocationOf(record: CustodyRecordRow): Promise<{ code: 'did_deactivated' | 'identity_revoked'; reason: string } | undefined> {
+    if ((await this.options.didRepository.findDidById(record.did))?.deactivatedAt) return { code: 'did_deactivated', reason: 'its DID is deactivated' };
+    if (record.credentialVcId && (await this.options.credentials.isRevoked?.(record.credentialVcId))) {
+      return { code: 'identity_revoked', reason: 'its identity credential is revoked' };
+    }
+    return undefined;
   }
 
   // ---------------------------------------------------- rotation (story C-E)
@@ -1221,7 +1247,8 @@ export class CustodyService implements CustodialKeys {
     await this.options.didRepository.createDid({
       id: did,
       subjectType: record.subjectType,
-      controller: did,
+      // The stored controller is the document's own: the account's DID for an agent, none otherwise.
+      ...(documents.didDocument.controller === undefined ? {} : { controller: documents.didDocument.controller }),
       publicKey: Buffer.from(publicKey).toString('hex'),
       publicKeyMultibase: publicKeyToMultibaseOf(publicKey),
       hederaTransactionId: `custody:${record.keyCustody}:${record.didHosting}`,
@@ -1318,6 +1345,8 @@ export class CustodyService implements CustodialKeys {
     const document = versionDidDocument(
       buildDidDocument({
         did: record.did,
+        // An agent's document names its account's DID as its controller (see accountControlsAgents).
+        ...(this.options.accountControlsAgents === true && record.subjectType === 'agent' && record.ownerDid ? { controller: record.ownerDid } : {}),
         publicKeyJwk: current!.publicKeyJwk,
         kid: current!.kid,
         alsoKnownAs: [didKeyFromPublicKey(currentBytes)],

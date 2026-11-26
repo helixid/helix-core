@@ -46,6 +46,18 @@ export class CustodialSigningRefusedError extends HelixError {
   }
 }
 
+/**
+ * Helix does not sign for a subject that has been revoked: its identity
+ * credential is revoked or its DID is deactivated. A verifier would refuse
+ * whatever Helix signed anyway; refusing here keeps a revoked agent from
+ * producing fresh proofs at all.
+ */
+export class AgentRevokedError extends HelixError {
+  constructor(did: string, reason: string) {
+    super('AGENT_REVOKED', `Helix does not sign for ${did}: ${reason}`, 403, { did, reason });
+  }
+}
+
 /** The enrollment or rotation proof of possession of the new key did not verify. */
 export class EnrollmentProofInvalidError extends HelixError {
   constructor(message: string) {

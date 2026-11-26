@@ -16,7 +16,8 @@ import { publicKeyToMultibase, multibaseToPublicKeyHex } from './keys.js';
 export type DIDDocument = {
   '@context': string[];
   id: string;
-  controller: string;
+  /** Optional (DID Core §5.1.2): a document another system publishes may leave it out. */
+  controller?: string | undefined;
   verificationMethod: VerificationMethod[];
   authentication: string[];
   assertionMethod: string[];
